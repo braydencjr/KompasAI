@@ -1,95 +1,47 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import CareerPlan from "./components/CareerPlan";
+import Shell from "./components/Shell";
+import { bets } from "./data/bets";
 
 export default function Home() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+    <Shell bubbles>
+      <section className="hero">
+        <span className="eyebrow">AI watches the market. You grow.</span>
+        <h1>
+          See where your work is heading <span className="accent">before it moves.</span>
+        </h1>
+        <p>
+          Upload your resume and Kompas maps your skills against live AI and job-market signals,
+          then shows you three bets for what comes next.
+        </p>
+        <div className="hud">
+          <span>Snapshot <strong>2026.10.20</strong></span>
+          <span>Sources <strong>06</strong></span>
+          <span>Scenario <strong>Moderate</strong></span>
         </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      </section>
+
+      <section className="upload glass">
+        <div className="upload-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
+            <path d="M12 16V4m0 0-4 4m4-4 4 4M5 20h14" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+        <div className="upload-text">
+          <h3>Upload your resume</h3>
+          <p>PDF or DOCX, up to 5 MB. We never use age, gender or photos.</p>
+        </div>
+        <div className="upload-actions">
+          <button className="btn btn-ghost">Try a sample</button>
+          <button className="btn btn-primary">Upload file</button>
+        </div>
+      </section>
+
+      <CareerPlan bets={bets} />
+
+      <footer className="foot muted">
+        Resources checked 20 Oct 2026. Projections are estimates based on current signals, not predictions.
       </footer>
-    </div>
+    </Shell>
   );
 }
