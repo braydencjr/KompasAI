@@ -251,6 +251,10 @@ html.lg-refract .glass {
   max-width: 1080px;
 }
 
+.main > .hero {
+  max-width: 640px;
+}
+
 /* ---------- sidebar ---------- */
 
 .sidebar {
@@ -939,6 +943,451 @@ h3 {
   margin-top: auto;
 }
 
+/* ---------- trend metrics ---------- */
+
+.bet-name {
+  font-size: 19px;
+  letter-spacing: -0.015em;
+  margin-bottom: 4px;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 12px 14px;
+}
+
+.metric + .metric {
+  border-left: 1px solid var(--line);
+}
+
+.metric .label {
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.metric strong {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.metric-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.metric-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.bet-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.spark {
+  display: block;
+  overflow: visible;
+}
+
+.spark-line {
+  fill: none;
+  stroke: url(#ringGrad);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.spark-area {
+  fill: rgba(61, 155, 233, 0.08);
+}
+
+.spark-dot {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 3px var(--accent));
+}
+
+.risk-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.14);
+  color: #0f7a55;
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+/* ---------- roadmap popup ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: rgba(225, 232, 244, 0.45);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  animation: fade-in 0.25s ease;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 48px);
+  padding: 30px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.5));
+  animation: pop-in 0.4s cubic-bezier(0.2, 0.9, 0.2, 1.15);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(4px); }
+}
+
+.modal:focus {
+  outline: none;
+}
+
+.modal-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.modal-close {
+  position: sticky;
+  top: 0;
+  align-self: flex-end;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: -8px -8px -44px 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.5));
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255, 255, 255, 0.6), 0 6px 16px -8px rgba(20, 40, 80, 0.4);
+}
+
+.modal-head h2 {
+  font-size: clamp(24px, 3.2vw, 32px);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-bottom: 6px;
+  padding-right: 40px;
+}
+
+.modal-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.modal-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+.modal-stat .label {
+  margin-bottom: 4px;
+}
+
+.modal-stat strong {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+/* vertical variant of the roadmap track, used in the popup */
+.track-vertical {
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  gap: 14px;
+  overflow: visible;
+}
+
+.track-vertical .track-step {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 14px;
+}
+
+.track-vertical .track-step::before {
+  top: 44px;
+  bottom: -14px;
+  left: 20px;
+  right: auto;
+  width: 1px;
+  height: auto;
+  background: linear-gradient(180deg, rgba(15, 30, 60, 0.3), rgba(15, 30, 60, 0.08));
+}
+
+.track-vertical .track-step.done::before {
+  background: linear-gradient(180deg, var(--accent), rgba(61, 155, 233, 0.2));
+}
+
+.track-vertical .track-why {
+  margin-bottom: 8px;
+}
+
+/* ---------- job openings ---------- */
+
+/* light glass like the stats beside it; blue only as an accent */
+.jobs-cta {
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(61, 155, 233, 0.12), transparent 60%),
+    rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 0 0 1px rgba(61, 155, 233, 0.22),
+    0 8px 20px -14px rgba(20, 40, 80, 0.35);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1.3), box-shadow 0.25s, background 0.25s;
+}
+
+.jobs-cta:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 0 0 1px rgba(61, 155, 233, 0.35),
+    0 12px 26px -14px rgba(20, 40, 80, 0.45),
+    0 0 22px -10px rgba(61, 155, 233, 0.5);
+}
+
+.jobs-cta.active {
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(61, 155, 233, 0.2), transparent 65%),
+    rgba(255, 255, 255, 0.65);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    inset 0 0 0 1.5px rgba(61, 155, 233, 0.45),
+    0 0 22px -8px rgba(61, 155, 233, 0.55);
+}
+
+.jobs-cta-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 50%;
+  color: var(--accent-ink);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.95), transparent 45%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.8), rgba(214, 232, 250, 0.7));
+  box-shadow: inset 0 -2px 6px rgba(20, 40, 80, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
+.jobs-cta-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--accent-ink);
+}
+
+/* roadmap + jobs side by side; the jobs slot grows from 0 so the roadmap glides left */
+.modal-stage {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.modal-main {
+  transition: width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.modal-stage.split .modal-main {
+  width: min(660px, 100%);
+}
+
+.jobs-slot {
+  flex: none;
+  width: 436px;
+  padding-left: 16px;
+  overflow: clip;
+  overflow-clip-margin: 40px;
+  animation: slot-open 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.jobs-slot.closing {
+  animation: slot-close 0.38s cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+.jobs-slot .modal-jobs {
+  width: 420px;
+  animation: panel-in 0.5s cubic-bezier(0.2, 0.9, 0.2, 1.05) both;
+}
+
+.jobs-slot.closing .modal-jobs {
+  animation: panel-out 0.3s ease-in both;
+}
+
+@keyframes slot-open {
+  from { width: 0; padding-left: 0; }
+}
+
+@keyframes slot-close {
+  to { width: 0; padding-left: 0; }
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateX(60px) scale(0.97); filter: blur(6px); }
+}
+
+@keyframes panel-out {
+  to { opacity: 0; transform: translateX(60px) scale(0.97); filter: blur(6px); }
+}
+
+.modal-jobs {
+  gap: 18px;
+}
+
+.modal-jobs .modal-head h2 {
+  font-size: 24px;
+}
+
+.jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+}
+
+.job {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 8px 20px -14px rgba(20, 40, 80, 0.35);
+  transition: transform 0.25s;
+}
+
+.job:hover {
+  transform: translateY(-2px);
+}
+
+.job-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.job h4 {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.job-top .meta {
+  flex: none;
+  font-size: 11px;
+}
+
+.job-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.job-bottom .chip {
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+.job-pay {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.job-salary {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.job-boards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* not enough room side by side: the jobs panel slides in over the roadmap as a drawer */
+@media (max-width: 1140px) {
+  .modal-stage {
+    position: relative;
+  }
+
+  .modal-stage.split .modal-main {
+    width: min(760px, 100%);
+  }
+
+  .jobs-slot,
+  .jobs-slot.closing {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: min(420px, 100%);
+    padding: 0;
+    overflow: visible;
+    animation: none;
+  }
+
+  .jobs-slot .modal-jobs {
+    width: 100%;
+    max-height: calc(100dvh - 48px);
+    box-shadow: var(--glass-shadow), -20px 0 60px -20px rgba(20, 40, 80, 0.35);
+  }
+}
+
 /* ---------- ring ---------- */
 
 .ring {
@@ -1031,12 +1480,6 @@ h3 {
   color: var(--muted);
 }
 
-.bet-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
 
 .bet-title h3 {
   font-size: 19px;
@@ -1209,8 +1652,10 @@ h3 {
   .orb,
   .bubble,
   .bubble::before,
-  .pulse::after {
-    animation: none;
+  .pulse::after,
+  .jobs-slot,
+  .jobs-slot .modal-jobs {
+    animation: none !important;
   }
 }
 
@@ -1263,6 +1708,14 @@ h3 {
     height: 160px;
     top: 40px;
     right: -40px;
+  }
+
+  .modal {
+    padding: 22px 18px;
+  }
+
+  .modal-stats {
+    grid-template-columns: 1fr;
   }
 
   .upload {
