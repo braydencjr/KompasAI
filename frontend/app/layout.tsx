@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Kompas",
   description: "AI watches the market. You grow.",
+  icons: {
+    icon: "/kompas_logo.png",
+    shortcut: "/kompas_logo.png",
+    apple: "/kompas_logo.png",
+  },
 };
 
 export default function RootLayout({

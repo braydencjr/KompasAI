@@ -25,8 +25,8 @@ export default function Sidebar() {
 
   return (
     <aside className="sidebar glass">
-      <Link href="/" className="brand">
-        <span className="brand-mark" />
+      <Link href="/" className="brand" aria-label="Kompas home">
+        <img src="/kompas_logo.png" alt="Kompas logo" className="brand-mark" />
         Kompas
       </Link>
 
