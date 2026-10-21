@@ -1,6 +1,7 @@
 import CvMatch from "./components/CvMatch";
 import TrendingCareers from "./components/TrendingCareers";
 import Shell from "./components/Shell";
+import UploadCard from "./components/UploadCard";
 import { bets, cvMatch } from "./data/bets";
 
 export default function Home() {
@@ -22,21 +23,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="upload glass">
-        <div className="upload-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden>
-            <path d="M12 16V4m0 0-4 4m4-4 4 4M5 20h14" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <div className="upload-text">
-          <h3>Upload your resume</h3>
-          <p>PDF or DOCX, up to 5 MB. We never use age, gender or photos.</p>
-        </div>
-        <div className="upload-actions">
-          <button className="btn btn-ghost">Try a sample</button>
-          <button className="btn btn-primary">Upload file</button>
-        </div>
-      </section>
+      <UploadCard />
 
       <CvMatch role={cvMatch} />
 
