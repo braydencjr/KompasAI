@@ -8,3 +8,6 @@ CORS_ORIGINS = [
 ]
 
 APP_VERSION = "0.1.0"
+
+# PRD FR-1.1: resumes up to 5 MB
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "5")) * 1024 * 1024

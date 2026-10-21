@@ -1,1 +1,2 @@
 fastapi[standard]==0.154.0
+pypdf==6.21.1
