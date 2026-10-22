@@ -7,9 +7,10 @@ The LLM labels the CV against Kompas's closed lists; every item must quote the C
 import io
 import re
 import zipfile
+from collections import Counter
 from html import unescape
 
-from . import llm
+from . import journey, llm
 from .curated import Curated
 from .tag import Tagger
 
@@ -57,19 +58,69 @@ def _line_around(text: str, start: int) -> str:
     return line if len(line) <= 160 else line[max(0, start - a - 60): start - a + 100].strip()
 
 
-def _statuses(conn) -> dict[str, str]:
-    row = conn.execute("SELECT id FROM snapshot ORDER BY as_of DESC LIMIT 1").fetchone()
-    if not row:
-        return {}
-    return {r["concept_id"]: r["status"] for r in
-            conn.execute("SELECT concept_id, status FROM concept_status WHERE snapshot_id = ?", (row["id"],))}
+RISING, FALLING = ("Act now", "Emerging"), ("Declining", "Stalled")
+TOP_ROLES = 5
+HEADER_WORDS = {"resume", "cv", "curriculum", "vitae", "profile", "synthetic", "sample"}
 
+
+def _words(s: str) -> set[str]:
+    return {w.lower() for w in re.findall(r"[^\W\d_]{2,}", s)}
+
+
+def checked_summary(summary: str | None, text: str, known: set[str]) -> str | None:
+    """The model's summary, or None if it repeats a word from the CV's first line (almost always the name) that
+    isn't a skill or job word. The prompt forbids names; this checks instead of trusting it (FR-10.3)."""
+    if not summary:
+        return None
+    first = next((line for line in text.splitlines() if line.strip()), "")
+    name = _words(first) - HEADER_WORDS - known
+    return None if _words(summary) & name else summary
+
+
+def _family(cur: Curated, cid: str) -> dict | None:
+    """The nearest job family above a skill (Power BI -> Data and analytics)."""
+    fam = next((a for a in cur.ancestors(cid) if a in cur.concepts and cur.concepts[a].kind == "family"), None)
+    return {"id": fam, "label": cur.concepts[fam].label} if fam else None
+
+
+def _sources(cur: Curated, conn) -> list[dict]:
+    """Each trend source with the date of the newest record it delivered: what the statuses rest on."""
+    latest = {r[0]: r[1] for r in conn.execute("SELECT source, MAX(published_at) FROM raw_doc GROUP BY source")}
+    return [{"id": s.id, "name": s.name, "rung": s.rung, "data_as_of": (latest.get(s.id) or "")[:10] or None}
+            for s in cur.sources.values()]
+
+
+def insights(skills: list[dict], roles: list[dict], exposed: list[dict]) -> list[dict]:
+    """Short findings for the top of the profile. Fixed templates over computed values (like explain.py), so
+    every sentence traces back to a number on the page."""
+    out = []
+    families = Counter(s["family"]["label"] for s in skills if s["family"])
+    if families:
+        label, k = families.most_common(1)[0]
+        out.append({"kind": "focus", "text": f"Your strongest area is {label.lower()}: {k} of your {len(skills)} skills."})
+    rising = [s["label"] for s in skills if s["status"] in RISING]
+    falling = [s["label"] for s in skills if s["status"] in FALLING]
+    if rising:
+        verb = "is" if len(rising) == 1 else "are"
+        out.append({"kind": "rising", "text": f"{len(rising)} of your skills {verb} rising in demand: {', '.join(rising)}."})
+    elif any(s["status"] for s in skills):
+        out.append({"kind": "rising", "text": "None of your skills shows rising demand in this snapshot."})
+    if falling:
+        out.append({"kind": "falling", "text": f"Demand is falling for {', '.join(falling)}."})
+    touched = sorted({b["skill"] for e in exposed for b in e["because"]})
+    if touched:
+        out.append({"kind": "ai", "text": f"AI is learning work tied to {len(touched)} of your skills: {', '.join(touched)}."})
+    if roles:
+        r = roles[0]
+        out.append({"kind": "fit", "text": f"Closest fit: {r['title']} at {r['match']}%, "
+                                           f"with {len(r['have'])} of its {len(r['breakdown'])} tracked skills."})
+    return out
 
 
 def analyse(text: str, cur: Curated, conn, client=None) -> dict:
     cv_norm = _norm(text)
-    status = _statuses(conn)
-    skills: dict[str, dict] = {}
+    st = journey.Statuses.latest(conn)
+    found: dict[str, dict] = {}
     unrecognised, jobs, discarded = [], [], 0
 
     extraction, llm_error = llm.extract_cv(text, cur, client=client)
@@ -79,7 +130,7 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
                 discarded += 1
                 continue
             if s["skill_id"] in cur.concepts:
-                skills.setdefault(s["skill_id"], {"quote": s["quote"], "found_by": "llm"})
+                found.setdefault(s["skill_id"], {"quote": s["quote"], "found_by": "llm"})
             else:
                 unrecognised.append({"name": s["name"], "quote": s["quote"]})
         for j in extraction["jobs"]:
@@ -93,59 +144,68 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
     # explicit tool and skill names the model may have skipped; the only extractor without an API key
     for cid, _method, _span, start in Tagger(cur).find_all(text):
         if cur.concepts[cid].kind != "family":
-            skills.setdefault(cid, {"quote": _line_around(text, start), "found_by": "dictionary"})
+            found.setdefault(cid, {"quote": _line_around(text, start), "found_by": "dictionary"})
 
-    have = set(skills)
+    def item(cid: str, info: dict) -> dict:
+        row = st.rows.get(cid)
+        return {"id": cid, "label": cur.concepts[cid].label, "status": st.measured(cid),
+                "projected": row["projected"] if row else None, "evidence_count": row["evidence"] if row else 0,
+                "family": _family(cur, cid), **info}
+
+    skills = [item(cid, info) for cid, info in found.items() if cur.concepts[cid].kind == "skill"]
+    # AI capabilities the CV names (document AI, anomaly detection): tools the person has used, not skills a role asks for
+    ai_tools = [item(cid, info) for cid, info in found.items() if cur.concepts[cid].kind == "capability"]
+    have = {s["id"] for s in skills}
+
     exposed = []
     for cap, links in cur.capability_skills.items():
         hit = [(skill, why) for skill, why in links if skill in have]
         if hit:
-            exposed.append({"id": cap, "label": cur.concepts[cap].label,
+            exposed.append({"id": cap, "label": cur.concepts[cap].label, "status": st.measured(cap),
                             "because": [{"skill": cur.concepts[s].label, "why": why} for s, why in hit]})
 
+    # the same scorer as the Three Bets, so a role's match is the same number on every step
+    mycol = journey.mycol_codes(conn, st.as_of or "9999-12-31")
+    scored = journey.score_roles(cur, st, journey.Profile(skills={cid: "claimed" for cid in have}), mycol)
+    roles = [r for r in scored if r["match"] > 0][:TOP_ROLES]
+    method = "llm" if extraction else "dictionary"
+    # market evidence for your skills, the shown roles' skills and their job families
+    sig = journey.skill_signals(cur, conn, st, have | {b["id"] for r in roles for b in r["breakdown"]}
+                  | {r["family"]["id"] for r in roles if r.get("family")})
+    by_id = {s["id"]: s for s in skills}
+    for r in roles:
+        r["reasons"] = journey.reasons(r, by_id, sig)
+    pick = journey.recommend(roles)
+
     return {
-        "method": "llm" if extraction else "dictionary",
+        "method": method,
         "model": llm.MODEL if extraction else None,
         "llm_note": llm_error,
-        "summary": extraction["summary"] if extraction else None,
+        "summary": checked_summary(extraction["summary"], text,
+                                   _words(" ".join([*(s["label"] for s in skills), *(j["title"] for j in jobs)])))
+                   if extraction else None,
         "jobs": jobs,
-        "skills": [{"id": cid, "label": cur.concepts[cid].label, "status": status.get(cid), **info}
-                   for cid, info in skills.items()],
+        "skills": skills,
+        "ai_tools": ai_tools,
         "unrecognised": unrecognised,
         "discarded_unverified": discarded,
         "exposed": exposed,
-        "roles": match_roles(cur, have, status),
+        "roles": roles,
+        "recommended": pick["isco"] if pick else None,
+        "signals": sig,
+        "insights": insights(skills, roles, exposed),
+        "snapshot": {"id": st.id, "as_of": st.as_of} if st.id else None,
+        # what each stage did, with real counts, for "How Kompas read this"
+        "trace": {
+            "text": {"chars": len(text), "lines": sum(1 for line in text.splitlines() if line.strip())},
+            "reader": {"method": method, "model": llm.MODEL if extraction else None, "note": llm_error},
+            "skills": {"llm": sum(i["found_by"] == "llm" for i in found.values()),
+                       "dictionary": sum(i["found_by"] == "dictionary" for i in found.values()),
+                       "dropped_unverified": discarded, "unrecognised": len(unrecognised),
+                       "ai_tools": len(ai_tools)},
+            "jobs": {"found": len(jobs), "mapped": sum(1 for j in jobs if j["occupation"])},
+            "signals": {"measured": sum(s["status"] is not None for s in skills), "of": len(skills),
+                        "sources": _sources(cur, conn)},
+            "roles": {"scored": len(scored), "catalogue": len(cur.role_titles), "shown": len(roles)},
+        },
     }
-
-
-# PRD FR-4.2: a skill's weight is importance x demand; a CV skill is "claimed" (0.7), not yet demonstrated (1.0)
-DEMAND = {"Act now": 1.2, "Emerging": 1.1, "Stable": 1.0, "Watch": 0.9, "Declining": 0.7, "Stalled": 0.7}
-CLAIMED = 0.7
-
-
-def match_roles(cur: Curated, have: set[str], status: dict[str, str], n: int = 4) -> list[dict]:
-    """Roles ranked by Match(r) = sum(w*c) / sum(w). Roles the user already covers completely are left out:
-    "best fit" means the next role, and a role with no gaps has nothing to learn."""
-    roles = []
-    for isco, title in cur.role_titles.items():
-        skills = [(cid, w) for cid, occs in cur.concept_occupations.items() if cur.concepts[cid].kind == "skill"
-                  for i, w in occs if i == isco]
-        if len(skills) < 2:
-            continue
-        weight = {cid: w * DEMAND.get(status.get(cid, "Stable"), 1.0) for cid, w in skills}
-        total = sum(weight.values())
-        matched = sum(weight[cid] * CLAIMED for cid in weight if cid in have)
-        gaps = [cid for cid in sorted(weight, key=weight.get, reverse=True) if cid not in have]
-        if not matched or not gaps:
-            continue
-        # the job family's own demand stands in for the role's (Malaysian demand is measured per occupation)
-        families = [(w, cid) for cid, occs in cur.concept_occupations.items() if cur.concepts[cid].kind == "family"
-                    for i, w in occs if i == isco]
-        family = max(families)[1] if families else None
-        item = lambda cid: {"id": cid, "label": cur.concepts[cid].label, "status": status.get(cid)}
-        roles.append({
-            "isco": isco, "title": title, "occupation": cur.occupation_titles[isco],
-            "match": round(100 * matched / total), "demand": status.get(family) if family else None,
-            "have": [item(cid) for cid in weight if cid in have], "gaps": [item(cid) for cid in gaps],
-        })
-    return sorted(roles, key=lambda r: r["match"], reverse=True)[:n]

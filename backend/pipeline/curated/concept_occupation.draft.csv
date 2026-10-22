@@ -1,0 +1,63 @@
+concept_id,isco_code,weight,status,current_weight,esco_items,reason,keep
+"# Drafted by gemini-2.5-flash from ESCO (kompas links-draft). Review every row: set keep to 'no' to reject it, then run `kompas links-apply`. Weights come from ESCO (essential 1.0, optional 0.5).",,,,,,,
+financial-modelling,1211,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+data-engineering,2120,1.0,new,,"design database scheme (essential, data scientist); establish data processes (essential, data scientist); normalise data (essential, data scientist); perform data cleansing (essential, data scientist); integrate ICT data (optional, data scientist); manage ICT data architecture (optional, data scientist)",Designing database schemes is a core task within data engineering. Establishing data processes is a fundamental aspect of data engineering. Normalising data is a key process in data engineering for data quality and consistency. Performing data cleansing is a crucial step in data engineering to ensure data quality. Integrating ICT data is a fundamental task in data engineering. Managing ICT data architecture is a core responsibility within data engineering.,yes
+data-visualisation,2120,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+forecasting,2120,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+machine-learning,2120,0.5,new,,"build predictive models (optional, statistician); perform data mining (optional, data scientist)",Building predictive models is a fundamental aspect of machine learning. Performing data mining involves techniques often used in machine learning to discover patterns.,yes
+python,2120,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+sql,2120,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+data-visualisation,2133,1.0,new,,"prepare visual data (essential, environmental scientist)",Preparing visual data is a core activity of data visualisation.,yes
+ghg-accounting,2133,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+sustainability-standards,2133,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+month-end-close,2411,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+ai-risk-frameworks,2411,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+excel,2411,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+financial-modelling,2411,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+ghg-accounting,2411,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+reconciliation,2411,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+sap-erp,2411,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+sustainability-standards,2411,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+excel,2413,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+financial-modelling,2413,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+forecasting,2413,1.0,same,1.0,"prepare financial projections (essential, financial analyst); financial forecasting (optional, financial analyst)",Preparing financial projections is a core activity of forecasting. Financial forecasting is explicitly the Kompas skill forecasting.,yes
+data-visualisation,2413,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+power-bi,2413,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+ai-risk-frameworks,2421,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+responsible-ai,2421,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+process-automation,2511,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+python,2511,0.5,new,,"Python (computer programming) (optional, ICT system analyst)",Python (computer programming) is a direct match for the Python skill.,yes
+sap-erp,2511,0.5,same,0.5,"SAP R3 (optional, ICT system analyst)","SAP R3 is a specific ERP system, directly matching the SAP / ERP skill.",yes
+typescript,2511,0.5,new,,"TypeScript (optional, ICT system analyst)",TypeScript is a direct match for the TypeScript skill.,yes
+machine-learning,2512,0.5,new,,"utilise machine learning (optional, software developer)",This ESCO item explicitly refers to the application of machine learning.,yes
+python,2512,0.5,weight changed,1.0,"Python (computer programming) (optional, software developer)",This ESCO item explicitly names the Python programming language.,yes
+sap-erp,2512,0.5,new,,"SAP R3 (optional, software developer)","Reviewed: rejected. ESCO lists SAP R3 among ~60 optional languages; Kompas tracks only a few, so it would weigh as much as Python.",no
+sql,2512,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+typescript,2512,0.5,new,,"TypeScript (optional, software developer)",This ESCO item explicitly names the TypeScript programming language.,yes
+react,2513,1.0,hand-added,,,Reviewed: hand-drafted. React is the most-used framework for web front ends; ESCO lists only generic web programming.,yes
+typescript,2513,0.5,new,,"TypeScript (optional, web developer)",TypeScript directly refers to the TypeScript programming language.,yes
+process-automation,2514,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+python,2514,0.5,new,,"Python (computer programming) (optional, ICT application developer)",Python (computer programming) is a direct match for the Kompas skill Python.,yes
+typescript,2514,0.5,new,,"TypeScript (optional, ICT application developer)",TypeScript is a direct match for the Kompas skill TypeScript.,yes
+ai-fundamentals,2519,1.0,new,,"principles of artificial intelligence (essential, ICT intelligent systems designer)",This item directly refers to the foundational principles of AI.,yes
+machine-learning,2519,1.0,hand-added,,,Reviewed: hand-drafted. Building AI systems means building ML models; ESCO's AI occupation covers it only as data mining.,yes
+llm-applications,2519,0.5,hand-added,,,Reviewed: hand-drafted. LLM applications are the newest kind of AI system; ESCO predates them.,yes
+python,2519,0.5,reviewed,0.5,"Python (computer programming) (optional, software tester); Python (computer programming) (optional, ICT intelligent systems designer)",Reviewed: ESCO lists Python for this role.,yes
+sap-erp,2519,0.5,new,,"SAP R3 (optional, software tester); SAP R3 (optional, ICT intelligent systems designer)","Reviewed: rejected. ESCO lists SAP R3 among ~60 optional languages; Kompas tracks only a few, so it would weigh as much as Python.",no
+sql,2521,1.0,weight changed,1.0,"DB2 (optional, database administrator); IBM Informix (optional, database administrator); Microsoft Access (optional, database administrator); Oracle Relational Database (optional, database administrator)","Reviewed: SQL is essential for database administration; ESCO names only specific databases (DB2, Informix...).",yes
+power-bi,2521,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+accounts-payable,3313,1.0,weight changed,0.5,"allocate bills (essential, accounting assistant)",Allocating bills is a fundamental task within accounts payable processes.,yes
+excel,3313,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+month-end-close,3313,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+reconciliation,3313,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+sap-erp,3313,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+data-engineering,3314,1.0,new,,"normalise data (essential, data analyst)",Normalising data is a specific data preparation technique commonly performed in data engineering.,yes
+machine-learning,3314,1.0,new,,"data mining (essential, data analyst); perform data mining (essential, data analyst)","Reviewed: rejected. Cited via data mining, which is not machine learning.",no
+cloud-platforms,3314,0.5,new,,"cloud technologies (optional, data analyst)",Cloud technologies directly refers to the use and understanding of cloud platforms.,yes
+data-visualisation,3314,0.5,same,0.5,"deliver visual presentation of data (optional, statistical assistant); deliver visual presentation of data (optional, data analyst)",This item directly describes the Kompas skill of data visualisation.,yes
+forecasting,3314,0.5,new,,"carry out statistical forecasts (optional, statistical assistant)",This item directly describes the Kompas skill of forecasting.,yes
+power-bi,3314,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes
+accounts-payable,4311,1.0,same,1.0,"allocate bills (essential, billing clerk)",Allocating bills is a core task within accounts payable processes.,yes
+excel,4311,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+reconciliation,4311,1.0,no ESCO item,1.0,,hand-drafted; ESCO lists nothing for it,yes
+month-end-close,4311,0.5,no ESCO item,0.5,,hand-drafted; ESCO lists nothing for it,yes

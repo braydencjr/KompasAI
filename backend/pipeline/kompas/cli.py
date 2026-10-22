@@ -169,6 +169,52 @@ def cmd_reject(args, conn, cur):
     print(f"rejected {suggest.reject(conn, args.ids)}")
 
 
+def cmd_esco_sync(args, conn, cur):
+    """Refreshes curated/occupation_task.csv (The Mirror's task cards) from the ESCO API."""
+    from .connectors import esco
+
+    counts = esco.sync()
+    for isco, n in counts.items():
+        print(f"{isco}: {n} tasks")
+    print(f"wrote curated/occupation_task.csv ({sum(counts.values())} tasks)")
+
+
+def cmd_esco_skills(args, conn, cur):
+    """Refreshes curated/occupation_skill_esco.csv: each role's ESCO skills, the evidence for its skill links."""
+    from .connectors import esco
+
+    counts = esco.sync_skills()
+    for occupation, n in counts.items():
+        print(f"{occupation}: {n} items")
+    print(f"wrote curated/occupation_skill_esco.csv ({sum(counts.values())} items)")
+
+
+def cmd_links_draft(args, conn, cur):
+    """Drafts role skill links from ESCO with Gemini into curated/concept_occupation.draft.csv, for review."""
+    from . import links
+
+    if not llm.available():
+        sys.exit("GEMINI_API_KEY isn't set (backend/.env)")
+    result = links.draft(cur, links.esco_items())
+    path = links.write_draft(result["rows"])
+    by_status: dict[str, int] = {}
+    for r in result["rows"]:
+        by_status[r["status"]] = by_status.get(r["status"], 0) + 1
+    print(f"wrote {path} ({', '.join(f'{n} {s}' for s, n in sorted(by_status.items()))}); "
+          f"dropped {result['dropped']} proposals citing no real ESCO item")
+    for isco, error in result["errors"].items():
+        print(f"error: {isco}: {error}")
+    print("Review it (set keep to 'no' to reject a row), then run `kompas links-apply`.")
+
+
+def cmd_links_apply(args, conn, cur):
+    from . import links
+
+    counts = links.apply(cur)
+    print(f"wrote curated/concept_occupation.csv: {counts['kept']} skill links kept, {counts['rejected']} rejected, "
+          f"{counts['families']} family links unchanged")
+
+
 def cmd_validate(args, conn, cur):
     errors = curated.validate(cur)
     for e in errors:
@@ -256,6 +302,10 @@ def main(argv=None):
     rj.add_argument("ids", type=int, nargs="+")
     rj.set_defaults(fn=cmd_reject)
 
+    sub.add_parser("esco-sync", help="refresh The Mirror's task lists from the ESCO API").set_defaults(fn=cmd_esco_sync)
+    sub.add_parser("esco-skills", help="fetch each role's ESCO skills (evidence for role skill links)").set_defaults(fn=cmd_esco_skills)
+    sub.add_parser("links-draft", help="draft role skill links from ESCO with Gemini, for review").set_defaults(fn=cmd_links_draft)
+    sub.add_parser("links-apply", help="merge the reviewed draft into concept_occupation.csv").set_defaults(fn=cmd_links_apply)
     sub.add_parser("validate", help="check the curated tables").set_defaults(fn=cmd_validate)
 
     v = sub.add_parser("serve", help="run the API")

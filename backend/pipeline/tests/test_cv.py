@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from google.genai import types
 
-from kompas import cv, llm
+from kompas import cv, journey, llm
 from kompas.api import create_app
 
 SAMPLE = (Path(__file__).resolve().parent / "fixtures" / "sample-cv.txt").read_text()
@@ -94,14 +94,56 @@ def test_exposure_and_best_fit_roles(conn, cur):
     held = {s["id"] for s in profile["skills"]}
     assert roles and roles == sorted(roles, key=lambda r: r["match"], reverse=True)
     for r in roles:
-        assert r["gaps"] and not held & {g["id"] for g in r["gaps"]}   # a best fit always has something to learn
+        assert not held & {g["id"] for g in r["gaps"]}
         assert {h["id"] for h in r["have"]} <= held
         assert 0 < r["match"] <= 70                                     # claimed skills count 0.7 (FR-4.2)
+        assert sum(b["coverage"] > 0 for b in r["breakdown"]) == len(r["have"])
 
 
-def test_match_formula(cur):
+def _profile_with(conn, cur, monkeypatch, text):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    return cv.analyse(text, cur, conn)
+
+
+def test_roles_you_already_cover_are_best_fits(conn, cur):
+    # the bug this guards: roles with no gaps were dropped, so a data scientist was shown "Database administrator"
+    have = {cid: "claimed" for cid, _ in journey.role_skills(cur, "4311")}       # every skill of the clerk role
+    roles = journey.score_roles(cur, journey.Statuses.latest(conn), journey.Profile(skills=have), {})
+    assert roles[0]["isco"] == "4311" and roles[0]["covered"] and roles[0]["match"] == 70
+
+
+def test_capabilities_are_not_listed_as_skills(conn, cur, monkeypatch):
+    text = "Analyst. Set up document AI to extract invoice data, then reconciled accounts in Excel every month."
+    profile = _profile_with(conn, cur, monkeypatch, text)
+    kinds = {s["id"]: cur.concepts[s["id"]].kind for s in profile["skills"]}
+    assert set(kinds.values()) == {"skill"}
+    assert all(cur.concepts[t["id"]].kind == "capability" for t in profile["ai_tools"])
+
+
+def test_unmeasured_status_is_null_not_stable(conn, cur, monkeypatch):
+    profile = _profile_with(conn, cur, monkeypatch, SAMPLE)     # empty test DB: no snapshot yet
+    assert profile["snapshot"] is None
+    assert all(s["status"] is None for s in profile["skills"])
+    assert all(r["family_status"] is None for r in profile["roles"])
+    assert profile["trace"]["signals"]["measured"] == 0
+    assert profile["trace"]["reader"]["note"] == "no Gemini API key configured"
+
+
+def test_summary_that_names_the_person_is_dropped():
+    text = "Wei Ling Tan\nData Scientist, Kampung Analytics\nBuilt forecasting models in Python"
+    known = {"data", "scientist", "python", "forecasting"}
+    assert cv.checked_summary("Wei Ling built forecasting models in Python.", text, known) is None
+    assert cv.checked_summary("You built forecasting models in Python.", text, known) is not None
+    # a job title on the first line isn't a name
+    assert cv.checked_summary("You work as a data scientist.", "Data Scientist\nPython", known) is not None
+
+
+def test_match_formula(conn, cur):
     # Accountant: month-end close (1.0), reconciliation/excel/sap/modelling/GHG/standards/AI risk (0.5 each)
-    roles = {r["isco"]: r for r in cv.match_roles(cur, {"month-end-close", "reconciliation", "excel", "sap-erp"}, {})}
+    have = {"month-end-close": "claimed", "reconciliation": "claimed", "excel": "claimed", "sap-erp": "claimed"}
+    st = journey.Statuses.latest(conn)
+    roles = {r["isco"]: r for r in journey.score_roles(cur, st, journey.Profile(skills=have), {})}
     assert roles["2411"]["match"] == round(100 * 0.7 * (1.0 + 0.5 * 3) / (1.0 + 0.5 * 7))
 
 

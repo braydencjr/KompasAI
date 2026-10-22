@@ -27,7 +27,8 @@ Rules:
 - Map each job to the closest occupation code from the list below, or "none".
 - Never extract or mention the person's name, age, date of birth, gender, ethnicity, nationality, religion,
   marital status, photo, or contact details.
-- `summary`: at most 80 words about their experience and skills, using only items you extracted.
+- `summary`: at most 60 words addressed to the person ("You ..."), about their experience and skills, using
+  only items you extracted. Never use their name.
 
 Skill ids:
 {skills}
@@ -167,3 +168,61 @@ def suggest_aliases(items: list[dict], cur: Curated, client: genai.Client | None
     if error:
         return None, error
     return result.get("suggestions") or [], None
+
+
+# ---------- role skill links from ESCO, for review ----------
+
+LINK_INSTRUCTIONS = """You help maintain Kompas's role catalogue: which of Kompas's skills each role needs. The evidence is
+the role's skills and knowledge in ESCO, the EU's occupation taxonomy. For each ESCO item below that IS one of
+Kompas's skills, give a link. Skip every other item: most items match no Kompas skill.
+
+Rules:
+- `esco_item`: the ESCO item, exactly as listed. `skill_id`: the Kompas skill it is.
+- Link only when anyone with the ESCO item certainly has the Kompas skill: the same skill, a named tool or
+  language for it ("Python (computer programming)" is python), or a technique that is the skill ("utilise
+  machine learning" is machine-learning).
+- Never link a broad item to a specific skill: "computer programming" is not Python, "database" is not SQL,
+  "statistics" is not forecasting, "accounting" is not month-end close.
+- Watch for same names that mean different things: "ML (computer programming)" is a programming language, not
+  machine learning.
+- Use the most specific Kompas skill (an item about Power BI is power-bi, not data-visualisation).
+- `reason`: one short sentence.
+
+Kompas skills:
+{skills}"""
+
+
+# Gemini refuses schemas whose enums branch too much; past this many ESCO items the citation is a free string,
+# still checked against the role's items afterwards (kompas.links.check)
+MAX_ENUM_ITEMS = 80
+
+
+def _link_schema(items: list[str], skill_ids: list[str]) -> dict:
+    item = {"type": "string", "enum": items} if len(items) <= MAX_ENUM_ITEMS else {"type": "string"}
+    return {
+        "type": "object",
+        "properties": {"links": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"esco_item": item,
+                           "skill_id": {"type": "string", "enum": skill_ids},
+                           "reason": {"type": "string"}},
+            "required": ["esco_item", "skill_id", "reason"],
+        }}},
+        "required": ["links"],
+    }
+
+
+def draft_role_links(role: str, esco_occupations: list[str], items: list[dict], cur: Curated,
+                     client: genai.Client | None = None) -> tuple[list[dict] | None, str | None]:
+    """items: [{skill, relation, skill_type}] from occupation_skill_esco.csv. Returns (links, None) or (None, reason).
+    Links are unverified model output: kompas.links checks every one before a person reviews the draft."""
+    skills = {cid: c.label for cid, c in sorted(cur.concepts.items()) if c.kind == "skill"}
+    # the tag goes first, so the model copies the label alone
+    listing = "\n".join(f"- [{i['relation']} {i['skill_type']}] {i['skill']}" for i in items)
+    contents = (f"<role>{role}</role>\n<esco_occupations>{', '.join(esco_occupations)}</esco_occupations>\n"
+                f"<esco_items>\n{listing}\n</esco_items>")
+    system = LINK_INSTRUCTIONS.format(skills="\n".join(f"- {cid}: {label}" for cid, label in skills.items()))
+    result, error = _generate(system, contents, _link_schema(sorted({i["skill"] for i in items}), list(skills)), client)
+    if error:
+        return None, error
+    return result.get("links") or [], None

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { kompas, onFeedEvent, type FeedItem, type LiveStatus, type Match, type SignalCard } from "../lib/kompas";
+import { useOptionalJourney } from "./journey/JourneyProvider";
 import { useProfile } from "./Profile";
 import { signalClass, useSignals } from "./Signals";
 
@@ -129,7 +130,10 @@ export default function LiveFeed() {
   const [loading, setLoading] = useState(true);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const pending = useRef<Set<string>>(new Set());
-  const { matchProfile } = useProfile();
+  const { matchProfile: sampleOrCv } = useProfile();
+  // inside the journey, follow its profile: Mirror corrections and the chosen route
+  const journey = useOptionalJourney();
+  const matchProfile = journey?.data?.feed_profile ?? sampleOrCv;
   // the server answers but has nothing scored yet: say so, rather than "offline"
   const { health } = useSignals();
   const noSnapshot = health !== null && !health.latest_snapshot;

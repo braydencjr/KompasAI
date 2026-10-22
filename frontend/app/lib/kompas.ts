@@ -3,6 +3,7 @@
 // data in app/data/bets.ts.
 
 import { API_URL as BACKEND_URL } from "./api";
+import type { RoleScore, SignalItem } from "./journey";
 
 export const API_URL = `${BACKEND_URL}/api/signals`;
 
@@ -69,7 +70,7 @@ export type Profile = {
 
 async function call<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(`${API_URL}${path}`, { ...init, signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(5000), ...init });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;
@@ -97,35 +98,76 @@ export function onFeedEvent(handler: (artifactId: string) => void): () => void {
   return () => es.close();
 }
 
-export type CvSkill = { id: string; label: string; status: LiveStatus | null; quote: string; found_by: "llm" | "dictionary" };
+export type CvSkill = {
+  id: string;
+  label: string;
+  /** null when no snapshot has measured it yet */
+  status: LiveStatus | null;
+  projected: { moderate: LiveStatus; fast: LiveStatus } | null;
+  evidence_count: number;
+  family: { id: string; label: string } | null;
+  quote: string;
+  found_by: "llm" | "dictionary";
+};
+
+export type CvTrace = {
+  text: { chars: number; lines: number };
+  reader: { method: "llm" | "dictionary"; model: string | null; note: string | null };
+  skills: { llm: number; dictionary: number; dropped_unverified: number; unrecognised: number; ai_tools: number };
+  jobs: { found: number; mapped: number };
+  signals: { measured: number; of: number; sources: { id: string; name: string; rung: number; data_as_of: string | null }[] };
+  roles: { scored: number; catalogue: number; shown: number };
+};
 
 /** What the API read from an uploaded CV. Nothing here is stored on the server. */
 export type CvProfile = {
   file: string | null;
   method: "llm" | "dictionary";
   model: string | null;
+  /** why the LLM wasn't used, when it wasn't */
   llm_note: string | null;
   summary: string | null;
   jobs: { title: string; employer: string; period: string; quote: string; occupation: { isco: string; title: string } | null }[];
   skills: CvSkill[];
+  /** AI capabilities the CV names (tools the person used), kept apart from skills */
+  ai_tools: CvSkill[];
   unrecognised: { name: string; quote: string }[];
   discarded_unverified: number;
-  exposed: { id: string; label: string; because: { skill: string; why: string }[] }[];
-  /** best-fit next roles, ranked by the PRD FR-4.2 match score */
+  exposed: { id: string; label: string; status: LiveStatus | null; because: { skill: string; why: string }[] }[];
+  /** best-fit roles, scored exactly as on the Your direction step (PRD FR-4.2) */
   roles: CvRole[];
+  /** ISCO of the role to pursue: highest demand x match among roles you fit 40%+ */
+  recommended: string | null;
+  /** market evidence per concept: your skills, the roles' skills and their job families */
+  signals: Record<string, SkillSignal>;
+  /** short computed findings, each traceable to a number on the page */
+  insights: { kind: "focus" | "rising" | "falling" | "ai" | "fit"; text: string }[];
+  snapshot: { id: string; as_of: string } | null;
+  trace: CvTrace;
 };
 
-type RoleSkill = { id: string; label: string; status: LiveStatus | null };
+export type CvRole = RoleScore;
 
-export type CvRole = {
-  isco: string;
-  title: string;
-  occupation: string;
-  match: number;
-  demand: LiveStatus | null;
-  have: RoleSkill[];
-  gaps: RoleSkill[];
+export type SkillSignal = {
+  status: LiveStatus;
+  projected: { moderate: LiveStatus; fast: LiveStatus };
+  rungs: { rung: 1 | 2 | 3; name: string; movement: "rising fast" | "slightly up" | "flat" | "slightly down" | "falling" | "no data"; sources: string[] }[];
+  meaning: string | null;
+  evidence: SignalItem[];
+  evidence_count: number;
 };
+
+/** The CV's text lines, fast, for the scanner. null when the API can't read it (the scanner then shows bars). */
+export async function readLines(file: File): Promise<string[] | null> {
+  const body = new FormData();
+  body.append("file", file);
+  try {
+    const res = await fetch(`${API_URL}/profile/text`, { method: "POST", body, signal: AbortSignal.timeout(15_000) });
+    return res.ok ? ((await res.json()).lines as string[]) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Uploads a CV. Returns the profile, or a message to show the user. */
 export async function extractProfile(file: File): Promise<{ profile: CvProfile } | { error: string }> {
@@ -139,4 +181,28 @@ export async function extractProfile(file: File): Promise<{ profile: CvProfile }
   } catch {
     return { error: "Can't reach the Kompas API. Is it running?" };
   }
+}
+
+export type LiveJob = {
+  id: string | null;
+  title: string;
+  employer: string;
+  location: string;
+  remote: boolean;
+  type: string | null;
+  posted: string | null;
+  /** the original posting, on the board that published it */
+  url: string | null;
+  via: string | null;
+  salary: string | null;
+  /** the user's skills the posting mentions */
+  matched: string[];
+};
+
+export type LiveJobs = { role: string; jobs: LiveJob[]; source: string; fetched_at: string | null; cached: boolean; note: string | null };
+
+/** Live openings in Malaysia for a role (JSearch, cached a day). null when the API can't be reached. */
+export async function liveJobs(isco: string, skills: string[]): Promise<LiveJobs | null> {
+  const params = new URLSearchParams({ isco, skills: skills.join(",") });
+  return call<LiveJobs>(`/jobs?${params}`, { signal: AbortSignal.timeout(25_000) });
 }

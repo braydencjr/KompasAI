@@ -63,6 +63,9 @@ export function SkillColumns({ role, gapClosed, quotes, onRemove, haveLabel = "S
       </div>
       <div>
         <div className="label">Skill gaps · {role.gaps.length}</div>
+        {role.gaps.length === 0 && (
+          <p className="muted small">None. You have every skill Kompas tracks for this role.</p>
+        )}
         <div className="chips">
           {role.gaps.map((g) => (
             <span key={g} className={`chip chip-gap${gapClosed(g) ? " closed" : ""}`}>
@@ -103,7 +106,7 @@ export default function Roadmap({ role, done, toggle, vertical = false }: Roadma
 
       <ol className={`track${vertical ? " track-vertical" : ""}`}>
         {role.steps.map((s, i) => (
-          <li key={s.url + s.title} className={`track-step${done[i] ? " done" : ""}`}>
+          <li key={`${s.skill}|${s.url}|${s.title}`} className={`track-step${done[i] ? " done" : ""}`}>
             <button
               className="step-node"
               onClick={() => toggle(i)}
@@ -120,10 +123,12 @@ export default function Roadmap({ role, done, toggle, vertical = false }: Roadma
               <div className="muted small">{s.provider}</div>
               <p className="track-why">{s.why}</p>
               <div className="track-foot">
-                <span className="meta">{s.hours} h · {s.cost}</span>
-                <a href={s.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                  Learn ↗
-                </a>
+                <span className="meta">{s.url ? `${s.hours} h · ${s.cost}` : "No verified course"}</span>
+                {s.url && (
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                    Learn ↗
+                  </a>
+                )}
               </div>
             </div>
           </li>

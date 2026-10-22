@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { profile as sampleProfile } from "../data/bets";
-import { extractProfile, type CvProfile, type CvRole, type Profile } from "../lib/kompas";
+import { extractProfile, readLines, type CvProfile, type CvRole, type Profile } from "../lib/kompas";
 
 // No login: the profile lives in this browser only (PRD NFR-3).
 const STORAGE_KEY = "kompas:profile";
@@ -17,7 +17,8 @@ type Stored = {
 
 const SAMPLE: Stored = { source: "sample", cv: null, skills: sampleProfile.skills.map((s) => s.id), roleIsco: null };
 
-/** A CV being read: drives the scanner animation in section 01. */
+/** The CV read in this session: drives the reading flow (scan, extract, match, direction). Kept until the next
+ * upload so the flow can play through; a profile restored from storage has no scan and shows the flow finished. */
 export type Scan = { name: string; lines: string[] | null; result: CvProfile | null };
 
 type ProfileState = Stored & {
@@ -29,6 +30,9 @@ type ProfileState = Stored & {
   analyse: (file: File) => Promise<void>;
   selectRole: (isco: string) => void;
   removeSkill: (id: string) => void;
+  addSkill: (id: string) => void;
+  /** goes up when a new CV is read or the user returns to the sample (not when a saved profile is restored) */
+  generation: number;
   reset: () => void;
 };
 
@@ -42,7 +46,7 @@ function textLines(text: string) {
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)
-    .slice(0, 22)
+    .slice(0, 80)
     .map((l) => (l.length > 96 ? `${l.slice(0, 95)}…` : l));
 }
 
@@ -50,11 +54,14 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<Stored>(SAMPLE);
   const [scan, setScan] = useState<Scan | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [generation, setGeneration] = useState(0);
 
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-      if (saved?.source === "cv" && Array.isArray(saved.cv?.roles)) setState(saved);
+      // profiles saved before the API added `trace` have the old role shape: drop them
+      if (saved?.source === "cv" && Array.isArray(saved.cv?.roles) && saved.cv?.signals) setState(saved);
+      else localStorage.removeItem(STORAGE_KEY);
     } catch {}
   }, []);
 
@@ -68,26 +75,31 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   async function analyse(file: File) {
     setError(null);
+    const local = /\.(txt|md)$/i.test(file.name) ? textLines(await file.text()) : null;
+    setScan({ name: file.name, lines: local, result: null });
     try {
-      const lines = /\.(txt|md)$/i.test(file.name) ? textLines(await file.text()) : null;
-      setScan({ name: file.name, lines, result: null });
-      // a floor on the scan so the animation reads even when the API answers instantly
-      const [res] = await Promise.all([extractProfile(file), wait(2000)]);
+      // the real lines of a PDF/DOCX arrive quickly from the API, while the reader is still working
+      if (!local) {
+        readLines(file).then((lines) => lines && setScan((s) => (s && s.name === file.name && !s.result ? { ...s, lines } : s)));
+      }
+      // a floor on the scan so it reads even when the API answers instantly
+      const [res] = await Promise.all([extractProfile(file), wait(2200)]);
       if ("error" in res) {
         setError(res.error);
+        setScan(null);
         return;
       }
-      if (!Array.isArray(res.profile.roles) || !Array.isArray(res.profile.skills)) {
+      if (!Array.isArray(res.profile.roles) || !res.profile.trace || !res.profile.signals) {
         setError("The Kompas API is out of date. Restart it and try again.");
+        setScan(null);
         return;
       }
-      setScan({ name: file.name, lines, result: res.profile });
-      await wait(1700); // let the found lines light up before the panel replaces the scanner
-      save({ source: "cv", cv: res.profile, skills: res.profile.skills.map((s) => s.id), roleIsco: res.profile.roles[0]?.isco ?? null });
+      const cv = res.profile;
+      setScan((s) => ({ name: file.name, lines: s?.lines ?? local, result: cv }));
+      save({ source: "cv", cv, skills: cv.skills.map((s) => s.id), roleIsco: cv.recommended ?? cv.roles[0]?.isco ?? null });
+      setGeneration((g) => g + 1);
     } catch {
       setError("Something went wrong reading this CV. Please try again.");
-    } finally {
-      // whatever happened, never leave the scanner on screen
       setScan(null);
     }
   }
@@ -110,10 +122,16 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     analyse,
     selectRole: (isco) => save({ ...state, roleIsco: isco }),
     removeSkill: (id) => save({ ...state, skills: state.skills.filter((s) => s !== id) }),
+    addSkill: (id) => {
+      if (!state.skills.includes(id)) save({ ...state, skills: [...state.skills, id] });
+    },
     reset: () => {
       setError(null);
+      setScan(null);
       save(SAMPLE);
+      setGeneration((g) => g + 1);
     },
+    generation,
   };
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;

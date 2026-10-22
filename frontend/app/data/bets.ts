@@ -16,7 +16,8 @@ export type Role = {
   title: string;
   summary: string;
   match: number;
-  signal: Signal;
+  /** the role's demand on the Signal Ladder; null when no snapshot has measured it */
+  signal: Signal | null;
   sdg?: { goal: string; reason: string };
   have: string[];
   gaps: string[];
@@ -35,7 +36,7 @@ export type Opening = {
 
 export type Bet = Role & {
   sdg: { goal: string; reason: string };
-  kind: "Safe Bet" | "Rising Bet" | "Impact Bet";
+  kind: "Stay and strengthen" | "Safest switch" | "Fastest-growing" | "Biggest impact";
   note: string;
   /** share of the role's tasks AI could take over within 5 years */
   aiRisk: number;
@@ -45,6 +46,8 @@ export type Bet = Role & {
   trend: number[];
   /** sample openings for the demo; the live product fills these from ingested postings */
   openings: Opening[];
+  /** what `growth` and `trend` measure (default: postings year on year) */
+  trendNote?: string;
 };
 
 // Demo data for the synthetic persona (Aisyah). Resource links checked 20 Oct 2026.
@@ -107,7 +110,7 @@ export const cvMatch: Role = {
 export const bets: Bet[] = [
   {
     id: "ai-risk-controls",
-    kind: "Safe Bet",
+    kind: "Safest switch",
     title: "AI Risk & Controls Analyst",
     note: "Low AI replacement risk; your audit trail habits transfer",
     summary: "Check that AI systems used in finance are accurate, fair and properly controlled.",
@@ -180,7 +183,7 @@ export const bets: Bet[] = [
   },
   {
     id: "finance-automation",
-    kind: "Rising Bet",
+    kind: "Fastest-growing",
     title: "Finance Automation Specialist",
     note: "Fastest-growing demand in Malaysian postings",
     summary: "Automate month-end close, reconciliation and reporting with scripts and workflow tools.",
@@ -253,7 +256,7 @@ export const bets: Bet[] = [
   },
   {
     id: "esg-reporting",
-    kind: "Impact Bet",
+    kind: "Biggest impact",
     title: "ESG Reporting Analyst",
     note: "Best fit with the goals you selected",
     summary: "Measure and report a company's emissions and sustainability performance.",

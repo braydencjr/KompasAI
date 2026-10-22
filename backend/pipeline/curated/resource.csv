@@ -1,0 +1,19 @@
+skill_id,title,provider,url,est_hours,cost,language,hrdc_verified,checked
+# Learning resources for The Route (PRD FR-6.1). Links checked on the date given; hrdc_verified only when HRD Corp claimability is confirmed.,,,,,,,,
+financial-modelling,Excel Skills for Business,Macquarie University · Coursera,https://www.coursera.org/specializations/excel,24,free-to-audit,en,false,2026-10-20
+forecasting,Forecasting: Principles and Practice,Hyndman & Athanasopoulos · OTexts,https://otexts.com/fpp3/,20,free,en,false,2026-10-20
+power-bi,Power BI learning paths,Microsoft Learn,https://learn.microsoft.com/en-us/training/powerplatform/power-bi,12,free,en,false,2026-10-20
+ai-fundamentals,Elements of AI,University of Helsinki · MinnaLearn,https://www.elementsofai.com/,30,free,en,false,2026-10-20
+ai-fundamentals,AI For Everyone,DeepLearning.AI · Coursera,https://www.coursera.org/learn/ai-for-everyone,6,free-to-audit,en,false,2026-10-20
+ai-risk-frameworks,AI Risk Management Framework,NIST,https://www.nist.gov/itl/ai-risk-management-framework,8,free,en,false,2026-10-20
+responsible-ai,Responsible AI business principles,Microsoft Learn,https://learn.microsoft.com/en-us/training/paths/responsible-ai-business-principles/,4,free,en,false,2026-10-20
+ai-risk-frameworks,AI resources for auditors,ISACA,https://www.isaca.org/resources/artificial-intelligence,6,free,en,false,2026-10-20
+sql,Interactive SQL lessons,SQLBolt,https://sqlbolt.com/,6,free,en,false,2026-10-20
+python,Python,Kaggle Learn,https://www.kaggle.com/learn/python,5,free,en,false,2026-10-20
+python,Pandas,Kaggle Learn,https://www.kaggle.com/learn/pandas,4,free,en,false,2026-10-20
+process-automation,Power Automate learning paths,Microsoft Learn,https://learn.microsoft.com/en-us/training/powerplatform/power-automate,10,free,en,false,2026-10-20
+process-automation,RPA developer foundations,UiPath Academy,https://academy.uipath.com/,15,free,en,false,2026-10-20
+ghg-accounting,GHG Protocol Corporate Standard,GHG Protocol,https://ghgprotocol.org/corporate-standard,10,free,en,false,2026-10-20
+sustainability-standards,GRI Academy,Global Reporting Initiative,https://www.globalreporting.org/reporting-support/education/gri-academy/,12,low-cost,en,false,2026-10-20
+sustainability-standards,ISSB knowledge hub,IFRS Foundation,https://www.ifrs.org/sustainability/knowledge-hub/,6,free,en,false,2026-10-20
+data-visualisation,Data Visualization,Kaggle Learn,https://www.kaggle.com/learn/data-visualization,4,free,en,false,2026-10-20

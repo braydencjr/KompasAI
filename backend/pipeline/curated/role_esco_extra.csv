@@ -1,0 +1,5 @@
+isco_code,esco_isco,esco_title,basis
+# Extra ESCO occupations whose skill lists a role's skill links may cite, when ESCO files the closest occupation under another ISCO group. The Mirror's task cards still come from occupation_esco.csv.,,,
+2120,2511,data scientist,the role is Statistician / data scientist; ESCO files data scientist under 2511
+2519,2511,ICT intelligent systems designer,ESCO's occupation for designing AI systems; 2519's own ESCO occupations are testing and audit roles
+3314,2511,data analyst,the role is Data analyst; ESCO files data analyst under 2511

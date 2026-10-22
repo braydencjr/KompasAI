@@ -73,7 +73,7 @@ export default function RoadmapModal({ bet, onClose }: { bet: Bet; onClose: () =
             </div>
             <div className="modal-stat">
               <div>
-                <div className="label">AI risk · 5 yrs</div>
+                <div className="label">AI risk · {bet.trendNote ? "tasks exposed" : "5 yrs"}</div>
                 <strong>{bet.aiRisk}%</strong> <span className="risk-pill">{riskLabel(bet.aiRisk)}</span>
               </div>
             </div>
@@ -89,7 +89,7 @@ export default function RoadmapModal({ bet, onClose }: { bet: Bet; onClose: () =
                 </svg>
               </span>
               <div>
-                <div className="label">{bet.openings.length} openings</div>
+                <div className="label">{bet.openings.length ? `${bet.openings.length} openings` : "Job boards"}</div>
                 <span className="jobs-cta-text">{jobsOpen ? "Hide jobs ←" : "Find open jobs →"}</span>
               </div>
             </button>

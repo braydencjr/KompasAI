@@ -12,10 +12,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from . import curated, cv, db, explain, ingest, live
+from . import brief, curated, cv, db, explain, ingest, journey, live
 from .config import PARAMS
+from .http import FetchError
 
 # PRD FR-4.2 demand multipliers, reused to weight personal feed items
 STATUS_WEIGHT = {"Act now": 1.2, "Emerging": 1.1, "Stable": 1.0, "Watch": 0.9, "Declining": 0.7, "Stalled": 0.6}
@@ -38,6 +39,25 @@ def _snapshot_id(conn, snapshot: str | None) -> str:
     if not row:
         raise HTTPException(503, "no snapshot built yet; run `kompas snapshot`")
     return row["id"]
+
+
+# Uvicorn waits for open connections to close before it stops or reloads, and an event stream never closes on its
+# own: without this, `fastapi dev` hangs on "Waiting for connections to close" after every file change. Streams end
+# when the server is told to exit (the hook sse-starlette uses); browsers reconnect to the new server by themselves.
+_exiting = False
+try:
+    from uvicorn.server import Server
+
+    _handle_exit = Server.handle_exit
+
+    def _note_exit(self, sig, frame):
+        global _exiting
+        _exiting = True
+        return _handle_exit(self, sig, frame)
+
+    Server.handle_exit = _note_exit
+except ImportError:  # not served by uvicorn
+    pass
 
 
 def _concept(row, cur: curated.Curated) -> dict:
@@ -72,6 +92,29 @@ class Profile(BaseModel):
     route: list[str] = []      # concepts the user is learning (their Route / Ghost CV gaps)
     exposed: list[str] = []    # capability concepts that reach the user's tasks (from the Mirror)
     limit: int = 20
+
+
+class JourneyRequest(BaseModel):
+    """Everything the journey needs; it lives in the browser and is sent with each request."""
+    skills: list[ProfileSkill] = []
+    occupation: str | None = None                 # ISCO code of the current job
+    overrides: dict[str, dict] = {}               # Mirror: task uri -> {"pile": "exposed"|"human", "reason": "..."}
+    scenario: Literal["moderate", "fast"] = "moderate"
+    sdgs: list[int] = []
+    role: str | None = None                       # ISCO code of the chosen bet
+    completed: list[str] = []                     # route skills marked done
+    pace: float = Field(5, gt=0, le=60)           # hours a week
+    snapshot: str | None = None                   # default: latest
+
+
+class PingRequest(JourneyRequest):
+    from_snapshot: str
+    to_snapshot: str | None = None                # default: latest
+
+
+class BriefRequest(JourneyRequest):
+    kind: Literal["bets", "ping"]
+    from_snapshot: str | None = None              # for kind=ping
 
 
 def create_router(live_mode: bool | None = None, replay: bool | None = None):
@@ -235,12 +278,17 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
                     for r in missed:
                         yield frame({"seq": r["seq"], "type": r["type"], "at": r["at"], "item": json.loads(r["payload"])})
                 yield ": connected\n\n"
-                while not await request.is_disconnected():
+                idle = 0
+                while not _exiting and not await request.is_disconnected():
                     try:
-                        event = await asyncio.wait_for(q.get(), timeout=15)
+                        event = await asyncio.wait_for(q.get(), timeout=1)
                     except asyncio.TimeoutError:
-                        yield ": ping\n\n"
+                        idle += 1
+                        if idle >= 15:      # a comment every 15 s keeps proxies from closing the stream
+                            idle = 0
+                            yield ": ping\n\n"
                         continue
+                    idle = 0
                     yield frame(event)
             finally:
                 bus.unsubscribe(q)
@@ -320,6 +368,44 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         return {"snapshot": sid, "summary": explain.summary(signals), "signals": signals, "ping": ping,
                 "statuses": _statuses(conn, sid, sorted(mine), cur)}
 
+    @app.get("/jobs")
+    def jobs(isco: str, skills: str = "", conn=Depends(get_conn)):
+        """Live openings in Malaysia for a role (JSearch, cached a day), each with the user's skills it mentions."""
+        from .connectors import jsearch
+        from .tag import Tagger
+
+        if isco not in cur.role_titles:
+            raise HTTPException(404, f"unknown occupation {isco!r}")
+        title = cur.role_titles[isco]
+        try:
+            found = jsearch.search(conn, title)
+        except FetchError as e:
+            return {"role": title, "jobs": [], "source": jsearch.SOURCE, "fetched_at": None, "cached": False, "note": str(e)}
+        have = {s for s in skills.split(",") if s}
+        tagger = Tagger(cur)
+        out = []
+        for j in found["jobs"]:
+            mentioned = {cid for cid, *_ in tagger.find_all(f"{j['title']}\n{j['description']}")}
+            out.append({**{k: v for k, v in j.items() if k != "description"},
+                        "matched": sorted(cur.concepts[c].label for c in mentioned & have)})
+        return {"role": title, "jobs": out, "source": found["source"], "fetched_at": found["fetched_at"],
+                "cached": found.get("cached", False), "note": found.get("note")}
+
+    @app.post("/profile/text")
+    def profile_text(file: UploadFile = File(...)):
+        """The CV's text lines, fast, so the scanner can show the real document while the reader works."""
+        data = file.file.read(cv.MAX_BYTES + 1)
+        if len(data) > cv.MAX_BYTES:
+            raise HTTPException(413, "CV must be 5 MB or smaller")
+        try:
+            text = cv.extract_text(file.filename or "", data)
+        except cv.UnsupportedFile as e:
+            raise HTTPException(415, str(e))
+        except Exception:
+            raise HTTPException(422, "Couldn't read this file. Try saving it again as PDF or DOCX.")
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return {"file": file.filename, "chars": len(text), "lines": lines[:80]}
+
     @app.post("/profile/extract")
     def extract_profile(file: UploadFile | None = File(None), text: str | None = Form(None), conn=Depends(get_conn)):
         """CV -> skills profile. The file is read in memory and never stored; nothing about the user is saved."""
@@ -338,6 +424,67 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         if len(text) > cv.MAX_CHARS:
             raise HTTPException(413, "That's much longer than a CV. Upload just the CV itself.")
         return {"file": file.filename if file else None, **cv.analyse(text, cur, conn)}
+
+    # ---------- user journey (PRD 5) ----------
+
+    def _profile(req: JourneyRequest) -> journey.Profile:
+        ids = {s.id for s in req.skills} | set(req.completed)
+        unknown = sorted(i for i in ids if i not in cur.concepts)
+        bad_occ = [o for o in (req.occupation, req.role) if o and o not in cur.role_titles]
+        if unknown or bad_occ:
+            raise HTTPException(422, {"unknown_concepts": unknown, "unknown_occupations": bad_occ})
+        if any(not 1 <= g <= 17 for g in req.sdgs):
+            raise HTTPException(422, "SDGs are numbered 1 to 17")
+        return journey.Profile(skills={s.id: s.evidence for s in req.skills}, occupation=req.occupation,
+                               overrides=req.overrides, scenario=req.scenario, sdgs=sorted(set(req.sdgs)),
+                               role=req.role, completed=req.completed, pace=req.pace)
+
+    @app.get("/journey/catalog")
+    def journey_catalog(conn=Depends(get_conn)):
+        """Occupations for The Mirror, SDGs for the lens, snapshots for The Ping, and the scoring rules."""
+        sid = _snapshot_id(conn, None)
+        mycol = journey.mycol_codes(conn, "9999-12-31")
+        masco = {isco: code for (system, code), isco in cur.occupation_codes.items() if system == "MASCO"}
+        occupations = [{"isco": isco, "title": title, "occupation": cur.occupation_titles[isco],
+                        "esco_occupation": cur.tasks[isco][0].occupation if isco in cur.tasks else None,
+                        "tasks": len(cur.tasks.get(isco, [])), "mycol": mycol.get(masco.get(isco, ""))}
+                       for isco, title in sorted(cur.role_titles.items(), key=lambda x: x[1])]
+        goals = sorted({t.sdg for (kind, _), tags in cur.sdg_tags.items() if kind == "role" for t in tags})
+        return {
+            "latest_snapshot": sid,
+            "snapshots": [dict(r) for r in conn.execute("SELECT id, as_of FROM snapshot ORDER BY as_of")],
+            "occupations": occupations,
+            "sdgs": [{"sdg": g, "name": journey.SDG_NAMES[g]} for g in goals],
+            "skills": sorted(({"id": cid, "label": c.label} for cid, c in cur.concepts.items() if c.kind == "skill"),
+                             key=lambda x: x["label"].lower()),
+            "scenarios": [{"id": "moderate", "label": "Moderate"}, {"id": "fast", "label": "Fast"}],
+            "rules": journey.WEIGHTS_DOC,
+        }
+
+    @app.post("/journey")
+    def journey_build(req: JourneyRequest, conn=Depends(get_conn)):
+        """The Mirror, Ghost CV, Three Bets, full ranking and Route for one profile, snapshot and scenario."""
+        return journey.build(cur, conn, _snapshot_id(conn, req.snapshot), _profile(req))
+
+    @app.post("/journey/ping")
+    def journey_ping(req: PingRequest, conn=Depends(get_conn)):
+        """What changed for this profile between two snapshots (The Ping)."""
+        return journey.ping(cur, conn, _snapshot_id(conn, req.from_snapshot), _snapshot_id(conn, req.to_snapshot),
+                            _profile(req))
+
+    @app.post("/journey/brief")
+    def journey_brief(req: BriefRequest, conn=Depends(get_conn)):
+        """A plain-language brief of the bets or of a ping, written by Gemini and checked against the computed
+        result (PRD FR-10.4), or the fixed template."""
+        p = _profile(req)
+        if req.kind == "bets":
+            facts, terms, template = brief.bets_facts(journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p))
+        else:
+            if not req.from_snapshot:
+                raise HTTPException(422, "from_snapshot is required for a ping brief")
+            diff = journey.ping(cur, conn, _snapshot_id(conn, req.from_snapshot), _snapshot_id(conn, req.snapshot), p)
+            facts, terms, template = brief.ping_facts(diff)
+        return brief.write(cur, facts, terms, template)
 
     return app, background
 

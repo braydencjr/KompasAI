@@ -1,3 +1,5 @@
+import { JourneyProvider } from "./journey/JourneyProvider";
+import { LadderProvider } from "./journey/shared";
 import { ProfileProvider } from "./Profile";
 import Sidebar from "./Sidebar";
 import { SignalsProvider } from "./Signals";
@@ -6,6 +8,8 @@ export default function Shell({ children, bubbles = false }: { children: React.R
   return (
     <ProfileProvider>
       <SignalsProvider>
+        <JourneyProvider>
+        <LadderProvider>
         <div className="shell">
           <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
             <defs>
@@ -48,6 +52,8 @@ export default function Shell({ children, bubbles = false }: { children: React.R
             {children}
           </main>
         </div>
+        </LadderProvider>
+        </JourneyProvider>
       </SignalsProvider>
     </ProfileProvider>
   );

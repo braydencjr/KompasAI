@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import type { SkillRow } from "../lib/journey";
 import Ring from "./Ring";
 import Roadmap, { SkillColumns, useStepProgress } from "./Roadmap";
 import { SimButton } from "./SimulatorProvider";
@@ -7,6 +9,10 @@ import type { Role } from "../data/bets";
 
 type Props = {
   role: Role;
+  /** what Kompas read about the person, shown above the role */
+  intro?: React.ReactNode;
+  /** the role's per-skill score rows: "How is this calculated?" shows them */
+  breakdown?: SkillRow[];
   /** where this profile came from (sample, or which CV and how it was read) */
   origin?: React.ReactNode;
   /** experience and AI exposure, between the header and the skills */
@@ -18,22 +24,55 @@ type Props = {
   onRemoveSkill?: (label: string) => void;
   haveLabel?: string;
   animate?: boolean;
+  /** section label (default: best fit from the CV) */
+  label?: string;
+  /** shown instead of the roadmap when the role has no steps (null: nothing) */
+  emptyNote?: React.ReactNode;
+  /** progress kept elsewhere (the journey); default: this browser's per-role progress */
+  progress?: ReturnType<typeof useStepProgress>;
 };
 
 const FORMULA =
   "Match = Σ weight × coverage ÷ Σ weight. Weight = importance (essential 1.0, optional 0.5) × demand. " +
   "Coverage: demonstrated 1.0, claimed on a CV 0.7, missing 0.";
 
-export default function CvMatch({ role, origin, details, footer, skillQuotes, onRemoveSkill, haveLabel, animate }: Props) {
-  const { done, toggle, gapClosed } = useStepProgress(role);
+const EVIDENCE: Record<string, string> = { demonstrated: "shown", claimed: "on your CV" };
+
+/** Each skill's share of the match: weight x coverage over the total weight, so the rows add up to the score. */
+export function Breakdown({ rows }: { rows: SkillRow[] }) {
+  const total = rows.reduce((t, r) => t + r.weight, 0) || 1;
+  return (
+    <div className="plan-breakdown">
+      <div className="pb-row pb-head">
+        <span>Skill</span><span>Role needs it</span><span>Demand</span><span>You</span><span>Points</span>
+      </div>
+      {rows.map((r) => (
+        <div key={r.id} className={`pb-row${r.coverage ? "" : " missing"}`}>
+          <span>{r.label}</span>
+          <span>{r.importance === 1 ? "Essential" : "Optional"}</span>
+          <span>{r.measured ? r.status : "No signal"}</span>
+          <span>{r.coverage ? `${EVIDENCE[r.evidence ?? ""] ?? "yes"} · ${Math.round(r.coverage * 100)}%` : "Missing"}</span>
+          <span>{Math.round((100 * r.weight * r.coverage) / total)} / {Math.round((100 * r.weight) / total)}</span>
+        </div>
+      ))}
+      <p className="muted small">{FORMULA}</p>
+    </div>
+  );
+}
+
+export default function CvMatch({ role, intro, breakdown, origin, details, footer, skillQuotes, onRemoveSkill, haveLabel, animate, label, emptyNote, progress }: Props) {
+  const local = useStepProgress(role);
+  const { done, toggle, gapClosed } = progress ?? local;
+  const [showHow, setShowHow] = useState(false);
 
   return (
     <section id="plan" className={`plan glass${animate ? " reveal" : ""}`}>
       <div className="plan-inner">
+        {intro}
         <header className="plan-head">
           <div className="plan-title">
             <div className="plan-tags">
-              <span className="label">01 — Best fit from your CV</span>
+              <span className="label">{label ?? "Best fit from your CV"}</span>
               {origin}
               {role.sdg && <span className="chip chip-blue">{role.sdg.goal}</span>}
             </div>
@@ -41,21 +80,27 @@ export default function CvMatch({ role, origin, details, footer, skillQuotes, on
             <p className="muted">{role.summary}</p>
             <SimButton roleId={role.id} />
           </div>
-          <div className="plan-score" title={FORMULA}>
+          <div className="plan-score">
             <Ring value={role.match} size={84} stroke={6} />
             <div>
               <div className="profile-stat-title">Skill match</div>
-              <div className="muted small">{role.signal} demand · estimate</div>
-              <div className="plan-how">How is this calculated?</div>
+              <div className="muted small">{role.signal ? `${role.signal} demand` : "No demand signal yet"} · estimate</div>
+              <button className="plan-how" onClick={() => setShowHow(!showHow)} aria-expanded={showHow}>
+                {showHow ? "Hide the calculation" : "How is this calculated?"}
+              </button>
             </div>
           </div>
         </header>
+
+        {showHow && (breakdown?.length ? <Breakdown rows={breakdown} /> : <p className="muted small plan-empty">{FORMULA}</p>)}
 
         {details}
 
         <SkillColumns role={role} gapClosed={gapClosed} quotes={skillQuotes} onRemove={onRemoveSkill} haveLabel={haveLabel} />
         {role.steps.length > 0 ? (
           <Roadmap role={role} done={done} toggle={toggle} />
+        ) : emptyNote !== undefined ? (
+          emptyNote
         ) : (
           <p className="muted small plan-empty">No verified course for these gaps yet. They&apos;re still worth learning.</p>
         )}

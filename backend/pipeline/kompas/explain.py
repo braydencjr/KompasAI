@@ -12,8 +12,8 @@ RELATION_LABEL = {
 MEANING = {
     "Act now": "Malaysian employers are hiring for this now.",
     "Emerging": "Companies abroad are hiring for this. Malaysian demand hasn't caught up yet.",
-    "Watch": "This is buzz from researchers and developers. There's no hiring signal behind it yet.",
-    "Stable": "Lots of talk, but hiring for it hasn't changed.",
+    "Watch": "Talk about it is rising fast, but hiring hasn't clearly picked up yet.",
+    "Stable": "Hiring for it is holding steady, whatever the buzz is doing.",
     "Declining": "Hiring for this is falling.",
     "Stalled": "It's been hyped for months without turning into jobs.",
 }

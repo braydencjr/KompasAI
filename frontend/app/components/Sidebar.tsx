@@ -1,17 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useProfile } from "./Profile";
 import { SidebarSnapshot } from "./Signals";
+import { STEPS, useOptionalJourney } from "./journey/JourneyProvider";
 
-const nav = [
-  { label: "Home", href: "/", icon: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
-  { label: "The Mirror", href: "#", icon: "M12 3v18M5 5h14v14H5z" },
-  { label: "Ghost CV", href: "#", icon: "M6 3h9l4 4v14H6zM9 12h7M9 16h5" },
-  { label: "Signal Ladder", href: "#", icon: "M7 3v18M17 3v18M7 8h10M7 13h10M7 18h10" },
-  { label: "My Roadmap", href: "/#plan", icon: "M5 19c4 0 4-14 8-14s4 14 6 14" },
-];
+const ICONS: Record<string, string> = {
+  you: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
+  future: "M6 3h9l4 4v14H6zM9 12h7M9 16h5",
+  bets: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  route: "M5 19c4 0 4-14 8-14s4 14 6 14",
+  ping: "M12 3a6 6 0 0 1 6 6v4l2 3H4l2-3V9a6 6 0 0 1 6-6zM10 20a2 2 0 0 0 4 0",
+};
 
 function Icon({ d }: { d: string }) {
   return (
@@ -23,9 +23,10 @@ function Icon({ d }: { d: string }) {
 }
 
 export default function Sidebar() {
-  const pathname = usePathname();
   const { source, cv } = useProfile();
+  const journey = useOptionalJourney();
   const fromCv = source === "cv";
+  const current = STEPS.findIndex((s) => s.id === journey?.step);
 
   return (
     <aside className="sidebar glass">
@@ -34,16 +35,20 @@ export default function Sidebar() {
         Kompas
       </Link>
 
-      <nav className="nav">
-        {nav.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link key={item.label} href={item.href} className={`nav-item${active ? " active" : ""}`}>
-              <Icon d={item.icon} />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="nav j-rail" aria-label="Your journey">
+        <span className="j-rail-line" aria-hidden><span style={{ height: `${(Math.max(current, 0) / (STEPS.length - 1)) * 100}%` }} /></span>
+        {STEPS.map((s, i) => (
+          <a key={s.id} href={`#${s.id}`}
+            className={`nav-item${i === current ? " active" : ""}${i < current ? " done" : ""}`}
+            onClick={(e) => {
+              if (!journey) return;
+              e.preventDefault();
+              journey.go(s.id);
+            }}>
+            <Icon d={ICONS[s.id]} />
+            <span>{s.label}</span>
+          </a>
+        ))}
       </nav>
 
       <SidebarSnapshot />
