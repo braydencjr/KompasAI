@@ -89,7 +89,7 @@ export function SimButton({ roleId, variant = "button" }: { roleId: string; vari
       )}
       <button className={variant === "button" ? "btn btn-ghost btn-sm sim-btn" : "sim-link"} onClick={() => open(roleId)}>
         <span className="sim-play" aria-hidden>▶</span>
-        {result ? "Try again" : variant === "button" ? "Try a day in this job" : "Try a 15-min work simulation"}
+        {result ? "Try again" : variant === "button" ? "Try a day in this job" : "Try the job hands-on · 15 min"}
       </button>
     </div>
   );

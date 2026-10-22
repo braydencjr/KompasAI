@@ -1,12 +1,14 @@
 import CvMatch from "./components/CvMatch";
 import TrendingCareers from "./components/TrendingCareers";
 import Shell from "./components/Shell";
+import SimulatorProvider from "./components/SimulatorProvider";
 import UploadCard from "./components/UploadCard";
 import { bets, cvMatch } from "./data/bets";
 
 export default function Home() {
   return (
     <Shell bubbles>
+      <SimulatorProvider>
       <section className="hero">
         <span className="eyebrow">AI watches the market. You grow.</span>
         <h1>
@@ -32,6 +34,7 @@ export default function Home() {
       <footer className="foot muted">
         Resources checked 20 Oct 2026. Projections are estimates based on current signals, not predictions.
       </footer>
+      </SimulatorProvider>
     </Shell>
   );
 }

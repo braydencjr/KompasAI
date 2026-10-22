@@ -2,6 +2,7 @@
 
 import Ring from "./Ring";
 import Roadmap, { SkillColumns, useStepProgress } from "./Roadmap";
+import { SimButton } from "./SimulatorProvider";
 import type { Role } from "../data/bets";
 
 export default function CvMatch({ role }: { role: Role }) {
@@ -18,6 +19,7 @@ export default function CvMatch({ role }: { role: Role }) {
             </div>
             <h2>{role.title}</h2>
             <p className="muted">{role.summary}</p>
+            <SimButton roleId={role.id} />
           </div>
           <div className="plan-score">
             <Ring value={role.match} size={84} stroke={6} />

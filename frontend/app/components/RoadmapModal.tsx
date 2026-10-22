@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import JobsPanel from "./JobsPanel";
 import Ring from "./Ring";
 import Roadmap, { SkillColumns, useStepProgress } from "./Roadmap";
+import { SimButton } from "./SimulatorProvider";
 import { riskLabel, type Bet } from "../data/bets";
 
 // keep in sync with the jobs-slot / panel-out animation length in globals.css
@@ -58,6 +59,7 @@ export default function RoadmapModal({ bet, onClose }: { bet: Bet; onClose: () =
               </div>
               <h2 id="modal-title">{bet.title}</h2>
               <p className="muted">{bet.summary}</p>
+              <SimButton roleId={bet.id} />
             </div>
           </header>
 

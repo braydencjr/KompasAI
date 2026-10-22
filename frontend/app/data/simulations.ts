@@ -1,53 +1,109 @@
-// Work simulations: three short, realistic moments from each role.
-// Scenarios are written from the role's core tasks; all names, companies and figures are fictional.
+// Hands-on work simulations: four tasks per role, done in a mini workspace.
+// Tasks 1–2 are the job's core work; tasks 3–4 use the AI tools now arriving in that field (replies are scripted).
+// All names, companies and figures are fictional.
+
+import type { SheetSpec } from "../lib/sheet";
+
+/** manager's comment on the work, picked by score: ≥0.9 high, ≥0.5 mid, else low */
+export type Review = { high: string; mid: string; low: string };
 
 type TaskBase = {
-  /** what this moment exercises, shown on the result screen */
-  skill: string;
-  /** roadmap skill gap this moment maps to, if any */
+  id: string;
+  title: string;
+  /** competency shown on the performance report */
+  competency: string;
+  /** roadmap skill gap this task builds, if any */
   gap?: string;
-};
-
-export type DataTask = TaskBase & {
-  kind: "data";
+  /** expected time, for the report */
+  minutes: number;
   from: string;
   fromRole: string;
   subject: string;
-  body: string;
-  file: { name: string; columns: string[]; rows: string[][] };
-  question: string;
-  options: { text: string; correct: boolean; feedback: string }[];
+  brief: string;
+  requirements: string[];
+  review: Review;
 };
 
-export type WriteTask = TaskBase & {
-  kind: "write";
-  from: string;
-  fromRole: string;
-  subject: string;
-  body: string;
-  prompt: string;
+export type SheetTask = TaskBase & { tool: "sheet"; sheet: SheetSpec };
+
+export type CodeTask = TaskBase & {
+  tool: "code";
+  fn: string;
+  /** helper functions available to the user's code */
+  helpers: { signature: string; source: string }[];
+  starter: string;
+  tests: { label: string; args: unknown[]; expected: unknown }[];
+};
+
+export type DocTask = TaskBase & {
+  tool: "doc";
+  docName: string;
+  template: string;
   checklist: { label: string; keywords: string[] }[];
-  sample: string;
+  words: [number, number];
 };
 
-export type ChoiceTask = TaskBase & {
-  kind: "choice";
-  from: string;
-  fromRole: string;
-  message: string;
-  options: { text: string; score: 0 | 1 | 2; feedback: string }[];
+export type CalEvent = {
+  id: string;
+  title: string;
+  people: string[];
+  /** must finish by this day index and hour */
+  deadline?: { day: number; hour: number; label: string };
+  /** must start after this event ends */
+  after?: string;
 };
 
-export type SimTask = DataTask | WriteTask | ChoiceTask;
+export type CalendarTask = TaskBase & {
+  tool: "calendar";
+  days: string[];
+  hours: number[];
+  /** per person, the busy start hours for each day */
+  busy: Record<string, number[][]>;
+  events: CalEvent[];
+};
+
+type AiTaskBase = TaskBase & {
+  /** the simulated AI tool's name */
+  aiName: string;
+  /** why this AI skill matters now, shown in the inbox */
+  why: string;
+};
+
+export type AiReply = { text: string; table?: { columns: string[]; rows: string[][] }; steps?: string[]; note?: string };
+
+/** "Direct the AI": the user briefs an AI tool; the reply depends on how complete the brief is */
+export type PromptTask = AiTaskBase & {
+  tool: "prompt";
+  rubric: { label: string; keywords: string[] }[];
+  replies: { weak: AiReply; partial: AiReply; strong: AiReply };
+};
+
+/** "Check the AI's work": an AI draft with planted mistakes to catch */
+export type ReviewTask = AiTaskBase & {
+  tool: "review";
+  artifactName: string;
+  format: "prose" | "code";
+  source: { title: string; columns: string[]; rows: string[][] };
+  segments: { text: string; issue?: string }[];
+  verdict: "approve" | "send back";
+};
+
+export type SimTask = SheetTask | CodeTask | DocTask | CalendarTask | PromptTask | ReviewTask;
+
+export const isAiTask = (t: SimTask): t is PromptTask | ReviewTask => t.tool === "prompt" || t.tool === "review";
 
 export type Simulation = {
   roleId: string;
   title: string;
   setting: string;
-  minutes: number;
   welcome: { from: string; text: string };
-  tasks: [SimTask, SimTask, SimTask];
+  tasks: SimTask[];
 };
+
+/** what a finished task reports back */
+export type Outcome = { score: number; evidence: string[]; seconds: number; enjoy: number };
+
+export type Quadrant = "Strong fit" | "Capable, may burn out" | "Learnable" | "Probably not for you";
 
 export type SimResult = {
   can: number;
@@ -57,8 +113,6 @@ export type SimResult = {
   at: string;
 };
 
-export type Quadrant = "Strong fit" | "Capable, may burn out" | "Learnable" | "Probably not for you";
-
 export const FIT_THRESHOLD = 60;
 
 export function quadrantOf(can: number, want: number): Quadrant {
@@ -66,193 +120,431 @@ export function quadrantOf(can: number, want: number): Quadrant {
   return want >= FIT_THRESHOLD ? "Learnable" : "Probably not for you";
 }
 
-export function checkWriting(task: WriteTask, text: string) {
-  const t = text.toLowerCase();
-  return task.checklist.map((c) => c.keywords.some((k) => t.includes(k)));
+export function reviewFor(task: SimTask, score: number) {
+  return score >= 0.9 ? task.review.high : score >= 0.5 ? task.review.mid : task.review.low;
 }
 
-/** 0–1 score for one task */
-export function scoreTask(task: SimTask, answer: { choice: number | null; text: string }) {
-  if (task.kind === "write") {
-    const hits = checkWriting(task, answer.text);
-    return hits.filter(Boolean).length / hits.length;
-  }
-  if (answer.choice === null) return 0;
-  if (task.kind === "data") return task.options[answer.choice].correct ? 1 : 0;
-  return task.options[answer.choice].score / 2;
+export function checkDoc(task: DocTask, text: string) {
+  const t = text.toLowerCase();
+  const plain = t.replace(/,/g, "");
+  return task.checklist.map((c) => c.keywords.some((k) => t.includes(k) || plain.includes(k)));
 }
+
+/** which rubric items a brief covers; numbers are matched with or without thousands separators */
+export function checkBrief(task: PromptTask, text: string) {
+  const t = text.toLowerCase();
+  const plain = t.replace(/,/g, "");
+  return task.rubric.map((c) => c.keywords.some((k) => t.includes(k) || plain.includes(k)));
+}
+
+export function replyFor(task: PromptTask, hits: boolean[]) {
+  const n = hits.filter(Boolean).length;
+  return n === hits.length ? task.replies.strong : n >= 2 ? task.replies.partial : task.replies.weak;
+}
+
+export const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
+
+const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const HOURS = [9, 10, 11, 12, 13, 14, 15, 16];
 
 export const simulations: Simulation[] = [
   {
     roleId: "fpa-analyst",
     title: "FP&A Analyst",
     setting: "Monday 09:00 · Week 1 · Group finance",
-    minutes: 15,
-    welcome: { from: "Farid Hassan", text: "Welcome aboard! 👋 Could you look at my email about Marketing first? I need it before my 11am." },
+    welcome: { from: "Farid Hassan", text: "Welcome aboard! 👋 The Q4 forecast is due this week, and you get to try our new AI assistant too." },
     tasks: [
       {
-        kind: "data",
-        skill: "Variance analysis",
+        id: "forecast",
+        tool: "sheet",
+        title: "Build the Q4 forecast",
+        competency: "Financial modelling",
         gap: "Financial modelling",
+        minutes: 6,
         from: "Farid Hassan",
         fromRole: "CFO",
-        subject: "Marketing 18% over budget?",
-        body: "Hi, Marketing is showing roughly 18% over budget for Q3. Before I raise it with the CEO, can you check whether any of it looks like a booking error rather than real spend?",
-        file: {
-          name: "marketing_budget_Q3.xlsx",
-          columns: ["Month", "Line item", "Budget (RM)", "Actual (RM)", "Variance"],
+        subject: "Q4 forecast model",
+        brief: "Hi, can you finish the Q4 forecast in the attached sheet? Q3 actuals and growth assumptions are already in. Use formulas so I can change the assumptions later.",
+        requirements: [
+          "Q4 forecast = Q3 actual × (1 + growth)",
+          "Operating profit = revenue − cost of sales − operating expenses",
+          "Variance = Q4 forecast − Q4 budget",
+          "Tip: start a cell with = to write a formula, e.g. =B2*(1+C2)",
+        ],
+        sheet: {
+          name: "Q4_forecast.xlsx",
+          columns: [
+            { label: "Line item", fmt: "text" },
+            { label: "Q3 actual (RM)", fmt: "rm" },
+            { label: "Growth", fmt: "pct" },
+            { label: "Q4 forecast (RM)", fmt: "rm" },
+            { label: "Q4 budget (RM)", fmt: "rm" },
+            { label: "Variance (RM)", fmt: "rm" },
+          ],
           rows: [
-            ["Jul", "Digital ads", "40,000", "39,200", "−800"],
-            ["Jul", "Events", "30,000", "28,500", "−1,500"],
-            ["Jul", "Agency fees", "25,000", "25,000", "0"],
-            ["Aug", "Digital ads", "40,000", "41,100", "+1,100"],
-            ["Aug", "Events", "30,000", "31,800", "+1,800"],
-            ["Aug", "Agency fees", "25,000", "50,000", "+25,000"],
-            ["Sep", "Digital ads", "40,000", "64,000", "+24,000"],
-            ["Sep", "Events", "30,000", "31,400", "+1,400"],
-            ["Sep", "Agency fees", "25,000", "25,000", "0"],
+            ["Revenue", "1,200,000", "8%", { expect: 1296000 }, "1,250,000", { expect: 46000 }],
+            ["Cost of sales", "720,000", "6%", { expect: 763200 }, "750,000", { expect: 13200 }],
+            ["Operating expenses", "300,000", "2%", { expect: 306000 }, "310,000", { expect: -4000 }],
+            ["Operating profit", "180,000", "", { expect: 226800 }, "190,000", { expect: 36800 }],
           ],
         },
-        question: "Which line should you flag as a likely booking error, not real spend?",
-        options: [
-          {
-            text: "September digital ads (+RM24,000)",
-            correct: false,
-            feedback: "It's big, but campaign spend genuinely varies month to month. That's a question for Marketing, not an error.",
-          },
-          {
-            text: "August agency fees (+RM25,000)",
-            correct: true,
-            feedback: "Exactly double a fee that's flat every other month: the classic sign of one invoice posted twice.",
-          },
-          {
-            text: "August events (+RM1,800)",
-            correct: false,
-            feedback: "Too small to explain the gap, and within normal month-to-month noise.",
-          },
-        ],
+        review: {
+          high: "Clean model, and it's formula-driven so I can flex the assumptions in the meeting. Exactly what I needed.",
+          mid: "Most of it is right, but a few cells don't tie out. I'd have caught that in review, but the CEO wouldn't have.",
+          low: "The numbers don't hold together yet. Let's sit down and walk through how the forecast links up.",
+        },
       },
       {
-        kind: "write",
-        skill: "Explaining numbers to leaders",
+        id: "schedule",
+        tool: "calendar",
+        title: "Book the budget review",
+        competency: "Planning & coordination",
+        minutes: 4,
         from: "Farid Hassan",
         fromRole: "CFO",
-        subject: "Re: Marketing 18% over budget?",
-        body: "Good catch. Can you send me 2–3 lines I can forward straight to the CEO?",
-        prompt: "Write your reply to Farid",
-        checklist: [
-          { label: "States the size of the overspend", keywords: ["51", "18%", "18 %", "18 per"] },
-          { label: "Flags the duplicate invoice", keywords: ["duplicate", "twice", "double", "two times"] },
-          { label: "Mentions the real campaign spend", keywords: ["campaign", "digital", "ads", "september", "sep "] },
-          { label: "Says what happens next", keywords: ["revers", "correct", "fix", "credit", "confirm", "follow", "will "] },
+        subject: "Budget review meeting",
+        brief: "Please book the Q4 budget review with me, Mei Ling (Sales) and Ravi (Ops). I also need a 1-hour prep with you beforehand. Everything has to be done before Thursday noon.",
+        requirements: [
+          "Book a 1-hour prep with Farid",
+          "Book the 1-hour review with Farid, Mei Ling and Ravi, after the prep",
+          "Both must finish before Thursday 12:00",
+          "Shaded slots show when attendees are busy",
         ],
-        sample:
-          "Marketing is about RM51k (18%) over budget for Q3. RM25k of that is an August agency invoice booked twice, which we're reversing this week. The rest is September's digital campaign (+RM24k); I'm confirming with Marketing that it was approved.",
+        days: WEEK,
+        hours: HOURS,
+        busy: {
+          Farid: [[9, 10, 11, 14], [9, 10, 11, 12, 13, 14, 15, 16], [10, 15], [9, 10], []],
+          "Mei Ling": [[13, 14, 15, 16], [], [9, 10, 14], [11], []],
+          Ravi: [[9, 10, 15, 16], [], [13, 16], [9, 10], []],
+        },
+        events: [
+          { id: "prep", title: "Prep with Farid", people: ["Farid"], deadline: { day: 3, hour: 12, label: "Thu 12:00" } },
+          {
+            id: "review",
+            title: "Q4 budget review",
+            people: ["Farid", "Mei Ling", "Ravi"],
+            deadline: { day: 3, hour: 12, label: "Thu 12:00" },
+            after: "prep",
+          },
+        ],
+        review: {
+          high: "Booked, no clashes, and the prep is before the review. Thanks for sorting that without a single email chain.",
+          mid: "One of these doesn't work: check the deadline and who's free.",
+          low: "These slots don't work for the people involved. Check everyone's calendar before sending invites.",
+        },
       },
       {
-        kind: "choice",
-        skill: "Forecasting judgement",
-        gap: "Forecasting",
-        from: "Mei Ling",
-        fromRole: "Sales Director",
-        message: "Q4 is going to be huge 🚀 can you bump the revenue forecast up 30%? Leadership meeting at 2pm.",
-        options: [
-          {
-            text: "Done, I've updated it to +30%.",
-            score: 0,
-            feedback: "Fast and friendly, but a forecast nobody can back up costs you trust when it misses. FP&A owns the numbers.",
-          },
-          {
-            text: "Love the optimism! Can you share the deals behind it? I'll include what the pipeline supports and show the rest as an upside scenario.",
-            score: 2,
-            feedback: "This is the job: keep Sales on side, ask for evidence, and use scenarios instead of a single guess.",
-          },
-          {
-            text: "Sorry, forecasts aren't changed on request.",
-            score: 1,
-            feedback: "Right instinct, but shutting Sales out means losing information they genuinely have.",
-          },
+        id: "ai-scenario",
+        tool: "prompt",
+        title: "Brief the forecasting AI",
+        competency: "Directing AI tools",
+        minutes: 5,
+        aiName: "Forecast Assistant",
+        why: "Finance teams are starting to use AI assistants to draft scenarios in minutes. The skill is no longer building every number by hand; it's briefing the AI well and knowing what to give it.",
+        from: "Farid Hassan",
+        fromRole: "CFO",
+        subject: "Try the new forecasting assistant",
+        brief: "We're piloting an AI forecasting assistant. Use it to build a downside scenario for Q4: what happens to operating profit if revenue only grows 2% instead of 8%? It only knows what you tell it.",
+        requirements: [
+          "Give it context: what forecast, which quarter",
+          "Give it the numbers it needs (it can't see your sheet)",
+          "State the assumption to change, and what to keep the same",
+          "Ask for a clear output, e.g. a table comparing base vs downside",
         ],
+        rubric: [
+          { label: "Context", keywords: ["q4", "forecast", "quarter"] },
+          { label: "Base numbers", keywords: ["1200000", "1.2m", "1.2 m", "720000", "763200", "300000", "306000", "1296000"] },
+          { label: "Assumption", keywords: ["2%", "2 %", "two percent", "2 percent"] },
+          { label: "What stays fixed", keywords: ["keep", "same", "constant", "unchanged", "hold", "flat", "fixed"] },
+          { label: "Output format", keywords: ["table", "compare", "comparison", " vs", "versus", "side by side", "column"] },
+        ],
+        replies: {
+          weak: {
+            text: "Sure! A downside scenario usually assumes lower revenue than planned. A common approach is to cut revenue by 5–10% and see what happens to profit. Would you like some general tips on scenario planning?",
+          },
+          partial: {
+            text: "Here's a downside scenario with 2% revenue growth. I don't have your actual figures, so I've used illustrative numbers:",
+            table: {
+              columns: ["", "Base", "Downside"],
+              rows: [
+                ["Revenue", "1,000,000", "1,020,000"],
+                ["Costs", "800,000", "800,000"],
+                ["Profit", "200,000", "220,000"],
+              ],
+            },
+            note: "⚠ These numbers are made up because the brief didn't include yours. This is how AI tools quietly invent figures.",
+          },
+          strong: {
+            text: "Downside scenario for Q4, with revenue growth cut from 8% to 2% and costs held at the base forecast:",
+            table: {
+              columns: ["RM", "Base (8%)", "Downside (2%)", "Change"],
+              rows: [
+                ["Revenue", "1,296,000", "1,224,000", "−72,000"],
+                ["Cost of sales", "763,200", "763,200", "0"],
+                ["Operating expenses", "306,000", "306,000", "0"],
+                ["Operating profit", "226,800", "154,800", "−72,000 (−31.7%)"],
+              ],
+            },
+            note: "Holding cost of sales flat is conservative. If it scales with volume, downside profit would be about RM197k. Want me to add that as a third scenario?",
+          },
+        },
+        review: {
+          high: "That's exactly what I needed for the board. Good brief: the assistant had everything it needed.",
+          mid: "Useful, but I had to fill in gaps. Give it the numbers and the format, and it does the rest.",
+          low: "The assistant was guessing. With AI tools, the quality of the brief is the quality of the answer.",
+        },
+      },
+      {
+        id: "ai-commentary",
+        tool: "review",
+        title: "Check the AI's commentary",
+        competency: "Verifying AI output",
+        minutes: 5,
+        aiName: "Forecast Assistant",
+        why: "AI can draft board commentary in seconds, but it can misread numbers or invent explanations that sound plausible. A person still signs it off.",
+        from: "Farid Hassan",
+        fromRole: "CFO",
+        subject: "AI draft: variance commentary",
+        brief: "The assistant drafted the variance commentary for the board pack. Check every sentence against the model before it goes anywhere. Flag anything that's wrong, then approve it or send it back.",
+        requirements: [
+          "Click a sentence to flag it as wrong",
+          "Check numbers against the source data",
+          "Watch for explanations or facts the AI couldn't know",
+          "Then approve it or send it back",
+        ],
+        artifactName: "Q4 variance commentary (AI draft)",
+        format: "prose",
+        source: {
+          title: "Your Q4 model",
+          columns: ["RM", "Q4 forecast", "Q4 budget", "Variance"],
+          rows: [
+            ["Revenue", "1,296,000", "1,250,000", "+46,000"],
+            ["Cost of sales", "763,200", "750,000", "+13,200"],
+            ["Operating expenses", "306,000", "310,000", "−4,000"],
+            ["Operating profit", "226,800", "190,000", "+36,800"],
+          ],
+        },
+        segments: [
+          { text: "Q4 revenue is forecast at RM1,296,000, RM46,000 ahead of budget." },
+          {
+            text: "Cost of sales is RM13,200 under budget, reflecting strong supplier negotiations.",
+            issue: "Cost of sales is over budget, not under. And nothing in the model mentions supplier negotiations; the AI made up a reason.",
+          },
+          { text: "Operating expenses are RM4,000 below budget." },
+          {
+            text: "As a result, operating profit is forecast at RM262,800, 38% above budget.",
+            issue: "Wrong number: operating profit is RM226,800, about 19% above budget.",
+          },
+          {
+            text: "This is in line with the wider Malaysian market, which grew 8% this quarter.",
+            issue: "An unsourced market statistic. The 8% is your growth assumption, not a market figure.",
+          },
+          { text: "We recommend reviewing cost of sales with Operations before year end." },
+        ],
+        verdict: "send back",
+        review: {
+          high: "Good catch. That would have gone to the board with two wrong numbers. This is why we check AI drafts.",
+          mid: "You caught some of it, but a mistake still slipped through. Every number gets checked, every time.",
+          low: "This would have embarrassed us at the board. AI drafts are a starting point, not a final answer.",
+        },
       },
     ],
   },
   {
     roleId: "ai-risk-controls",
     title: "AI Risk & Controls Analyst",
-    setting: "Tuesday 10:00 · Week 1 · Model risk team",
-    minutes: 15,
-    welcome: { from: "Ahmad Razak", text: "Hi, welcome to the team! The loan model review in my email is today's priority." },
+    setting: "Monday 10:00 · Week 1 · Model risk team",
+    welcome: { from: "Ahmad Razak", text: "Hi, welcome to the team! The loan approval model launches Friday. We need to review it first." },
     tasks: [
       {
-        kind: "data",
-        skill: "Model review",
+        id: "fairness",
+        tool: "sheet",
+        title: "Test the model for fairness",
+        competency: "Model testing",
         gap: "AI risk frameworks",
+        minutes: 6,
         from: "Ahmad Razak",
         fromRole: "Head of Risk",
-        subject: "Loan approval model: ready to sign off?",
-        body: "The new loan approval model passed accuracy testing (91%). Before we sign off, have a look at the approval-rate breakdown from the pilot.",
-        file: {
-          name: "pilot_approvals_by_group.csv",
-          columns: ["Applicant group", "Applications", "Approved", "Approval rate"],
+        subject: "Loan model: fairness check",
+        brief: "The model passed accuracy testing at 91%. Before sign-off, run the four-fifths check on the pilot approvals: any group approved at less than 0.8× the salaried rate needs explaining.",
+        requirements: [
+          "Approval rate = approved ÷ applications",
+          "Ratio vs salaried = group's rate ÷ salaried rate",
+          "Below 0.8? → type Yes or No",
+          "Tip: start a cell with = to write a formula, e.g. =C2/B2",
+        ],
+        sheet: {
+          name: "pilot_approvals.xlsx",
+          columns: [
+            { label: "Applicant group", fmt: "text" },
+            { label: "Applications", fmt: "num" },
+            { label: "Approved", fmt: "num" },
+            { label: "Approval rate", fmt: "pct" },
+            { label: "Ratio vs salaried", fmt: "dec" },
+            { label: "Below 0.8?", fmt: "text" },
+          ],
           rows: [
-            ["Salaried", "4,200", "2,940", "70%"],
-            ["Government", "900", "720", "80%"],
-            ["Self-employed", "1,100", "330", "30%"],
-            ["Gig workers", "600", "90", "15%"],
+            ["Salaried", "4,200", "2,940", { expect: 0.7 }, "1.00", "No"],
+            ["Government", "900", "720", { expect: 0.8 }, { expect: 1.1429, tol: 0.01 }, { expect: "No" }],
+            ["Self-employed", "1,100", "330", { expect: 0.3 }, { expect: 0.4286, tol: 0.01 }, { expect: "Yes" }],
+            ["Gig workers", "600", "90", { expect: 0.15 }, { expect: 0.2143, tol: 0.01 }, { expect: "Yes" }],
           ],
         },
-        question: "What should you raise before sign-off?",
-        options: [
-          {
-            text: "Nothing: 91% accuracy is well above the threshold, so sign off.",
-            correct: false,
-            feedback: "High overall accuracy can hide very different outcomes for different groups. That's exactly what a review is for.",
-          },
-          {
-            text: "Gig and self-employed approval rates are far lower. Check whether the model penalises income type rather than ability to repay.",
-            correct: true,
-            feedback: "Right. A gap this large needs explaining before launch: it may be real risk, or the model may be learning a proxy.",
-          },
-          {
-            text: "Government approvals are too high; tighten them to match the others.",
-            correct: false,
-            feedback: "Lowering one group's rate to even things out doesn't fix the cause, and could reject good applicants.",
-          },
-        ],
+        review: {
+          high: "Spot on. Two groups fail the four-fifths test, and you've shown it clearly. That's our finding.",
+          mid: "You're close, but some of the ratios are off. In risk work, one wrong number undermines the whole finding.",
+          low: "The test isn't right yet. Let's go through how the ratios work together.",
+        },
       },
       {
-        kind: "write",
-        skill: "Writing for a risk committee",
-        from: "Ahmad Razak",
-        fromRole: "Head of Risk",
-        subject: "Re: Loan approval model",
-        body: "Agreed. Draft 2–3 lines for the model risk committee, please.",
-        prompt: "Write your note to the committee",
-        checklist: [
-          { label: "Names the affected groups", keywords: ["gig", "self-employed", "self employed"] },
-          { label: "Gives the numbers", keywords: ["15%", "30%", "70%", "80%", "15 %", "30 %"] },
-          { label: "Explains the risk", keywords: ["fair", "bias", "discriminat", "penalis", "penaliz", "proxy"] },
-          { label: "Recommends an action", keywords: ["test", "review", "investigat", "hold", "before", "check"] },
-        ],
-        sample:
-          "The model is 91% accurate overall, but approves 15% of gig workers and 30% of self-employed applicants vs 70% of salaried. We recommend holding sign-off until we test whether income type is acting as a proxy for repayment ability.",
-      },
-      {
-        kind: "choice",
-        skill: "Holding a line under pressure",
-        gap: "Responsible AI",
+        id: "committee",
+        tool: "calendar",
+        title: "Get it reviewed before launch",
+        competency: "Planning under a deadline",
+        minutes: 4,
         from: "Kevin Lim",
         fromRole: "Product Owner",
-        message: "We launch Friday and marketing's already booked. Can we sign off now and fix fairness in v2?",
-        options: [
-          { text: "OK, let's launch and fix it in v2.", score: 0, feedback: "Every declined applicant before v2 is affected. Risk's job is to make that cost visible." },
-          {
-            text: "We can launch Friday if declined gig and self-employed applications go to human review, and we retest in 30 days.",
-            score: 2,
-            feedback: "A control that lets the business move while protecting people. This is what good risk work looks like.",
-          },
-          { text: "No launch until it's fully fixed.", score: 1, feedback: "Safe, but with no path forward the business may route around you next time." },
+        subject: "Launch is Friday 9am!",
+        brief: "If the committee needs to see this, it has to happen before we launch on Friday morning. After they decide, I need a session to train the loan officers on the human-review step before Friday noon.",
+        requirements: [
+          "Committee review: Ahmad, Kevin and Siti (Legal), finished before Fri 09:00",
+          "Loan officer training with Kevin, after the committee, finished by Fri 12:00",
+          "Shaded slots show when attendees are busy",
         ],
+        days: WEEK,
+        hours: HOURS,
+        busy: {
+          Ahmad: [[9, 10, 11, 12, 13, 14, 16], [9, 10, 11, 12], [13, 14, 15, 16], [9, 10, 11, 14, 15, 16], []],
+          Kevin: [[15], [13, 14, 15, 16], [9, 10, 11], [12, 13], [9, 10]],
+          Siti: [[], [9, 10, 11, 12, 13, 14], [], [9, 10, 11, 12, 13, 16], []],
+        },
+        events: [
+          { id: "committee", title: "Model risk committee", people: ["Ahmad", "Kevin", "Siti"], deadline: { day: 4, hour: 9, label: "Fri 09:00" } },
+          { id: "training", title: "Train loan officers", people: ["Kevin"], deadline: { day: 4, hour: 12, label: "Fri 12:00" }, after: "committee" },
+        ],
+        review: {
+          high: "Committee before launch, training straight after. The launch stays on track and the control is in place.",
+          mid: "One of these doesn't work. Check the order and the launch deadline.",
+          low: "These don't fit people's calendars or the launch date. Check availability before booking.",
+        },
+      },
+      {
+        id: "ai-explainer",
+        tool: "prompt",
+        title: "Question the model explainer",
+        competency: "Directing AI tools",
+        gap: "AI fundamentals",
+        minutes: 5,
+        aiName: "Model Explainer",
+        why: "Explainability tools show which inputs drive an AI model's decisions. Risk teams use them to find hidden bias, but only if they ask the right question.",
+        from: "Ahmad Razak",
+        fromRole: "Head of Risk",
+        subject: "Why are gig workers rejected?",
+        brief: "Our explainability tool can break down what drives the loan model's decisions. Use it to find out why gig workers are rejected so much more often. Ask it precisely.",
+        requirements: [
+          "Name the model and the group you're investigating",
+          "Ask which inputs (features) drive the decision",
+          "Ask it to compare against salaried applicants",
+          "Ask for a clear output, e.g. a ranked table",
+        ],
+        rubric: [
+          { label: "Names the model", keywords: ["loan", "approval model", "credit model", "the model"] },
+          { label: "Names the group", keywords: ["gig", "self-employed", "self employed"] },
+          { label: "Asks for drivers", keywords: ["feature", "factor", "driver", "input", "variable", "why"] },
+          { label: "Asks to compare", keywords: ["compare", "salaried", "versus", " vs", "difference"] },
+          { label: "Output format", keywords: ["table", "rank", "list", "top"] },
+        ],
+        replies: {
+          weak: {
+            text: "Credit models typically consider many factors, such as income, credit history and existing debt. Is there a specific model you'd like me to look at?",
+          },
+          partial: {
+            text: "Top factors lowering approval for gig workers in the loan approval model:",
+            table: {
+              columns: ["Feature", "Effect on gig applicants"],
+              rows: [
+                ["Employment type = gig", "−0.31"],
+                ["Income variability", "−0.22"],
+                ["Postcode cluster", "−0.12"],
+              ],
+            },
+            note: "Without a comparison you can't tell which of these treat gig workers differently from everyone else.",
+          },
+          strong: {
+            text: "Feature contributions to the approval score, gig workers vs salaried applicants (loan approval model, pilot data):",
+            table: {
+              columns: ["Feature", "Gig workers", "Salaried", "Gap"],
+              rows: [
+                ["Employment type", "−0.31", "+0.05", "Large"],
+                ["Income variability", "−0.22", "−0.04", "Large"],
+                ["Postcode cluster", "−0.12", "+0.02", "Medium"],
+                ["Credit history length", "−0.05", "−0.03", "Small"],
+                ["Debt-to-income", "−0.04", "−0.06", "None"],
+              ],
+            },
+            note: "Employment type is used directly, and postcode may be acting as a proxy for it. Both should be reviewed against your fairness policy. (Illustrative output for a fictional model.)",
+          },
+        },
+        review: {
+          high: "That's the finding: employment type and a postcode proxy. Exactly what the committee needs to see.",
+          mid: "We're getting somewhere, but without the comparison the committee will ask 'compared to what?'",
+          low: "The tool couldn't help with a question that vague. Be specific about model, group and output.",
+        },
+      },
+      {
+        id: "ai-audit",
+        tool: "review",
+        title: "Check the AI's audit summary",
+        competency: "Verifying AI output",
+        gap: "Responsible AI",
+        minutes: 5,
+        aiName: "Audit Copilot",
+        why: "AI tools now draft audit and compliance summaries. They tend to sound confident even when they gloss over a failed test, which is exactly what a reviewer has to catch.",
+        from: "Ahmad Razak",
+        fromRole: "Head of Risk",
+        subject: "AI draft: validation summary",
+        brief: "The audit copilot drafted the model validation summary from our test log. Check it against the log before I sign it. Flag anything wrong, then approve or send it back.",
+        requirements: [
+          "Click a sentence to flag it as wrong",
+          "Check each claim against the test log",
+          "Watch for overconfident conclusions",
+          "Then approve it or send it back",
+        ],
+        artifactName: "Model validation summary (AI draft)",
+        format: "prose",
+        source: {
+          title: "Test log: loan approval model",
+          columns: ["Test", "Result", "Detail"],
+          rows: [
+            ["Accuracy (hold-out)", "PASS", "91% vs 85% threshold"],
+            ["Fairness: four-fifths", "FAIL", "Gig 0.21, self-employed 0.43"],
+            ["Data drift", "NOT RUN", "Scheduled after launch"],
+            ["Explainability", "PASS", "Employment type top driver for gig"],
+          ],
+        },
+        segments: [
+          { text: "The loan approval model achieved 91% accuracy on the hold-out set, above the 85% threshold." },
+          {
+            text: "Fairness testing found no material differences between applicant groups.",
+            issue: "The fairness test failed: gig (0.21) and self-employed (0.43) are well below 0.8.",
+          },
+          {
+            text: "Data drift monitoring was completed and showed stable inputs.",
+            issue: "The drift test was never run. The AI filled the gap with something plausible.",
+          },
+          { text: "Explainability analysis shows employment type is the top driver for gig applicants." },
+          {
+            text: "The model is therefore ready for production without further controls.",
+            issue: "An overconfident conclusion. With a failed fairness test, it needs controls (e.g. human review) before launch.",
+          },
+          { text: "Ongoing performance will be reviewed quarterly by the model risk team." },
+        ],
+        verdict: "send back",
+        review: {
+          high: "If I'd signed that, we'd have certified a model that failed fairness testing. Great review.",
+          mid: "You found some issues, but one still made it through. In audit, one is enough to fail.",
+          low: "This summary would have passed a failed model. Always check AI drafts against the evidence.",
+        },
       },
     ],
   },
@@ -260,147 +552,400 @@ export const simulations: Simulation[] = [
     roleId: "finance-automation",
     title: "Finance Automation Specialist",
     setting: "Wednesday 09:30 · Week 1 · Shared-services centre",
-    minutes: 15,
-    welcome: { from: "Jason Tan", text: "Morning! Bank recon is eating the team's whole Wednesday again. Can you take a look?" },
+    welcome: { from: "Jason Tan", text: "Morning! Bank reconciliation eats the team's whole Wednesday. Let's automate it." },
     tasks: [
       {
-        kind: "data",
-        skill: "Matching logic",
-        gap: "SQL",
+        id: "matcher",
+        tool: "code",
+        title: "Build the matching rule",
+        competency: "Automation logic",
+        gap: "Python",
+        minutes: 8,
         from: "Jason Tan",
         fromRole: "AP Lead",
-        subject: "Recon is off again",
-        body: "These items didn't auto-match last night. We want a matching rule that clears as many as possible without creating false matches.",
-        file: {
-          name: "unmatched_items.csv",
-          columns: ["Ref", "Ledger date", "Ledger (RM)", "Bank date", "Bank (RM)"],
-          rows: [
-            ["INV-1042", "02 Oct", "12,500.00", "04 Oct", "12,500.00"],
-            ["INV-1043", "02 Oct", "8,320.50", "05 Oct", "8,320.50"],
-            ["INV-1051", "03 Oct", "4,100.00", "04 Oct", "4,085.00"],
-            ["INV-1060", "06 Oct", "2,250.00", "—", "—"],
-          ],
+        subject: "Auto-match rule for bank recon",
+        brief: "Can you write the rule that decides when a bank line matches a ledger line? Banks post a few days late, and anything with a fee deducted must go to a person, not get auto-matched.",
+        requirements: [
+          "Match only when the amount is exactly the same",
+          "…and the dates are at most 3 days apart (either way)",
+          "Click Run tests to check your rule against real cases",
+        ],
+        fn: "isMatch",
+        helpers: [
+          {
+            signature: "daysBetween(a, b)",
+            source: "function daysBetween(a, b) { return Math.round(Math.abs(new Date(b) - new Date(a)) / 86400000); }",
+          },
+        ],
+        starter: `// ledger: { ref: "INV-1042", date: "2026-10-02", amount: 12500 }
+// bank:   { date: "2026-10-04", amount: 12500 }
+// Return true when the bank line should auto-match the ledger line.
+
+function isMatch(ledger, bank) {
+  const days = daysBetween(ledger.date, bank.date);
+
+  return false;
+}
+`,
+        tests: [
+          { label: "Bank posts 2 days later", args: [{ ref: "INV-1042", date: "2026-10-02", amount: 12500 }, { date: "2026-10-04", amount: 12500 }], expected: true },
+          { label: "Bank posts 3 days later", args: [{ ref: "INV-1043", date: "2026-10-02", amount: 8320.5 }, { date: "2026-10-05", amount: 8320.5 }], expected: true },
+          { label: "Bank fee deducted", args: [{ ref: "INV-1051", date: "2026-10-03", amount: 4100 }, { date: "2026-10-04", amount: 4085 }], expected: false },
+          { label: "9 days apart", args: [{ ref: "INV-1060", date: "2026-10-06", amount: 2250 }, { date: "2026-10-15", amount: 2250 }], expected: false },
+          { label: "Across month end", args: [{ ref: "INV-0998", date: "2026-09-30", amount: 5600 }, { date: "2026-10-02", amount: 5600 }], expected: true },
+          { label: "Bank posts a day early", args: [{ ref: "INV-1071", date: "2026-10-08", amount: 990 }, { date: "2026-10-07", amount: 990 }], expected: true },
+        ],
+        review: {
+          high: "All cases pass, including the month-end one. I'll schedule it for tonight's run.",
+          mid: "It handles the easy cases, but a few would get mismatched. Those are what auditors find.",
+          low: "This rule isn't safe to run yet. Let's pair on it this afternoon.",
         },
-        question: "Which rule clears the most items safely?",
-        options: [
-          { text: "Exact amount and exact date", correct: false, feedback: "Bank dates lag the ledger by a few days, so this clears none of them." },
-          {
-            text: "Exact amount, date within ±3 days",
-            correct: true,
-            feedback: "Clears INV-1042 and INV-1043 safely. INV-1051 (bank fee) and INV-1060 (not yet paid) should go to a person.",
-          },
-          {
-            text: "Amount within RM50, any date",
-            correct: false,
-            feedback: "Clears more today, but loose rules create false matches that are far harder to find later.",
-          },
-        ],
       },
       {
-        kind: "write",
-        skill: "Explaining automation",
-        from: "Jason Tan",
-        fromRole: "AP Lead",
-        subject: "Re: Recon is off again",
-        body: "Nice. Can you explain to the team in 2–3 lines what the script will and won't do? Some are nervous about it.",
-        prompt: "Write your message to the AP team",
-        checklist: [
-          { label: "Says it matches on amount", keywords: ["amount"] },
-          { label: "Mentions the date window", keywords: ["day", "±3", "window", "date"] },
-          { label: "Exceptions still go to a person", keywords: ["review", "manual", "human", "you", "team", "exception", "flag"] },
-          { label: "Names an exception (fee / unpaid)", keywords: ["fee", "unpaid", "not paid", "outstanding", "partial"] },
-        ],
-        sample:
-          "The script only matches items where the amount is exact and the dates are within 3 days. Anything else, like bank fees or invoices not yet paid, is flagged for you to review, so nothing gets cleared without a person checking it.",
-      },
-      {
-        kind: "choice",
-        skill: "Automation with controls",
+        id: "business-case",
+        tool: "sheet",
+        title: "Make the business case",
+        competency: "Measuring impact",
         gap: "Process automation",
+        minutes: 5,
         from: "Priya Nair",
         fromRole: "Finance Manager",
-        message: "Can the bot just auto-approve every invoice under RM5k? We'd close two days faster.",
-        options: [
-          { text: "Sure, I'll set that up today.", score: 0, feedback: "Splitting a fraudulent invoice into RM4.9k pieces is one of the oldest tricks. Speed without controls is a risk." },
-          {
-            text: "Yes for known vendors with a matching PO, and we sample-check 5% each week.",
-            score: 2,
-            feedback: "You get most of the speed and keep a control. That balance is the core of this job.",
-          },
-          { text: "No, bots shouldn't approve anything.", score: 1, feedback: "Careful, but it leaves a real efficiency win on the table." },
+        subject: "Is this worth it?",
+        brief: "Before I approve rolling this out, show me what it saves. Fill in the pilot numbers and a year-2 scenario.",
+        requirements: [
+          "Auto-matched lines = bank lines × match rate",
+          "Hours saved = auto-matched × minutes per line ÷ 60",
+          "Saving = hours saved × cost per hour",
+          "Tip: start a cell with = to write a formula, e.g. =B2*C2",
         ],
+        sheet: {
+          name: "recon_business_case.xlsx",
+          columns: [
+            { label: "Scenario", fmt: "text" },
+            { label: "Bank lines / mo", fmt: "num" },
+            { label: "Match rate", fmt: "pct" },
+            { label: "Auto-matched", fmt: "num" },
+            { label: "Mins per line", fmt: "num" },
+            { label: "Hours saved / mo", fmt: "num" },
+            { label: "Cost / hour (RM)", fmt: "rm" },
+            { label: "Saving / mo (RM)", fmt: "rm" },
+          ],
+          rows: [
+            ["Pilot", "2,400", "78%", { expect: 1872 }, "4", { expect: 124.8 }, "45", { expect: 5616 }],
+            ["Year 2", "2,600", "90%", { expect: 2340 }, "4", { expect: 156 }, "47", { expect: 7332 }],
+          ],
+        },
+        review: {
+          high: "RM5.6k a month in the pilot, more in year 2. Approved. Good work making the case in numbers.",
+          mid: "The direction is right, but some figures don't add up. I can't take this to the director yet.",
+          low: "I can't follow how these numbers were built. Let's redo it together.",
+        },
+      },
+      {
+        id: "ai-agent",
+        tool: "prompt",
+        title: "Brief the workflow agent",
+        competency: "Directing AI tools",
+        gap: "Process automation",
+        minutes: 5,
+        aiName: "Workflow Agent",
+        why: "AI agents can now build automations from a plain-language description. The specialist's job shifts from writing every step to describing the process precisely, including what should never be automated.",
+        from: "Jason Tan",
+        fromRole: "AP Lead",
+        subject: "Let the agent build it",
+        brief: "IT gave us access to an AI workflow agent. Describe the nightly bank reconciliation so it can build the automation. If you leave something out, it'll guess.",
+        requirements: [
+          "When it should run",
+          "Where the data comes from (bank feed, ledger)",
+          "The matching rule",
+          "What happens to items that don't match",
+        ],
+        rubric: [
+          { label: "When it runs", keywords: ["night", "daily", "every day", "schedule", "each day", "2am", "evening"] },
+          { label: "Data sources", keywords: ["bank feed", "bank statement", "ledger", "sap", "erp"] },
+          { label: "Matching rule", keywords: ["amount", "3 days", "three days", "date"] },
+          { label: "Exceptions", keywords: ["exception", "flag", "unmatched", "manual", "review", "notify", "email"] },
+        ],
+        replies: {
+          weak: {
+            text: "I can build automations for you! What process would you like to automate, and which systems does it use?",
+          },
+          partial: {
+            text: "Here's the workflow I've built:",
+            steps: ["Download the bank statement", "Match each bank line to a ledger item", "Mark all matched items as cleared", "Done ✓"],
+            note: "⚠ Nothing says what to do with unmatched items or how to match, so the agent chose for you. This version would clear items no one has checked.",
+          },
+          strong: {
+            text: "Here's the workflow I've built from your description:",
+            steps: [
+              "Trigger: every night at 02:00",
+              "Pull new lines from the bank feed and open items from the SAP ledger",
+              "Match when the amount is identical and dates are within 3 days",
+              "Clear matched pairs and write each match to the audit log",
+              "Send unmatched items to the exception queue",
+              "Email the AP team a summary at 08:00 with the exceptions to review",
+            ],
+            note: "Ready to run in test mode. Should I run it against last month's data first?",
+          },
+        },
+        review: {
+          high: "That's a workflow I'd trust in production: clear rule, audit log, and exceptions go to people.",
+          mid: "It works, but the gaps would hurt us. Agents fill gaps with guesses.",
+          low: "The agent had nothing to work with. Describe the process like you'd train a new joiner.",
+        },
+      },
+      {
+        id: "ai-code-review",
+        tool: "review",
+        title: "Review the AI's script",
+        competency: "Verifying AI output",
+        gap: "Python",
+        minutes: 5,
+        aiName: "Code Assistant",
+        why: "AI now writes a lot of automation code. It usually runs, which makes its mistakes harder to spot. Reviewing AI code is becoming as important as writing it.",
+        from: "Jason Tan",
+        fromRole: "AP Lead",
+        subject: "AI wrote a version, is it safe?",
+        brief: "Someone asked the code assistant for a reconciliation script and wants to run it tonight. Review it line by line against our matching rule. Flag the risky lines, then approve or send it back.",
+        requirements: [
+          "Our rule: exact amount, dates within 3 days",
+          "Unmatched items must go to a person",
+          "Click a line to flag it",
+          "Then approve it or send it back",
+        ],
+        artifactName: "reconcile.js (AI generated)",
+        format: "code",
+        source: {
+          title: "Team matching policy",
+          columns: ["Rule", "Requirement"],
+          rows: [
+            ["Amount", "Must match exactly"],
+            ["Date", "Within 3 days either way"],
+            ["Unmatched", "Go to the exception queue for review"],
+          ],
+        },
+        segments: [
+          { text: "function reconcile(ledgerItems, bankLines) {" },
+          { text: "  const matched = [];" },
+          { text: "  for (const item of ledgerItems) {" },
+          {
+            text: "    const line = bankLines.find((b) => Math.abs(b.amount - item.amount) < 50);",
+            issue: "A RM50 tolerance auto-matches lines with fees deducted. The rule says amounts must match exactly.",
+          },
+          { text: "    if (line) {" },
+          { text: "      matched.push({ ref: item.ref, bankId: line.id });" },
+          {
+            text: "      // date check removed to improve match rate",
+            issue: "The date window was dropped on purpose, so an old payment could match a new invoice.",
+          },
+          { text: "    }" },
+          { text: "  }" },
+          {
+            text: "  return matched; // unmatched items are discarded",
+            issue: "Unmatched items are thrown away silently instead of going to the exception queue.",
+          },
+          { text: "}" },
+        ],
+        verdict: "send back",
+        review: {
+          high: "All three problems caught. That script would have 'improved' our match rate by clearing the wrong things.",
+          mid: "Good start, but one risky line was missed. AI code needs a full review before it touches the ledger.",
+          low: "This would have gone live and silently mismatched payments. Read AI code like you'd read a junior's.",
+        },
       },
     ],
   },
   {
     roleId: "esg-reporting",
     title: "ESG Reporting Analyst",
-    setting: "Thursday 14:00 · Week 1 · Sustainability office",
-    minutes: 15,
-    welcome: { from: "Nurul Aina", text: "Hi! The board pack closes tomorrow and our Scope 2 number looks odd. Email incoming 🙏" },
+    setting: "Monday 09:00 · Week 1 · Sustainability office",
+    welcome: { from: "Nurul Aina", text: "Hi! The board pack closes Friday and our Scope 2 number looks odd. Can you dig in? 🙏" },
     tasks: [
       {
-        kind: "data",
-        skill: "Emissions data checks",
+        id: "scope2",
+        tool: "sheet",
+        title: "Recalculate Scope 2",
+        competency: "Emissions accounting",
         gap: "GHG accounting",
+        minutes: 6,
         from: "Nurul Aina",
         fromRole: "Head of Sustainability",
         subject: "Scope 2 more than doubled?",
-        body: "Our electricity emissions more than doubled this year, but usage barely changed. Can you find out why before this goes to the board?",
-        file: {
+        brief: "Electricity emissions more than doubled, but usage barely changed. Recalculate what we reported, then the corrected figure using the national grid factor of 0.585 kgCO₂e/kWh.",
+        requirements: [
+          "tCO₂e = kWh × factor ÷ 1000",
+          "Reported uses the factor in the file; corrected uses 0.585",
+          "Fill in both totals",
+          "Tip: start a cell with = to write a formula, e.g. =B2*C2/1000",
+        ],
+        sheet: {
           name: "scope2_electricity_2026.xlsx",
-          columns: ["Site", "kWh 2025", "kWh 2026", "Factor used (kgCO₂e/kWh)"],
+          columns: [
+            { label: "Site", fmt: "text" },
+            { label: "kWh 2026", fmt: "num" },
+            { label: "Factor used", fmt: "text" },
+            { label: "Reported tCO₂e", fmt: "num" },
+            { label: "Correct factor", fmt: "text" },
+            { label: "Corrected tCO₂e", fmt: "num" },
+          ],
           rows: [
-            ["Shah Alam plant", "1,200,000", "1,230,000", "0.585"],
-            ["Penang plant", "800,000", "790,000", "0.585"],
-            ["KL headquarters", "400,000", "410,000", "5.85"],
+            ["Shah Alam plant", "1,230,000", "0.585", { expect: 719.55 }, "0.585", { expect: 719.55 }],
+            ["Penang plant", "790,000", "0.585", { expect: 462.15 }, "0.585", { expect: 462.15 }],
+            ["KL headquarters", "410,000", "5.85", { expect: 2398.5 }, "0.585", { expect: 239.85 }],
+            ["Total", "", "", { expect: 3580.2 }, "", { expect: 1421.55 }],
           ],
         },
-        question: "What's causing the jump?",
-        options: [
-          { text: "Shah Alam used more electricity", correct: false, feedback: "Up only 2.5%, which can't double total emissions." },
-          {
-            text: "KL HQ's emission factor is 10× too high, a decimal error",
-            correct: true,
-            feedback: "5.85 instead of 0.585. One misplaced decimal multiplies that site's emissions tenfold.",
-          },
-          { text: "Malaysia's grid got dirtier this year", correct: false, feedback: "Then every site's factor would change, not just one." },
-        ],
+        review: {
+          high: "That's it: KL HQ had the factor 10× too high. Corrected total checks out. You just saved us a public restatement.",
+          mid: "You're on the right track, but some totals don't reconcile. Auditors will check every one of these.",
+          low: "The recalculation isn't right yet. Let's go through the formula together.",
+        },
       },
       {
-        kind: "write",
-        skill: "Board reporting",
-        gap: "Sustainability standards",
+        id: "validation",
+        tool: "calendar",
+        title: "Validate with the sites",
+        competency: "Stakeholder coordination",
+        minutes: 4,
         from: "Nurul Aina",
         fromRole: "Head of Sustainability",
-        subject: "Re: Scope 2 more than doubled?",
-        body: "Phew. Write 2–3 lines for the board pack explaining the correction, please.",
-        prompt: "Write the note for the board pack",
-        checklist: [
-          { label: "Names the cause", keywords: ["factor", "decimal", "typo", "error", "input"] },
-          { label: "Names the site", keywords: ["kl", "hq", "headquarters", "kuala lumpur"] },
-          { label: "Gives the corrected picture", keywords: ["flat", "stable", "unchanged", "similar", "in line", "roughly", "corrected"] },
-          { label: "Adds a control", keywords: ["check", "review", "control", "prevent", "verify", "validation"] },
+        subject: "Sites must confirm before sign-off",
+        brief: "Before I sign off, the three site managers need to confirm their meter data on one call by Thursday. Then book my sign-off, which must be done before the pack closes Friday 10:00.",
+        requirements: [
+          "Validation call: Hafiz, Mei Chen and Arun, finished by end of Thursday",
+          "Sign-off with Nurul, after the call, finished by Fri 10:00",
+          "Shaded slots show when attendees are busy",
         ],
-        sample:
-          "The reported jump in Scope 2 emissions was caused by an emission-factor input error at KL headquarters (5.85 instead of 0.585). Corrected, Scope 2 is roughly flat year on year. We've added a factor check to the data review to prevent this recurring.",
+        days: WEEK,
+        hours: HOURS,
+        busy: {
+          Hafiz: [[9, 10, 11, 12, 13, 14, 15, 16], [9, 10, 11], [14, 15, 16], [9, 10, 11, 12], []],
+          "Mei Chen": [[], [13, 14, 15, 16], [9, 10, 11], [13, 14, 15, 16], []],
+          Arun: [[], [12], [13], [9, 10, 14], []],
+          Nurul: [[], [], [13, 14, 15, 16], [9, 10, 11, 12, 13, 14, 15], []],
+        },
+        events: [
+          { id: "call", title: "Site data validation", people: ["Hafiz", "Mei Chen", "Arun"], deadline: { day: 3, hour: 17, label: "Thu 17:00" } },
+          { id: "signoff", title: "Sign-off with Nurul", people: ["Nurul"], deadline: { day: 4, hour: 10, label: "Fri 10:00" }, after: "call" },
+        ],
+        review: {
+          high: "All three sites confirmed, and sign-off was done before the pack closed. Smooth.",
+          mid: "One of these slots doesn't work. Check who's free and the order.",
+          low: "These don't line up with people's calendars or the deadline.",
+        },
       },
       {
-        kind: "choice",
-        skill: "Avoiding greenwashing",
-        gap: "Sustainability standards",
-        from: "Daniel Ong",
-        fromRole: "Marketing",
-        message: "We bought some carbon offsets this year. Can we say we're 'carbon neutral' in the annual report? 🌱",
-        options: [
-          { text: "Sure, offsets count.", score: 0, feedback: "Unverified neutrality claims are greenwashing and a growing legal and reputational risk." },
-          {
-            text: "Not yet. Let's state what we cut and what we offset, with numbers. 'Carbon neutral' needs a recognised standard and verification.",
-            score: 2,
-            feedback: "Honest, specific, and still gives Marketing a story to tell.",
-          },
-          { text: "No, we shouldn't mention offsets at all.", score: 1, feedback: "Too cautious: offsets can be disclosed transparently." },
+        id: "ai-extract",
+        tool: "prompt",
+        title: "Extract data with document AI",
+        competency: "Directing AI tools",
+        minutes: 5,
+        aiName: "Document AI",
+        why: "Sustainability teams are using document AI to read hundreds of utility bills instead of typing them in. It's fast, but only as good as the instructions on what to extract and how.",
+        from: "Nurul Aina",
+        fromRole: "Head of Sustainability",
+        subject: "36 utility bills to process",
+        brief: "I've uploaded all 36 electricity bills for 2026 (three sites, 12 months) to the document AI. Get it to pull out what we need for Scope 2. Be specific or it'll give us a mess.",
+        requirements: [
+          "Say what the documents are",
+          "Say exactly which field to extract (and in what unit)",
+          "Say the period to cover",
+          "Ask for a clear output, e.g. a table by site",
         ],
+        rubric: [
+          { label: "What the documents are", keywords: ["bill", "invoice", "utility", "electricity"] },
+          { label: "Field and unit", keywords: ["kwh", "consumption", "usage"] },
+          { label: "Period", keywords: ["2026", "month", "jan", "year", "period", "12"] },
+          { label: "Output format", keywords: ["table", "by site", "per site", "each site", "column", "csv"] },
+        ],
+        replies: {
+          weak: {
+            text: "I found 36 documents. They appear to be electricity bills from three locations. What would you like me to do with them?",
+          },
+          partial: {
+            text: "Here's what I extracted from the bills:",
+            table: {
+              columns: ["Site", "Value"],
+              rows: [
+                ["Shah Alam plant", "102,500"],
+                ["Penang plant", "65.8 MWh"],
+                ["KL headquarters", "RM 18,240"],
+              ],
+            },
+            note: "⚠ Mixed units: one site gave kWh for a single month, one MWh, one the bill amount in RM. The brief didn't say which field or period.",
+          },
+          strong: {
+            text: "Electricity consumption (kWh), Jan–Dec 2026, by site:",
+            table: {
+              columns: ["Site", "kWh 2026", "Bills read", "Confidence"],
+              rows: [
+                ["Shah Alam plant", "1,230,000", "12 / 12", "High"],
+                ["Penang plant", "790,000", "12 / 12", "High"],
+                ["KL headquarters", "410,000", "11 / 12", "⚠ Check"],
+              ],
+            },
+            note: "The KL HQ December bill is missing, so I estimated it from November (33,800 kWh). Please confirm before this goes into the report.",
+          },
+        },
+        review: {
+          high: "Clean, in kWh, by site, and it flagged the missing bill. That saved us two days of typing.",
+          mid: "Some of it's usable, but the mixed results mean we'd have to redo part of it by hand.",
+          low: "The AI didn't know what we wanted. Spell out field, unit, period and format.",
+        },
+      },
+      {
+        id: "ai-disclosure",
+        tool: "review",
+        title: "Check the AI's disclosure",
+        competency: "Verifying AI output",
+        gap: "Sustainability standards",
+        minutes: 5,
+        aiName: "Report Writer",
+        why: "AI can draft sustainability disclosures quickly, but it tends to reach for impressive claims. Unsupported green claims are a growing legal and reputational risk.",
+        from: "Nurul Aina",
+        fromRole: "Head of Sustainability",
+        subject: "AI draft: Scope 2 disclosure",
+        brief: "The report writer drafted our Scope 2 disclosure for the annual report. Check every claim against our data. Flag anything we can't stand behind, then approve or send it back.",
+        requirements: [
+          "Click a sentence to flag it",
+          "Check each figure and claim against the data",
+          "Watch for greenwashing: claims bigger than the evidence",
+          "Then approve it or send it back",
+        ],
+        artifactName: "Annual report: Scope 2 disclosure (AI draft)",
+        format: "prose",
+        source: {
+          title: "Your verified data",
+          columns: ["Item", "Value"],
+          rows: [
+            ["Scope 2, 2025", "1,404 tCO₂e"],
+            ["Scope 2, 2026 (corrected)", "1,422 tCO₂e (+1.3%)"],
+            ["Renewable electricity share", "0%"],
+            ["Carbon offsets bought", "500 t, not yet verified"],
+          ],
+        },
+        segments: [
+          { text: "In 2026 our Scope 2 emissions were 1,422 tCO₂e, broadly flat on 2025." },
+          {
+            text: "This represents a 15% reduction, driven by our energy-efficiency programme.",
+            issue: "Emissions rose 1.3%; there was no 15% reduction, and no programme is in the data.",
+          },
+          {
+            text: "All three sites are powered by 100% renewable electricity.",
+            issue: "The data says 0% renewable electricity.",
+          },
+          {
+            text: "Through verified carbon offsets, the group is now carbon neutral.",
+            issue: "The offsets aren't verified, and 500 t doesn't cover 1,422 t. A textbook greenwashing claim.",
+          },
+          { text: "A data-validation control was introduced after an emission-factor error at KL headquarters was corrected." },
+        ],
+        verdict: "send back",
+        review: {
+          high: "Three claims we couldn't defend, all caught. You just kept us out of a greenwashing headline.",
+          mid: "Good catches, but one false claim survived. In a published report, that's the one people find.",
+          low: "This would have published claims we can't support. AI drafts need fact-checking line by line.",
+        },
       },
     ],
   },

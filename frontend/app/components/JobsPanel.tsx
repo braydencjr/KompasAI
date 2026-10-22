@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { SimButton } from "./SimulatorProvider";
 import { jobSearchLinks, type Bet } from "../data/bets";
 
 type Props = { bet: Bet; closing: boolean; onClose: () => void };
@@ -40,7 +41,8 @@ export default function JobsPanel({ bet, closing, onClose }: Props) {
             <span className="chip chip-blue">+{bet.growth}% YoY</span>
           </div>
           <h2 id="jobs-title">{bet.openings.length} openings</h2>
-          <p className="muted small">Your matching skills are highlighted.</p>
+          <p className="muted small">Your matching skills are highlighted. Not sure yet? Try the work first.</p>
+          <SimButton roleId={bet.id} variant="link" />
         </header>
 
         <ul className="jobs">

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Ring from "./Ring";
 import Sparkline from "./Sparkline";
 import RoadmapModal from "./RoadmapModal";
+import { SimButton } from "./SimulatorProvider";
 import { riskLabel, type Bet } from "../data/bets";
 
 export default function TrendingCareers({ bets }: { bets: Bet[] }) {
@@ -71,6 +72,8 @@ export default function TrendingCareers({ bets }: { bets: Bet[] }) {
                 ))}
               </ol>
             </div>
+
+            <SimButton roleId={b.id} variant="link" />
 
             <button onClick={() => setOpenId(b.id)} className="btn btn-ghost btn-block">
               View full roadmap →
