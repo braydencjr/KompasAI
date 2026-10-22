@@ -27,6 +27,13 @@ def db_path() -> Path:
     return Path(os.environ.get("KOMPAS_DB", DATA_DIR / "kompas.db"))
 
 
+def database_url() -> str | None:
+    """Postgres connection string (Supabase). Unset, or KOMPAS_DB set, means the local SQLite file."""
+    if os.environ.get("KOMPAS_DB"):
+        return None
+    return os.environ.get("DATABASE_URL") or None
+
+
 def snapshot_dir() -> Path:
     return Path(os.environ.get("KOMPAS_SNAPSHOT_DIR", DATA_DIR / "snapshots"))
 

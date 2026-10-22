@@ -80,6 +80,7 @@ def search(conn, query: str, country: str = "my", http: Http | None = None) -> d
     data = body.get("data") or []
     jobs = [_job(j) for j in (data.get("jobs", []) if isinstance(data, dict) else data)]
     fetched = now.isoformat(timespec="seconds")
-    conn.execute("INSERT OR REPLACE INTO job_cache (query, fetched_at, payload) VALUES (?, ?, ?)", (key, fetched, json.dumps(jobs)))
+    conn.execute("INSERT INTO job_cache (query, fetched_at, payload) VALUES (?, ?, ?) ON CONFLICT (query) DO UPDATE SET "
+                 "fetched_at = excluded.fetched_at, payload = excluded.payload", (key, fetched, json.dumps(jobs)))
     conn.commit()
     return {"jobs": jobs, "fetched_at": fetched, "source": SOURCE, "cached": False}

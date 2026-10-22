@@ -120,11 +120,11 @@ def refresh_live(conn, p: Params) -> list[dict]:
              json.dumps({k: item[k] for k in ("points", "stars", "description") if k in item}), now, now),
         )
         if kind:
-            cur = conn.execute(
-                "INSERT INTO feed_event (at, type, artifact_id, payload) VALUES (?, ?, ?, ?)",
+            seq = conn.execute(
+                "INSERT INTO feed_event (at, type, artifact_id, payload) VALUES (?, ?, ?, ?) RETURNING seq",
                 (now, kind, item["artifact_id"], json.dumps(item)),
-            )
-            events.append({"seq": cur.lastrowid, "type": kind, "at": now, "item": item})
+            ).fetchone()[0]
+            events.append({"seq": seq, "type": kind, "at": now, "item": item})
     keep = {i["artifact_id"] for i in ranked}
     for row in conn.execute("SELECT artifact_id FROM feed_item").fetchall():
         if row["artifact_id"] not in keep:

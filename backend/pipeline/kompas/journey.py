@@ -83,7 +83,7 @@ class Statuses:
         if snapshot_id is None:     # before the first snapshot: nothing is measured
             return
         self.as_of = conn.execute("SELECT as_of FROM snapshot WHERE id = ?", (snapshot_id,)).fetchone()["as_of"]
-        for r in conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ?", (snapshot_id,)):
+        for r in conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ? ORDER BY concept_id", (snapshot_id,)):
             self.rows[r["concept_id"]] = {"status": r["status"], "projected": json.loads(r["projected"]),
                                           "rungs": json.loads(r["rungs"]), "family_status": r["family_status"],
                                           "evidence": len(json.loads(r["evidence_ids"]))}

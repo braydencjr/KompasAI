@@ -112,8 +112,8 @@ def _reason(old_rungs: dict, new_rungs: dict) -> str:
 
 
 def diff(conn, a: str, b: str) -> dict:
-    old = {r["concept_id"]: r for r in conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ?", (a,))}
-    new = {r["concept_id"]: r for r in conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ?", (b,))}
+    old = {r["concept_id"]: r for r in conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ? ORDER BY concept_id", (a,))}
+    new = {r["concept_id"]: r for r in conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ? ORDER BY concept_id", (b,))}
     changes = []
     for cid, n in new.items():
         o = old.get(cid)

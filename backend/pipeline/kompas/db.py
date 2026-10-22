@@ -127,6 +127,9 @@ CREATE TABLE IF NOT EXISTS feed_event (
   payload TEXT NOT NULL
 );
 
+-- JSearch answers, cached for a day (connectors/jsearch.py).
+CREATE TABLE IF NOT EXISTS job_cache (query TEXT PRIMARY KEY, fetched_at TEXT NOT NULL, payload TEXT NOT NULL);
+
 CREATE TABLE IF NOT EXISTS fetch_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   source TEXT NOT NULL,
@@ -141,16 +144,27 @@ CREATE TABLE IF NOT EXISTS fetch_log (
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
+    """The local SQLite file, or Postgres (Supabase) when DATABASE_URL is set and no file is asked for.
+    Both connections take the same SQL (SQLite's dialect, translated in kompas/pg.py)."""
+    url = None if path else config.database_url()
+    if url:
+        from . import pg
+        return pg.connect(url)
     path = path or config.db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    init(conn)
+    return conn
+
+
+def init(conn: sqlite3.Connection):
+    """Creates the schema and brings it to the current version."""
     conn.executescript(SCHEMA)
     _migrate(conn)
     migrate(conn)
-    return conn
 
 
 def _migrate(conn: sqlite3.Connection):
@@ -382,7 +396,8 @@ def record_metric(conn: sqlite3.Connection, artifact_id: str, name: str, value: 
     """Point-in-time observation. Observations are history: a new one never replaces an older one, and the
     same (artifact, time, name) written twice keeps one row."""
     conn.execute(
-        "INSERT OR REPLACE INTO artifact_metric (artifact_id, observed_at, name, value) VALUES (?, ?, ?, ?)",
+        "INSERT INTO artifact_metric (artifact_id, observed_at, name, value) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (artifact_id, observed_at, name) DO UPDATE SET value = excluded.value",
         (artifact_id, observed_at or utcnow(), name, value),
     )
 
@@ -393,4 +408,5 @@ def get_meta(conn, key: str) -> str | None:
 
 
 def set_meta(conn, key: str, value: str):
-    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+    conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                 (key, value))

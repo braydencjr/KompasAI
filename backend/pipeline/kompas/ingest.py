@@ -94,13 +94,14 @@ class Run:
             if held and held["expires_at"] > now:
                 raise SourceBusy(f"{self.source}/{self.stream} is locked by {held['owner']} "
                                  f"until {held['expires_at']}")
-            cur = self.conn.execute(
-                "INSERT INTO fetch_log (source, mode, stream, status, started_at) VALUES (?, ?, ?, 'running', ?)",
-                (self.source, self.mode, self.stream, now))
-            self.id = cur.lastrowid
+            self.id = self.conn.execute(
+                "INSERT INTO fetch_log (source, mode, stream, status, started_at) VALUES (?, ?, ?, 'running', ?) "
+                "RETURNING id", (self.source, self.mode, self.stream, now)).fetchone()[0]
             self.conn.execute(
-                "INSERT OR REPLACE INTO ingest_lock (source, stream, owner, run_id, acquired_at, expires_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)", (self.source, self.stream, self.owner, self.id, now, expires))
+                "INSERT INTO ingest_lock (source, stream, owner, run_id, acquired_at, expires_at) VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (source, stream) DO UPDATE SET owner = excluded.owner, run_id = excluded.run_id, "
+                "acquired_at = excluded.acquired_at, expires_at = excluded.expires_at",
+                (self.source, self.stream, self.owner, self.id, now, expires))
             self.conn.execute("COMMIT")
         except BaseException:
             self.conn.execute("ROLLBACK")
@@ -215,7 +216,9 @@ class Run:
         the lock lease. In a dry run everything is rolled back instead."""
         if cursor is not None:
             self.conn.execute(
-                "INSERT OR REPLACE INTO checkpoint (source, stream, cursor, updated_at, run_id) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO checkpoint (source, stream, cursor, updated_at, run_id) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT (source, stream) DO UPDATE SET cursor = excluded.cursor, updated_at = excluded.updated_at, "
+                "run_id = excluded.run_id",
                 (self.source, self.stream, cursor, utcnow(), self.id))
         expires = iso(parse(utcnow()) + timedelta(minutes=config.LOCK_LEASE_MINUTES))
         self.conn.execute("UPDATE ingest_lock SET expires_at = ? WHERE source = ? AND stream = ? AND owner = ?",

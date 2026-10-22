@@ -1,6 +1,7 @@
 import argparse
 import json
 import logging
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -235,6 +236,27 @@ def cmd_serve(args, conn, cur):
     uvicorn.run(create_app(live_mode=args.live, replay=args.replay), host=args.host, port=args.port)
 
 
+def cmd_copy_to_postgres(args, conn, cur):
+    """Copies the local SQLite database into Postgres (DATABASE_URL), once, when moving to Supabase."""
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        sys.exit("set DATABASE_URL in backend/.env first")
+    from . import pg
+    path = Path(args.source) if args.source else config.db_path()
+    if not path.exists():
+        sys.exit(f"no SQLite database at {path}")
+    src = db.connect(path)
+    try:
+        counts = pg.copy_from_sqlite(src, url, replace=args.replace)
+    except RuntimeError as e:
+        sys.exit(str(e))
+    finally:
+        src.close()
+    for table, (lite, postgres) in counts.items():
+        print(f"{table:<18} sqlite={lite:<7} postgres={postgres}" + ("" if lite == postgres else "  MISMATCH"))
+    sys.exit(0 if all(a == b for a, b in counts.values()) else 1)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="kompas", description="Kompas signal pipeline")
     ap.add_argument("-v", "--verbose", action="store_true", help="structured run logs on stderr")
@@ -307,6 +329,10 @@ def main(argv=None):
     sub.add_parser("links-draft", help="draft role skill links from ESCO with Gemini, for review").set_defaults(fn=cmd_links_draft)
     sub.add_parser("links-apply", help="merge the reviewed draft into concept_occupation.csv").set_defaults(fn=cmd_links_apply)
     sub.add_parser("validate", help="check the curated tables").set_defaults(fn=cmd_validate)
+    cp = sub.add_parser("copy-to-postgres", help="copy the local SQLite database into DATABASE_URL (Supabase)")
+    cp.add_argument("--source", help="SQLite file (default: KOMPAS_DB or backend/data/kompas.db)")
+    cp.add_argument("--replace", action="store_true", help="overwrite data already in Postgres")
+    cp.set_defaults(fn=cmd_copy_to_postgres)
 
     v = sub.add_parser("serve", help="run the API")
     v.add_argument("--live", action="store_true", help="run the HN and GitHub pollers")

@@ -76,7 +76,7 @@ def _statuses(conn, sid: str, ids: list[str], cur: curated.Curated) -> list[dict
         return []
     rows = conn.execute(
         f"SELECT concept_id, status, family_status FROM concept_status WHERE snapshot_id = ? "
-        f"AND concept_id IN ({','.join('?' * len(ids))})", (sid, *ids),
+        f"AND concept_id IN ({','.join('?' * len(ids))}) ORDER BY concept_id", (sid, *ids),
     ).fetchall()
     return [{"id": r["concept_id"], "label": cur.concepts[r["concept_id"]].label, "status": r["status"],
              "family_status": r["family_status"]} for r in rows if r["concept_id"] in cur.concepts]
@@ -196,7 +196,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     def concepts(snapshot: str | None = None, status: str | None = None, kind: str | None = None,
                  conn=Depends(get_conn)):
         sid = _snapshot_id(conn, snapshot)
-        rows = conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ?", (sid,)).fetchall()
+        rows = conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ? ORDER BY concept_id", (sid,)).fetchall()
         out = [_concept(r, cur) for r in rows]
         return {"snapshot": sid, "concepts": [
             c for c in out if (not status or c["status"] == status) and (not kind or c["kind"] == kind)
@@ -239,9 +239,12 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
                      conn.execute("SELECT * FROM feed_item ORDER BY momentum DESC")]
         if concept:
             items = [i for i in items if concept in i["concept_ids"]]
+        items = items[:limit]
+        # one query for every item's statuses: each round trip to the database costs ~100 ms on Supabase
+        found = {s["id"]: s for s in _statuses(conn, sid, sorted({c for i in items for c in i["concept_ids"]}), cur)}
         for i in items:
-            i["concepts"] = _statuses(conn, sid, i["concept_ids"], cur)
-        return sid, items[:limit]
+            i["concepts"] = [found[c] for c in sorted(set(i["concept_ids"])) if c in found]
+        return sid, items
 
     @app.get("/feed")
     def feed(snapshot: str | None = None, concept: str | None = None, limit: int = Query(30, le=100),
@@ -307,7 +310,8 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
             raise HTTPException(422, {"unknown_concepts": unknown})
         sid, items = _feed(conn, None, None, 100)
         rows = {r["concept_id"]: r for r in conn.execute(
-            "SELECT concept_id, status, family_id, family_status, rungs FROM concept_status WHERE snapshot_id = ?",
+            "SELECT concept_id, status, family_id, family_status, rungs FROM concept_status WHERE snapshot_id = ? "
+            "ORDER BY concept_id",
             (sid,))}
 
         def ladder(cid: str) -> dict:

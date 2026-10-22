@@ -108,8 +108,12 @@ def suggest(conn, cur: Curated, limit: int = 50, days: int = 90, batch: int = 25
                 n = None if note else reach(conn, alias, bool(a.get("case_sensitive")))
             counts[status] += 1
             conn.execute(
-                "INSERT OR REPLACE INTO alias_suggestion (doc_id, item_title, concept_id, alias, case_sensitive, "
-                "reason, model, status, check_note, reach, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO alias_suggestion (doc_id, item_title, concept_id, alias, case_sensitive, "
+                "reason, model, status, check_note, reach, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (doc_id) DO UPDATE SET item_title = excluded.item_title, concept_id = excluded.concept_id, "
+                "alias = excluded.alias, case_sensitive = excluded.case_sensitive, reason = excluded.reason, "
+                "model = excluded.model, status = excluded.status, check_note = excluded.check_note, "
+                "reach = excluded.reach, created_at = excluded.created_at, decided_at = NULL",
                 (it["id"], it["title"][:300], cid, alias, int(bool(a.get("case_sensitive"))), (a.get("reason") or "")[:300],
                  llm.MODEL, status, note, n, now))
         conn.commit()
