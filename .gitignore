@@ -55,3 +55,6 @@ data/cache/
 backend/data/kompas.db*
 backend/data/snapshots/
 backend/data/cache/
+
+# reports downloaded by hand for manual imports (e.g. MyCOL editions); listed in the manifests next to them
+backend/data/manual/*.pdf

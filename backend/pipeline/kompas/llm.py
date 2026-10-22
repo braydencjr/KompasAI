@@ -72,19 +72,20 @@ def _system(cur: Curated) -> str:
     return INSTRUCTIONS.format(skills=skills, occupations=occupations)
 
 
-def extract_cv(text: str, cur: Curated, client: genai.Client | None = None) -> tuple[dict | None, str | None]:
-    """Returns (extraction, None) or (None, reason) when the model can't be used, so callers can fall back."""
+def _generate(system: str, contents: str, schema: dict, client: genai.Client | None) -> tuple[dict | None, str | None]:
+    """One structured-output call. Returns (parsed JSON, None) or (None, reason) when the model can't be used,
+    so callers can fall back or report it."""
     if client is None and not available():
         return None, "no Gemini API key configured"
     try:
         client = client or genai.Client()  # reads GEMINI_API_KEY or GOOGLE_API_KEY
         response = client.models.generate_content(
             model=MODEL,
-            contents=f"<cv>\n{text}\n</cv>",
+            contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=_system(cur),
+                system_instruction=system,
                 response_mime_type="application/json",
-                response_json_schema=_schema(cur),
+                response_json_schema=schema,
                 temperature=0,
             ),
         )
@@ -104,7 +105,7 @@ def extract_cv(text: str, cur: Curated, client: genai.Client | None = None) -> t
     candidate = (response.candidates or [None])[0]
     finish = candidate.finish_reason if candidate else None
     if finish == types.FinishReason.SAFETY or (response.prompt_feedback and response.prompt_feedback.block_reason):
-        return None, "Gemini declined to process this CV"
+        return None, "Gemini declined to process this input"
     if finish == types.FinishReason.MAX_TOKENS:
         return None, "Gemini's answer was cut off"
     if not response.text:
@@ -113,3 +114,56 @@ def extract_cv(text: str, cur: Curated, client: genai.Client | None = None) -> t
         return json.loads(response.text), None
     except json.JSONDecodeError:
         return None, "Gemini returned malformed JSON"
+
+
+def extract_cv(text: str, cur: Curated, client: genai.Client | None = None) -> tuple[dict | None, str | None]:
+    """Returns (extraction, None) or (None, reason) when the model can't be used, so callers can fall back."""
+    result, error = _generate(_system(cur), f"<cv>\n{text}\n</cv>", _schema(cur), client)
+    if error == "Gemini declined to process this input":
+        error = "Gemini declined to process this CV"
+    return result, error
+
+
+# ---------- alias suggestions for the review queue ----------
+
+SUGGEST_INSTRUCTIONS = """You help maintain Kompas's skills dictionary. Kompas tags trending Hacker News stories and GitHub
+repositories with skills by matching words (aliases) in their titles, topics and descriptions. The items below
+matched no skill. For each item, decide whether it is mainly about one of the skills listed below.
+
+Rules:
+- Answer "none" unless the item is clearly and mainly about that skill. Most items are general tech news: "none".
+- `alias`: the exact phrase from the item (title, topics or description), copied character for character, that
+  names the skill: a tool, product, library, standard or technique (e.g. "LangGraph" for LLM agents, "dbt" for
+  data engineering). It must be specific: wherever this phrase appears in other items, it should mean this skill.
+  Never a generic word ("AI", "data", "agent", "tool", "open source") and never a company name on its own.
+- `case_sensitive`: true when the phrase is also an everyday word or a short acronym (e.g. "Rust", "RAG").
+- `reason`: one short sentence.
+
+Skills:
+{skills}"""
+
+
+def _suggest_schema(cur: Curated) -> dict:
+    ids = [NONE] + sorted(cid for cid, c in cur.concepts.items() if c.kind != "family")
+    return {
+        "type": "object",
+        "properties": {"suggestions": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"item_id": {"type": "string"}, "skill_id": {"type": "string", "enum": ids},
+                           "alias": {"type": "string"}, "case_sensitive": {"type": "boolean"},
+                           "reason": {"type": "string"}},
+            "required": ["item_id", "skill_id", "alias", "case_sensitive", "reason"],
+        }}},
+        "required": ["suggestions"],
+    }
+
+
+def suggest_aliases(items: list[dict], cur: Curated, client: genai.Client | None = None) -> tuple[list[dict] | None, str | None]:
+    """items: [{id, title, topics, description}]. Returns (suggestions, None) or (None, reason). Suggestions are
+    unverified model output: kompas.suggest checks every one before a person sees it."""
+    skills = "\n".join(f"- {cid}: {c.label}" for cid, c in sorted(cur.concepts.items()) if c.kind != "family")
+    contents = "<items>\n" + json.dumps(items, ensure_ascii=False, indent=1) + "\n</items>"
+    result, error = _generate(SUGGEST_INSTRUCTIONS.format(skills=skills), contents, _suggest_schema(cur), client)
+    if error:
+        return None, error
+    return result.get("suggestions") or [], None

@@ -1,6 +1,11 @@
+import io
+import random
+
+import httpx
 import pytest
 
 from kompas import curated, db
+from kompas.http import Http
 from kompas.periods import available_at, months
 
 
@@ -49,4 +54,69 @@ def add_dosm(conn, period: str, release_date: str, rows: dict[str, int]):
         })
 
 
-__all__ = ["add_hiring", "add_github_counts", "add_dosm", "months"]
+def mock_http(handler, **kwargs) -> Http:
+    """An Http client whose requests go to handler(request) -> httpx.Response. Never sleeps."""
+    kwargs.setdefault("sleep", lambda s: None)
+    kwargs.setdefault("rng", random.Random(0))
+    return Http(transport=httpx.MockTransport(handler), **kwargs)
+
+
+def routes(table: dict):
+    """handler for mock_http: maps a URL path (or a callable on the request) to a response or a list of
+    responses served in turn. Unknown paths answer 404."""
+    served = {k: (list(v) if isinstance(v, list) else v) for k, v in table.items()}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        for key, value in served.items():
+            if (callable(key) and key(request)) or key == request.url.path:
+                if isinstance(value, list):
+                    return value.pop(0) if len(value) > 1 else value[0]
+                return value(request) if callable(value) else value
+        return httpx.Response(404, text="not found")
+
+    return handler
+
+
+def jmi_workbook(values: dict[str, dict[str, object]], title_suffix: str = "by Major Group Occupation") -> bytes:
+    """A workbook laid out like DOSM's JMI release file: Table 1 (economic activity) first, then the
+    major-group table with annual, quarterly and monthly columns. values: {row label: {quarter: value}}."""
+    import openpyxl
+
+    quarters = sorted({q for row in values.values() for q in row})
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    years = sorted({int(q[:4]) for q in quarters})
+
+    def table(top: int, title: str, label: str, rows: dict):
+        ws.cell(top + 1, 2, title)
+        for j, y in enumerate(years):                         # annual columns
+            ws.cell(top + 3, 3 + j, y)
+        col, seen = 11, set()
+        for q in quarters:                                    # quarterly: year only on a year's first column
+            if q[:4] not in seen:
+                ws.cell(top + 3, col, int(q[:4]))
+                seen.add(q[:4])
+            ws.cell(top + 4, col, q[4:])
+            col += 1
+        ws.cell(top + 3, col + 1, years[0])                   # a monthly block after the quarters
+        ws.cell(top + 4, col + 1, "January")
+        ws.cell(top + 4, 2, label)
+        r = top + 5
+        for name, by_q in rows.items():
+            ws.cell(r, 2, name)
+            for j, q in enumerate(quarters):
+                ws.cell(r, 11 + j, by_q.get(q))
+            ws.cell(r, col + 1, 123)
+            r += 1
+        ws.cell(r, 2, "Source: Big Data Analytics: Job Market Insights, DOSM")
+        return r + 2
+
+    nxt = table(0, "Table 1: Number of Job Offering Advertised Online by Economic Activity", "Economic Activity",
+                {"Jumlah": {q: 1 for q in quarters}, "Manufacturing": {q: 1 for q in quarters}})
+    table(nxt, f"Table 2: Number of Job Offerings Advertised Online {title_suffix}", "Occupation", values)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+__all__ = ["add_hiring", "add_github_counts", "add_dosm", "months", "mock_http", "routes", "jmi_workbook"]

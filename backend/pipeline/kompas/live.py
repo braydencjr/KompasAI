@@ -7,18 +7,13 @@ import logging
 
 from . import db
 from .config import Params
-from .connectors import github, hn
 from .curated import Curated
 from .feed import refresh_live
+from .ingest import run_live
 from .periods import utcnow
 from .tag import retag
 
 log = logging.getLogger("kompas.live")
-
-POLLERS = {
-    "hn_front": hn.poll_front,
-    "github": github.poll,
-}
 
 
 class Bus:
@@ -49,8 +44,7 @@ def run_cycle(source: str, cur: Curated, p: Params) -> list[dict]:
     """One poll of one source, then tag and re-rank. Runs in a worker thread."""
     conn = db.connect()
     try:
-        with db.fetch_run(conn, source, "live") as run:
-            run["n"] = len(POLLERS[source](conn, cur))
+        run_live(conn, cur, source)
         retag(conn, cur)
         return refresh_live(conn, p)
     finally:

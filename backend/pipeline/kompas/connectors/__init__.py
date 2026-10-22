@@ -1,2 +1,2 @@
-"""One module per source. Each exposes backfill(conn, cur, since, until) and, where the source
-supports it, poll(conn, cur) for the live loop. Both write raw docs and return how many."""
+"""One module per source. Scheduled streams expose ingest*(run, cur, opts); live ones poll(run, cur).
+Every connector writes Documents through the ingestion Run (kompas/ingest.py), never to the database directly."""

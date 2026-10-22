@@ -11,7 +11,7 @@ python3 -m venv .venv
 cp .env.example .env
 ```
 
-Then open `.env` and replace `your-anthropic-api-key` with a real key from https://console.anthropic.com/settings/keys. `.env` is git-ignored; never commit a key. While the placeholder is there, the AI endpoints return `503` and the frontend falls back to its built-in sample simulations, so everything still works without a key.
+Then open `.env` and fill in the keys (`ANTHROPIC_API_KEY` for simulations, `GEMINI_API_KEY` for reading CVs, `GITHUB_TOKEN` for ingestion). Replace `your-anthropic-api-key` with a real key from https://console.anthropic.com/settings/keys. `.env` is git-ignored; never commit a key. While the placeholder is there, the AI endpoints return `503` and the frontend falls back to its built-in sample simulations, so everything still works without a key.
 
 ## Run
 
@@ -43,6 +43,7 @@ From `backend/`:
 | GET | `/api/simulations/status` | `{"ai": true}` when an API key is configured |
 | POST | `/api/simulations` | Generates a 4-task work simulation for a role with Claude (cached per role; `"fresh": true` writes a new one) |
 | POST | `/api/simulations/brief` | Runs the "Direct the AI" task: Claude plays the AI tool, replies to the user's brief and grades it against the rubric |
+| GET/POST | `/api/signals/...` | The signal engine (`pipeline/`): `health`, `concepts`, `feed`, `feed/stream` (SSE), `match`, `profile/extract` (CV → skills, Gemini) |
 
 Upload errors: `415` not a PDF, `413` too large, `422` unreadable, password-protected, or no text found.
 
@@ -58,6 +59,20 @@ Claude writes the scenario; code checks it before anyone sees it:
 - **Structure:** exactly four tasks (core, core, AI brief, AI review), each with its content; one retry with the problems listed, then `502`.
 
 Model and settings live in `.env` (`ANTHROPIC_MODEL`, default `claude-opus-5-5`). Requests opt into server-side refusal fallbacks (`fallbacks: "default"`).
+
+## Signal engine
+
+`pipeline/` is the `kompas` package (installed into the same `.venv` by `requirements.txt`). The server
+above serves its API under `/api/signals`; set `KOMPAS_LIVE=1` in `.env` for the live Hacker News / GitHub
+feed. Ingestion runs from the CLI, from `backend/`:
+
+```bash
+.venv/bin/kompas fetch all          # incremental ingestion of every source (one failing source doesn't stop the rest)
+.venv/bin/kompas status             # freshness and last run per source
+.venv/bin/kompas snapshot           # score today's snapshot
+```
+
+Data lives in `backend/data/` (`kompas.db` is git-ignored; manual imports go in `data/manual/`).
 
 ## Layout
 

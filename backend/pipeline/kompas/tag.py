@@ -8,7 +8,8 @@ from .curated import Curated
 from .db import get_meta, set_meta
 
 # Docs whose concept is fixed by how they were fetched (e.g. an arXiv query per concept).
-PRE_ASSIGNED = ("paper", "paper_count", "repo_count", "occupation_stat", "paper_baseline")
+PRE_ASSIGNED = ("paper", "paper_count", "repo_count", "occupation_stat", "occupation_group_stat", "paper_baseline",
+                "critical_occupation", "shortage_assessment")
 
 
 def _norm(term: str) -> str:

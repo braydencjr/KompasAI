@@ -1,23 +1,21 @@
 """Real-time API over the pipeline's SQLite store.
 
-Run:  kompas serve [--live] [--replay]
+Served by backend/app under /api/signals; `kompas serve [--live] [--replay]` runs it alone for development.
 """
 
 import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from . import curated, cv, db, explain, live
+from . import curated, cv, db, explain, ingest, live
 from .config import PARAMS
-from .periods import iso
 
 # PRD FR-4.2 demand multipliers, reused to weight personal feed items
 STATUS_WEIGHT = {"Act now": 1.2, "Emerging": 1.1, "Stable": 1.0, "Watch": 0.9, "Declining": 0.7, "Stalled": 0.6}
@@ -76,14 +74,18 @@ class Profile(BaseModel):
     limit: int = 20
 
 
-def create_app(live_mode: bool | None = None, replay: bool | None = None) -> FastAPI:
+def create_router(live_mode: bool | None = None, replay: bool | None = None):
+    """The signal API as a router, plus the background tasks it needs (live pollers, replay).
+
+    Returns (router, background): include the router in any FastAPI app, and enter `background()` in that
+    app's lifespan. backend/app serves it under /api/signals; create_app() serves it on its own."""
     live_mode = os.environ.get("KOMPAS_LIVE") == "1" if live_mode is None else live_mode
     replay = os.environ.get("KOMPAS_REPLAY") == "1" if replay is None else replay
     cur = curated.load()
     bus = live.Bus()
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def background():
         tasks = []
         if live_mode:
             # e.g. KOMPAS_LIVE_SOURCES=hn_front while a GitHub backfill is using the search quota
@@ -99,33 +101,33 @@ def create_app(live_mode: bool | None = None, replay: bool | None = None) -> Fas
         for t in tasks:
             t.cancel()
 
-    app = FastAPI(title="Kompas Signal API", version="0.1.0", lifespan=lifespan)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=os.environ.get("KOMPAS_CORS", "http://localhost:3000").split(","),
-        allow_methods=["GET", "POST"], allow_headers=["*"],
-    )
+    app = APIRouter(tags=["signals"])   # named `app` so the route decorators below read as before
 
     @app.get("/health")
     def health(conn=Depends(get_conn)):
+        """Server status plus ingestion health. `ok` only says the API answers; `ingestion.healthy` says
+        whether every expected stream is fresh and its last run succeeded."""
         snap = conn.execute("SELECT id, created_at FROM snapshot ORDER BY as_of DESC LIMIT 1").fetchone()
+        report = ingest.status(conn, live_mode=live_mode)
+        rank = {"ok": 0, "no_new_records": 1, "not_expected": 1, "partial": 2, "stale": 3, "never_run": 4,
+                "invalid": 5, "unavailable": 5}
         sources = []
-        stale_before = iso(datetime.now(timezone.utc) - timedelta(hours=2))
         for s in cur.sources:
-            ok = conn.execute("SELECT MAX(finished_at) t FROM fetch_log WHERE source = ? AND ok = 1", (s,)).fetchone()["t"]
-            err = conn.execute(
-                "SELECT finished_at, error FROM fetch_log WHERE source = ? AND ok = 0 AND finished_at > ? "
-                "ORDER BY id DESC LIMIT 1", (s, ok or ""),
-            ).fetchone()
-            running = conn.execute(
-                # a run killed mid-way never finishes; ignore anything older than 2 hours
-                "SELECT started_at FROM fetch_log WHERE source = ? AND finished_at IS NULL AND started_at > ? "
-                "AND started_at > ? ORDER BY id DESC LIMIT 1", (s, ok or "", stale_before),
-            ).fetchone()
-            sources.append({"id": s, "data_as_of": ok, "running_since": running["started_at"] if running else None,
-                            "last_error": dict(err) if err else None})
+            streams = [x for x in report["streams"] if x["source"] == s]
+            expected = [x for x in streams if x["expected"]] or streams
+            errors = [x["last_error"] for x in streams if x["last_error"]]
+            sources.append({
+                "id": s,
+                # kept for the frontend: when this source last delivered data successfully
+                "data_as_of": max((x["last_success_at"] for x in streams if x["last_success_at"]), default=None),
+                "running_since": min((x["running_since"] for x in streams if x["running_since"]), default=None),
+                "last_error": max(errors, key=lambda e: e["at"] or "") if errors else None,
+                "state": max((x["state"] for x in expected), key=lambda st: rank.get(st, 3)) if expected else None,
+                "latest_published_at": max((x["latest_published_at"] for x in streams if x["latest_published_at"]),
+                                           default=None),
+            })
         return {"ok": True, "live": live_mode, "replay": replay, "subscribers": bus.subscribers,
-                "latest_snapshot": dict(snap) if snap else None, "sources": sources}
+                "latest_snapshot": dict(snap) if snap else None, "sources": sources, "ingestion": report}
 
     @app.get("/snapshots")
     def snapshots(conn=Depends(get_conn)):
@@ -337,7 +339,23 @@ def create_app(live_mode: bool | None = None, replay: bool | None = None) -> Fas
             raise HTTPException(413, "That's much longer than a CV. Upload just the CV itself.")
         return {"file": file.filename if file else None, **cv.analyse(text, cur, conn)}
 
+    return app, background
+
+
+def create_app(live_mode: bool | None = None, replay: bool | None = None) -> FastAPI:
+    """The signal API on its own (`kompas serve`). backend/app serves the same routes under /api/signals."""
+    router, background = create_router(live_mode, replay)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with background():
+            yield
+
+    app = FastAPI(title="Kompas Signal API", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=os.environ.get("KOMPAS_CORS", "http://localhost:3000").split(","),
+        allow_methods=["GET", "POST"], allow_headers=["*"],
+    )
+    app.include_router(router)
     return app
-
-
-app = create_app()

@@ -7,7 +7,8 @@ REPO_ROOT = PIPELINE_DIR.parent
 
 
 def _load_env_file(path: Path):
-    """Reads KEY=VALUE lines from pipeline/.env (gitignored). Real environment variables win."""
+    """Reads KEY=VALUE lines from backend/.env (gitignored), the same file backend/app uses. Real
+    environment variables win."""
     if not path.exists():
         return
     for line in path.read_text().splitlines():
@@ -16,7 +17,7 @@ def _load_env_file(path: Path):
             os.environ.setdefault(key.strip(), value.strip().strip("'\""))
 
 
-_load_env_file(PIPELINE_DIR / ".env")
+_load_env_file(REPO_ROOT / ".env")
 
 CURATED_DIR = Path(os.environ.get("KOMPAS_CURATED_DIR", PIPELINE_DIR / "curated"))
 DATA_DIR = Path(os.environ.get("KOMPAS_DATA_DIR", REPO_ROOT / "data"))
@@ -63,3 +64,66 @@ class Params:
 
 
 PARAMS = Params()
+
+
+@dataclass(frozen=True)
+class Stream:
+    """One ingestion stream: a source can have several (e.g. GitHub's monthly counts and its live poll).
+
+    max_age_hours: a stream whose last successful run is older than this is reported stale.
+    data_max_age_days: the newest *published* record may be at most this old before the data itself counts
+    as stale (None: not measured, e.g. live polls where "nothing new" is normal)."""
+
+    source: str
+    stream: str
+    kinds: tuple[str, ...]
+    description: str
+    max_age_hours: float
+    data_max_age_days: float | None = None
+    live: bool = False          # only expected while live polling is on (KOMPAS_LIVE=1)
+    manual_file: str | None = None   # in data/manual/: needs a file a person provides
+
+    @property
+    def manual(self) -> bool:
+        return self.manual_file is not None
+
+
+STREAMS = [
+    Stream("arxiv", "monthly", ("paper", "paper_count", "paper_baseline"),
+           "Monthly paper counts per concept, plus the top papers", 24 * 35, 62),
+    Stream("github", "counts", ("repo_count",), "New repositories per topic per month", 24 * 35, 62),
+    Stream("github", "live", ("repo",), "Most-starred recent repos per topic, with star observations", 6,
+           live=True),
+    Stream("hn_front", "backfill", ("story",), "Hacker News stories with 100+ points", 24 * 35, 40),
+    Stream("hn_front", "live", ("story",), "Current Hacker News top stories", 2, live=True),
+    Stream("hn_hiring", "threads", ("hiring_post",), "Monthly 'Who is hiring?' threads", 24 * 35, 62),
+    # JMI releases come out quarterly, months after the quarter ends (Q2 2026 was released 18 Aug 2026)
+    Stream("dosm_jmi", "groups", ("occupation_group_stat",),
+           "Official JMI release workbooks: online job offerings by MASCO major group", 24 * 8, 300),
+    Stream("dosm_jmi", "occupations", ("occupation_stat",),
+           "Manual CSV of 4-digit MASCO occupations (data/manual/dosm_jmi.csv)", 24 * 120, 300,
+           manual_file="dosm_jmi.csv"),
+    # MyCOL editions come out about once a year; an edition older than ~2 years is out of date
+    Stream("mycol", "editions", ("critical_occupation", "shortage_assessment"),
+           "MyCOL critical occupations and shortage indicators (data/manual/mycol_editions.csv)", 24 * 400, 800,
+           manual_file="mycol_editions.csv"),
+]
+
+
+def stream(source: str, name: str) -> Stream:
+    return next(s for s in STREAMS if s.source == source and s.stream == name)
+
+
+# How far back incremental runs re-fetch, so late-indexed or still-changing records get picked up again.
+OVERLAP_MONTHS = 1          # arXiv, GitHub counts, HN hiring threads
+HN_OVERLAP_DAYS = 3         # HN points settle within a few days
+HN_THREAD_FINAL_DAYS = 35   # a hiring thread still gets posts for about a month
+LOCK_LEASE_MINUTES = 30     # renewed on every commit; a crashed run's lock frees itself after this
+
+# DOSM Job Market Insights. Any release's archive page lists the whole series; two anchors so the list
+# still works if one release page is ever withdrawn.
+DOSM_JMI_BASE = "https://www.dosm.gov.my"
+DOSM_JMI_ANCHORS = tuple(os.environ.get(
+    "KOMPAS_DOSM_JMI_ANCHORS",
+    "big-data-analytics-job-market-insights-and-my-job-profile-q12024,big-data-analytics-job-market-insights-q32025",
+).split(","))
