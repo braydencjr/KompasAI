@@ -1,15 +1,41 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { postJson } from "../../lib/api";
 import { checkBrief, replyFor, type AiReply, type PromptTask } from "../../data/simulations";
 
-type Props = { task: PromptTask; onDone: (score: number, evidence: string[]) => void };
-type Turn = { prompt: string; hits: boolean[]; reply: AiReply };
+type Props = { task: PromptTask; field: string; onDone: (score: number, evidence: string[]) => void };
+/** live: answered by the real model through the backend; otherwise a scripted reply */
+type Turn = { prompt: string; hits: boolean[]; reply: AiReply; live: boolean };
 
 const MAX_TRIES = 3;
 const THINK_MS = 900;
 
-export default function PromptTool({ task, onDone }: Props) {
+// once the backend says no, stay scripted for the rest of the session instead of waiting on it every time
+let liveAvailable = true;
+
+async function askAi(task: PromptTask, field: string, turns: Turn[], prompt: string) {
+  if (liveAvailable) {
+    try {
+      const r = await postJson<{ reply: AiReply; covered: boolean[] }>("/api/simulations/brief", {
+        ai_name: task.aiName,
+        field,
+        task: task.brief,
+        rubric: task.rubric,
+        history: turns.map((t) => ({ prompt: t.prompt, reply: t.reply.text })),
+        prompt,
+      });
+      return { prompt, hits: r.covered, reply: r.reply, live: true };
+    } catch {
+      liveAvailable = false;
+    }
+  }
+  await new Promise((r) => setTimeout(r, THINK_MS));
+  const hits = checkBrief(task, prompt);
+  return { prompt, hits, reply: replyFor(task, hits), live: false };
+}
+
+export default function PromptTool({ task, field, onDone }: Props) {
   const [draft, setDraft] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [thinking, setThinking] = useState(false);
@@ -31,17 +57,15 @@ export default function PromptTool({ task, onDone }: Props) {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
   }, [turns, thinking, shown]);
 
-  function send() {
+  async function send() {
     const prompt = draft.trim();
     if (!prompt || thinking || typing) return;
     setDraft("");
     setThinking(true);
-    setTimeout(() => {
-      const hits = checkBrief(task, prompt);
-      setTurns((t) => [...t, { prompt, hits, reply: replyFor(task, hits) }]);
-      setShown(0);
-      setThinking(false);
-    }, THINK_MS);
+    const turn = await askAi(task, field, turns, prompt);
+    setTurns((t) => [...t, turn]);
+    setShown(0);
+    setThinking(false);
   }
 
   function submit() {
@@ -65,7 +89,9 @@ export default function PromptTool({ task, onDone }: Props) {
         <span className="tool-file ai-name">
           <span className="ai-spark" aria-hidden>✦</span> {task.aiName}
         </span>
-        <span className="muted small">Simulated AI · {Math.max(MAX_TRIES - turns.length, 0)} tries left</span>
+        <span className="muted small">
+          {last?.live ? "Live AI" : "Simulated AI"} · {Math.max(MAX_TRIES - turns.length, 0)} tries left
+        </span>
       </div>
 
       <div className="ai-chat" ref={chatRef}>

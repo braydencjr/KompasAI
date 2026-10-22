@@ -32,6 +32,8 @@ export type CodeTask = TaskBase & {
   /** helper functions available to the user's code */
   helpers: { signature: string; source: string }[];
   starter: string;
+  /** reference solution; AI-written tasks must pass their own tests before they're shown */
+  solution?: string;
   tests: { label: string; args: unknown[]; expected: unknown }[];
 };
 
@@ -98,6 +100,8 @@ export type Simulation = {
   setting: string;
   welcome: { from: string; text: string };
   tasks: SimTask[];
+  /** written by the AI for this user rather than one of the built-in samples */
+  generated?: boolean;
 };
 
 /** what a finished task reports back */

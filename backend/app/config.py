@@ -1,4 +1,10 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Settings come from the environment; backend/.env fills in anything not already set.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # Comma-separated list of origins allowed to call the API (the Next.js dev server by default).
 CORS_ORIGINS = [
@@ -11,3 +17,6 @@ APP_VERSION = "0.1.0"
 
 # PRD FR-1.1: resumes up to 5 MB
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "5")) * 1024 * 1024
+
+# Claude model used for generating and running work simulations.
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")

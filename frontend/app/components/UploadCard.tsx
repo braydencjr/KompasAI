@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { API_URL } from "../lib/api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const MAX_BYTES = 5 * 1024 * 1024;
 
 type UploadResult = {

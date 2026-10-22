@@ -9,11 +9,55 @@ import PromptTool from "./sim/PromptTool";
 import ReviewTool from "./sim/ReviewTool";
 import SheetTool from "./sim/SheetTool";
 import { FEELINGS, TOOL_LABEL, clock, initials } from "./sim/shared";
+import type { SimSource } from "./SimulatorProvider";
 import { isAiTask, quadrantOf, reviewFor, type Outcome, type SimResult, type Simulation } from "../data/simulations";
 
-type Props = { sim: Simulation; onClose: () => void; onFinish: (r: SimResult) => void };
+type Props = {
+  sim: Simulation;
+  source: SimSource;
+  /** why the sample is showing, when AI generation failed */
+  note?: string;
+  onUseSample: () => void;
+  onRegenerate: () => void;
+  onClose: () => void;
+  onFinish: (r: SimResult) => void;
+};
 
-export default function WorkSimulator({ sim, onClose, onFinish }: Props) {
+const GENERATING = [
+  "Reading the role and your skills…",
+  "Writing your first-day inbox…",
+  "Building the data for your tasks…",
+  "Choosing an AI tool from this field…",
+  "Planting mistakes for you to catch…",
+  "Checking every answer works…",
+];
+
+function Generating({ onUseSample }: { onUseSample: () => void }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => (n + 1) % GENERATING.length), 2600);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="sim-generating">
+      <span className="ai-spark big gen-spin" aria-hidden>
+        ✦
+      </span>
+      <div>
+        <strong>Writing a day in this job for you</strong>
+        <p className="muted small" aria-live="polite">
+          {GENERATING[i]}
+        </p>
+      </div>
+      <p className="muted small">This usually takes under a minute.</p>
+      <button className="sim-link" onClick={onUseSample}>
+        Skip and use a sample day instead
+      </button>
+    </div>
+  );
+}
+
+export default function WorkSimulator({ sim, source, note, onUseSample, onRegenerate, onClose, onFinish }: Props) {
   // -1 = welcome, 0..n-1 = tasks, n = report
   const [step, setStep] = useState(-1);
   const [attempt, setAttempt] = useState(0);
@@ -100,24 +144,36 @@ export default function WorkSimulator({ sim, onClose, onFinish }: Props) {
 
         <header className="sim-head">
           <div className="plan-tags">
-            <span className="label">Work simulation · {sim.setting}</span>
+            <span className="label">Work simulation{source === "loading" ? "" : ` · ${sim.setting}`}</span>
+            {source === "ai" && <span className="chip sim-source ai">✦ Written by AI for you</span>}
+            {source === "sample" && <span className="chip sim-source">Sample scenario</span>}
             {task && <span className="chip chip-blue">⏱ {clock(pending ? pending.seconds : elapsed)}</span>}
           </div>
           <h2 id="sim-title">{sim.title}</h2>
-          <ol className="sim-progress" aria-label="Progress" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
-            {sim.tasks.map((t, i) => (
-              <li key={t.id} className={`${i < step ? "done" : i === step ? "current" : ""}${isAiTask(t) ? " ai" : ""}`}>
-                <span>{isAiTask(t) ? "✦" : i + 1}</span>
-                {t.title}
-              </li>
-            ))}
-          </ol>
+          {source !== "loading" && (
+            <ol className="sim-progress" aria-label="Progress" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
+              {sim.tasks.map((t, i) => (
+                <li
+                  key={t.id}
+                  className={`${i < step ? "done" : i === step ? "current" : ""}${isAiTask(t) ? " ai" : ""}`}
+                >
+                  <span>{isAiTask(t) ? "✦" : i + 1}</span>
+                  {t.title}
+                </li>
+              ))}
+            </ol>
+          )}
         </header>
 
-        {step === -1 && (
+        {step === -1 && source === "loading" && <Generating onUseSample={onUseSample} />}
+
+        {step === -1 && source !== "loading" && (
           <div className="sim-intro">
+            {note && <p className="sim-note">{note}</p>}
             <div className="sim-bubble">
-              <span className="sim-avatar" aria-hidden>{initials(sim.welcome.from)}</span>
+              <span className="sim-avatar" aria-hidden>
+                {initials(sim.welcome.from)}
+              </span>
               <div>
                 <div className="sim-from">{sim.welcome.from}</div>
                 <p>{sim.welcome.text}</p>
@@ -149,9 +205,14 @@ export default function WorkSimulator({ sim, onClose, onFinish }: Props) {
               </div>
             ))}
             <p className="muted small">Names, companies and figures are fictional.</p>
-            <button className="btn btn-primary sim-start" onClick={() => setStep(0)}>
-              Start my first day →
-            </button>
+            <div className="sim-intro-actions">
+              <button className="btn btn-primary" onClick={() => setStep(0)}>
+                Start my first day →
+              </button>
+              <button className="sim-link" onClick={onRegenerate}>
+                ✦ {source === "ai" ? "Generate a different scenario" : "Try generating one with AI"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -161,7 +222,9 @@ export default function WorkSimulator({ sim, onClose, onFinish }: Props) {
               <div className="label">Inbox</div>
               <article className="sim-email">
                 <div className="sim-email-head">
-                  <span className="sim-avatar" aria-hidden>{initials(task.from)}</span>
+                  <span className="sim-avatar" aria-hidden>
+                    {initials(task.from)}
+                  </span>
                   <div>
                     <div className="sim-from">
                       {task.from} <span className="muted">· {task.fromRole}</span>
@@ -192,13 +255,15 @@ export default function WorkSimulator({ sim, onClose, onFinish }: Props) {
               {task.tool === "code" && <CodeTool task={task} onDone={taskDone} />}
               {task.tool === "doc" && <DocTool task={task} onDone={taskDone} />}
               {task.tool === "calendar" && <CalendarTool task={task} onDone={taskDone} />}
-              {task.tool === "prompt" && <PromptTool task={task} onDone={taskDone} />}
+              {task.tool === "prompt" && <PromptTool task={task} field={sim.title} onDone={taskDone} />}
               {task.tool === "review" && <ReviewTool task={task} onDone={taskDone} />}
 
               {pending && (
                 <div className="sim-after">
                   <div className="sim-bubble">
-                    <span className="sim-avatar" aria-hidden>{initials(task.from)}</span>
+                    <span className="sim-avatar" aria-hidden>
+                      {initials(task.from)}
+                    </span>
                     <div>
                       <div className="sim-from">
                         {task.from} <span className="muted">· replied</span>

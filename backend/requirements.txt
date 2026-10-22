@@ -1,2 +1,4 @@
+anthropic==2.1.0
 fastapi[standard]==0.154.0
 pypdf==6.21.1
+python-dotenv==1.2.4

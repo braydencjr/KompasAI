@@ -1,7 +1,8 @@
 // A tiny spreadsheet engine for the work simulator: literals, cell refs, + − * / ^, ranges and a few functions.
 
 export type Fmt = "text" | "num" | "rm" | "pct" | "dec";
-export type InputCell = { expect: number | string; tol?: number };
+/** a cell the user fills in; AI-written sheets give a `solution` formula and the expected value is computed from it */
+export type InputCell = { expect?: number | string; solution?: string; tol?: number };
 export type Cell = string | number | InputCell;
 export type SheetSpec = { name: string; columns: { label: string; fmt: Fmt }[]; rows: Cell[][] };
 export type Val = number | string | null;
@@ -162,7 +163,7 @@ export function evaluateSheet(spec: SheetSpec, inputs: Record<string, string>): 
 }
 
 export function isCorrect(cell: InputCell, v: Val | { error: string } | undefined) {
-  if (v === null || v === undefined || typeof v === "object") return false;
+  if (cell.expect === undefined || v === null || v === undefined || typeof v === "object") return false;
   if (typeof cell.expect === "string") return String(v).trim().toLowerCase() === cell.expect.toLowerCase();
   if (typeof v !== "number") return false;
   return Math.abs(v - cell.expect) <= (cell.tol ?? Math.max(Math.abs(cell.expect) * 0.005, 0.005));
@@ -174,4 +175,26 @@ export function formatVal(v: Val, fmt: Fmt) {
   if (fmt === "pct") return `${+(v * 100).toFixed(1)}%`;
   if (fmt === "dec") return v.toFixed(2);
   return v.toLocaleString("en-MY", { maximumFractionDigits: 2 });
+}
+
+/** Fills in `expect` for cells that only have a `solution`, by running the solutions through the engine. */
+export function resolveSolutions(spec: SheetSpec): SheetSpec {
+  const solutions: Record<string, string> = {};
+  spec.rows.forEach((r, ri) =>
+    r.forEach((c, ci) => {
+      if (isInput(c) && c.expect === undefined && c.solution) solutions[addr(ri, ci)] = c.solution;
+    }),
+  );
+  if (!Object.keys(solutions).length) return spec;
+
+  const computed = evaluateSheet(spec, solutions);
+  const rows = spec.rows.map((r, ri) =>
+    r.map((c, ci) => {
+      if (!isInput(c) || c.expect !== undefined) return c;
+      const v = computed[addr(ri, ci)];
+      if (v === null || v === undefined || typeof v === "object") throw new Error(`No answer for ${addr(ri, ci)}`);
+      return { ...c, expect: v };
+    }),
+  );
+  return { ...spec, rows };
 }
