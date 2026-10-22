@@ -79,25 +79,12 @@ function longDate(id: string) {
 }
 
 // sample values from the static demo, shown while the API is offline
-const SAMPLE = { snapshot: "2026-10-20", sources: 6 };
+const SAMPLE = { snapshot: "2026-10-20" };
 
 function useSnapshotInfo() {
   const { live, health } = useSignals();
   const snapshot = health?.latest_snapshot?.id ?? SAMPLE.snapshot;
-  const sources = health ? health.sources.filter((s) => s.data_as_of).length : SAMPLE.sources;
-  return { live, snapshot, sources };
-}
-
-export function SnapshotHud() {
-  const { live, snapshot, sources } = useSnapshotInfo();
-  return (
-    <div className="hud">
-      <span>Snapshot <strong>{snapshot.replaceAll("-", ".")}</strong></span>
-      <span>Sources <strong>{String(sources).padStart(2, "0")}</strong></span>
-      <span>Scenario <strong>Moderate</strong></span>
-      <span>{live ? <strong>Live</strong> : "Sample data"}</span>
-    </div>
-  );
+  return { live, snapshot };
 }
 
 export function SidebarSnapshot() {

@@ -2,7 +2,6 @@
 
 import CvUpload from "../CvUpload";
 import ProfilePanel from "../ProfilePanel";
-import { SnapshotHud } from "../Signals";
 
 /** Step 1: upload a CV and watch Kompas read it, match it with the market and suggest a direction. The current job
  * The Mirror needs is read from the CV (and can be changed inside the reading flow). */
@@ -18,7 +17,6 @@ export default function StepYou() {
           Upload your resume and Kompas maps your skills against live AI and job-market signals,
           then shows the careers that fit you and where the market is heading.
         </p>
-        <SnapshotHud />
       </section>
 
       <CvUpload />

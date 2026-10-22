@@ -392,6 +392,7 @@ html.lg-refract .glass {
 .avatar {
   display: grid;
   place-items: center;
+  flex: none;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -410,6 +411,35 @@ html.lg-refract .glass {
 .user-role {
   font-size: 12px;
   color: var(--muted);
+}
+
+.user-text { min-width: 0; }
+
+.user-name-edit {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.user-name-edit:hover { text-decoration: underline dotted; text-underline-offset: 3px; }
+
+.user-name-input {
+  width: 100%;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  outline: none;
 }
 
 /* ---------- top bar & hero ---------- */
@@ -4234,10 +4264,27 @@ h3 {
 
 /* sidebar progress rail */
 .j-rail { position: relative; }
-.j-rail-line { position: absolute; left: 24px; top: 22px; bottom: 22px; width: 2px; background: var(--hair); border-radius: 2px; }
+.j-rail-line { position: absolute; left: 23px; top: 19px; bottom: 19px; width: 2px; background: var(--hair); border-radius: 2px; }
 .j-rail-line span { display: block; width: 100%; background: linear-gradient(var(--accent), #b7a9ee); border-radius: 2px; transition: height 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .j-rail .nav-item { position: relative; }
-.j-rail .nav-item.done svg { color: var(--accent-ink); }
+/* each step's icon sits in a circle, so the progress line joins the circles instead of crossing the icons */
+.j-rail .nav-item { padding: 5px 14px 5px 10px; }
+.nav-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f3f6fa;
+  box-shadow: inset 0 0 0 1px var(--hair);
+  transition: background 0.3s, color 0.3s, box-shadow 0.3s;
+}
+.nav-node svg { width: 15px; height: 15px; }
+.j-rail .nav-item.done .nav-node { background: #e2eefb; color: var(--accent-ink); box-shadow: inset 0 0 0 1px rgba(61, 155, 233, 0.35); }
+.j-rail .nav-item.active .nav-node { background: linear-gradient(145deg, #2a3550, var(--ink)); color: #fff; box-shadow: 0 0 12px -2px rgba(61, 155, 233, 0.6); }
 
 /* shared bits */
 .j-status-move { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
