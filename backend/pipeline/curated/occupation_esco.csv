@@ -1,0 +1,20 @@
+isco_code,esco_title,basis
+# Which ESCO occupation stands for each ISCO group in The Mirror (its essential skills become the task cards). Chosen by hand from the ESCO occupations under the group; basis says how close the fit is.,,
+1120,chief executive officer,direct
+1211,financial manager,only ESCO occupation in the group
+2120,statistician,direct
+2133,environmental scientist,closest to the ESG specialist role
+2411,accountant,only ESCO occupation in the group
+2413,financial analyst,direct
+2421,business analyst,direct
+2431,advertising specialist,closest to the marketing specialist role
+2511,ICT system analyst,direct
+2512,software developer,direct
+2513,web developer,direct
+2514,ICT application developer,direct
+2519,software tester,loose: ESCO has no AI developer occupation in this group
+2521,database administrator,direct
+2529,ICT security administrator,closest to the data and security specialist role
+3313,accounting assistant,direct
+3314,statistical assistant,ESCO files data analyst under 2511 instead
+4311,billing clerk,closest of the two ESCO occupations in the group

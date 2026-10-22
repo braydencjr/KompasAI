@@ -1,0 +1,20 @@
+source_system,source_code,source_title,isco_code,verified,role_title
+# MASCO 2020 is based on ISCO-08. Codes below assume the 4-digit level matches; verified=false until checked against DOSM's MASCO 2020 document.,,,,,
+MASCO,1120,Managing directors and chief executives,1120,false,Managing director
+MASCO,1211,Finance managers,1211,false,Finance manager
+MASCO,2120,"Mathematicians, actuaries and statisticians",2120,false,Statistician / data scientist
+MASCO,2133,Environmental protection professionals,2133,false,Environmental and ESG specialist
+MASCO,2411,Accountants,2411,false,Accountant
+MASCO,2413,Financial analysts,2413,false,Financial analyst
+MASCO,2421,Management and organization analysts,2421,false,Management and process analyst
+MASCO,2431,Advertising and marketing professionals,2431,false,Marketing specialist
+MASCO,2511,Systems analysts,2511,false,Systems analyst
+MASCO,2512,Software developers,2512,false,Software developer
+MASCO,2513,Web and multimedia developers,2513,false,Web developer
+MASCO,2514,Applications programmers,2514,false,Applications programmer
+MASCO,2519,Software and applications developers and analysts n.e.c.,2519,false,Software and AI developer
+MASCO,2521,Database designers and administrators,2521,false,Database administrator
+MASCO,2529,Database and network professionals n.e.c.,2529,false,Data and security specialist
+MASCO,3313,Accounting associate professionals,3313,false,Accounting associate
+MASCO,3314,"Statistical, mathematical and related associate professionals",3314,false,Data analyst
+MASCO,4311,Accounting and bookkeeping clerks,4311,false,Accounts and bookkeeping clerk

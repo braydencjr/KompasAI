@@ -1,0 +1,61 @@
+entity_type,entity_id,sdg,target,rationale
+# SDG links for roles (ISCO codes) and skills (concept ids), PRD FR-7.1. target is the UN SDG target the link rests on (https://sdgs.un.org/goals).,,,,
+role,1120,8,8.3,Business leaders create productive activity and decent jobs
+role,1211,16,16.6,Finance managers keep organisations accountable and transparent
+role,1211,8,8.2,Sound financial management raises productivity
+role,2120,9,9.5,Statistical research upgrades analytical capability
+role,2120,17,17.18,Statisticians increase the availability of reliable data
+role,2133,13,13.2,ESG specialists bring climate measures into company strategy
+role,2133,12,12.6,ESG specialists help companies report on sustainability
+role,2411,16,16.6,Accountants keep financial records accountable and transparent
+role,2411,8,8.2,Reliable accounts support productive businesses
+role,2413,8,8.2,Financial analysis directs capital to productive uses
+role,2421,8,8.2,Process analysts raise productivity through better ways of working
+role,2431,8,8.3,Marketing helps enterprises grow
+role,2511,9,9.5,Systems analysts upgrade organisations' technological capability
+role,2512,9,9.5,Software developers build technological capability
+role,2512,9,9.c,Software extends access to digital services
+role,2513,9,9.c,Web developers extend access to information and services online
+role,2514,9,9.c,Applications bring digital services to more people
+role,2519,9,9.5,Software and AI development upgrades technological capability
+role,2521,9,9.5,Well-run databases underpin research and innovation
+role,2529,9,9.1,Security specialists keep digital infrastructure reliable and resilient
+role,3313,16,16.6,Accounting work keeps institutions accountable
+role,3313,8,8.5,Reskilling routine accounting roles protects decent work
+role,3314,9,9.5,Data analysts upgrade organisations' analytical capability
+role,4311,8,8.5,Reskilling clerical roles exposed to automation protects decent work
+skill,excel,8,8.2,Spreadsheet skills raise everyday productivity
+skill,month-end-close,16,16.6,A timely close keeps financial reporting accountable
+skill,reconciliation,16,16.6,Reconciliation keeps records accurate and accountable
+skill,accounts-payable,16,16.5,Payment controls reduce fraud and bribery
+skill,sap-erp,8,8.2,ERP systems raise productivity through technological upgrading
+skill,financial-modelling,8,8.2,Models guide productive investment decisions
+skill,forecasting,8,8.2,Forecasts support productive planning
+skill,data-visualisation,9,9.5,Visualisation turns data into usable insight
+skill,power-bi,9,9.5,Business intelligence upgrades analytical capability
+skill,sql,9,9.5,Data skills upgrade technological capability
+skill,data-engineering,9,9.5,Data infrastructure supports research and innovation
+skill,process-automation,8,8.2,Automation raises productivity through technological upgrading
+skill,ghg-accounting,13,13.2,Measuring emissions is the basis for climate action
+skill,ghg-accounting,12,12.6,Emissions data feeds corporate sustainability reporting
+skill,sustainability-standards,12,12.6,Standards make sustainability reporting comparable
+skill,ai-fundamentals,4,4.4,AI literacy is a relevant skill for employment
+skill,ai-risk-frameworks,16,16.6,AI risk controls keep institutions accountable
+skill,responsible-ai,16,16.6,Responsible AI keeps automated decisions accountable
+skill,responsible-ai,10,10.3,Fair AI reduces inequality of outcomes
+skill,python,9,9.5,Programming upgrades technological capability
+skill,typescript,9,9.c,Web development extends access to digital services
+skill,react,9,9.c,Web interfaces extend access to digital services
+skill,rust,9,9.1,Safe systems languages make infrastructure more reliable
+skill,kubernetes,9,9.1,Container platforms keep digital infrastructure resilient
+skill,cloud-platforms,9,9.c,Cloud platforms widen access to digital services
+skill,ai-assisted-dev,9,9.5,AI-assisted development upgrades technological capability
+skill,agentic-coding,9,9.5,Agentic workflows upgrade technological capability
+skill,llm-applications,9,9.5,LLM applications are a frontier of technological capability
+skill,llm-agents,9,9.5,Agents are a frontier of technological capability
+skill,rag,9,9.5,Retrieval-augmented generation makes AI systems more reliable
+skill,context-engineering,9,9.5,Prompt and context design upgrade AI capability
+skill,mcp,9,9.5,Open protocols connect AI tools to infrastructure
+skill,machine-learning,9,9.5,Machine learning drives research and innovation
+skill,mlops,9,9.1,MLOps keeps AI infrastructure reliable
+skill,vector-databases,9,9.5,Vector search underpins AI applications

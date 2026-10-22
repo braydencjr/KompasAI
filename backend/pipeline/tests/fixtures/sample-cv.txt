@@ -1,0 +1,31 @@
+AISYAH RAHMAN
+Kuala Lumpur · aisyah.rahman@example.com · (synthetic demo profile)
+
+PROFILE
+Accounts executive with five years in a regional shared-services centre, supporting finance teams across
+Malaysia, Singapore and Thailand. Known for clean month-end close and for spotting errors before they reach
+the auditors.
+
+EXPERIENCE
+
+Accounts Executive, Northwind Shared Services, Kuala Lumpur (2022 – present)
+- Process around 1,800 supplier invoices a month and match them against purchase orders and goods receipts
+- Lead the month-end close for three entities, including accruals, prepayments and intercompany balances
+- Reconcile 40+ bank accounts every month and investigate unmatched items with treasury
+- Built a monthly variance dashboard in Power BI that the regional finance director uses in review meetings
+- Wrote Excel macros that cut the time to prepare the aged payables report from a day to an hour
+
+Accounts Assistant, Tan & Co. Trading Sdn Bhd, Petaling Jaya (2020 – 2022)
+- Posted journal entries and maintained the general ledger in SAP S/4HANA
+- Prepared supporting schedules for the annual statutory audit
+- Handled vendor queries and payment runs for 300+ suppliers
+
+EDUCATION
+Bachelor of Accounting (Hons), Universiti Teknologi MARA, 2020
+
+SKILLS
+Excel (pivot tables, XLOOKUP, macros), SAP S/4HANA, Power BI, accounts payable, bank reconciliation,
+month-end close, IFRS basics, stakeholder communication, BlackLine
+
+CERTIFICATIONS
+Microsoft Certified: Power BI Data Analyst Associate (2024)

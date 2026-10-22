@@ -1,4 +1,4 @@
-export type Signal = "Act now" | "Emerging" | "Stable" | "Watch";
+export type Signal = "Act now" | "Emerging" | "Stable" | "Watch" | "Declining" | "Stalled";
 
 export type Step = {
   skill: string;
@@ -16,8 +16,9 @@ export type Role = {
   title: string;
   summary: string;
   match: number;
-  signal: Signal;
-  sdg: { goal: string; reason: string };
+  /** the role's demand on the Signal Ladder; null when no snapshot has measured it */
+  signal: Signal | null;
+  sdg?: { goal: string; reason: string };
   have: string[];
   gaps: string[];
   steps: Step[];
@@ -34,7 +35,8 @@ export type Opening = {
 };
 
 export type Bet = Role & {
-  kind: "Safe Bet" | "Rising Bet" | "Impact Bet";
+  sdg: { goal: string; reason: string };
+  kind: "Stay and strengthen" | "Safest switch" | "Fastest-growing" | "Biggest impact";
   note: string;
   /** share of the role's tasks AI could take over within 5 years */
   aiRisk: number;
@@ -44,6 +46,8 @@ export type Bet = Role & {
   trend: number[];
   /** sample openings for the demo; the live product fills these from ingested postings */
   openings: Opening[];
+  /** what `growth` and `trend` measure (default: postings year on year) */
+  trendNote?: string;
 };
 
 // Demo data for the synthetic persona (Aisyah). Resource links checked 20 Oct 2026.
@@ -106,7 +110,7 @@ export const cvMatch: Role = {
 export const bets: Bet[] = [
   {
     id: "ai-risk-controls",
-    kind: "Safe Bet",
+    kind: "Safest switch",
     title: "AI Risk & Controls Analyst",
     note: "Low AI replacement risk; your audit trail habits transfer",
     summary: "Check that AI systems used in finance are accurate, fair and properly controlled.",
@@ -179,7 +183,7 @@ export const bets: Bet[] = [
   },
   {
     id: "finance-automation",
-    kind: "Rising Bet",
+    kind: "Fastest-growing",
     title: "Finance Automation Specialist",
     note: "Fastest-growing demand in Malaysian postings",
     summary: "Automate month-end close, reconciliation and reporting with scripts and workflow tools.",
@@ -252,7 +256,7 @@ export const bets: Bet[] = [
   },
   {
     id: "esg-reporting",
-    kind: "Impact Bet",
+    kind: "Biggest impact",
     title: "ESG Reporting Analyst",
     note: "Best fit with the goals you selected",
     summary: "Measure and report a company's emissions and sustainability performance.",
@@ -314,6 +318,44 @@ export const bets: Bet[] = [
     ],
   },
 ];
+
+/** Skill names used on screen -> concept ids in pipeline/curated/concepts.csv. */
+export const conceptIds: Record<string, string> = {
+  Excel: "excel",
+  "Month-end close": "month-end-close",
+  Reconciliation: "reconciliation",
+  "Accounts payable": "accounts-payable",
+  SAP: "sap-erp",
+  "Financial modelling": "financial-modelling",
+  Forecasting: "forecasting",
+  "Power BI": "power-bi",
+  "Data visualisation": "data-visualisation",
+  SQL: "sql",
+  Python: "python",
+  "Process automation": "process-automation",
+  "AI fundamentals": "ai-fundamentals",
+  "AI risk frameworks": "ai-risk-frameworks",
+  "Responsible AI": "responsible-ai",
+  "GHG accounting": "ghg-accounting",
+  "Sustainability standards": "sustainability-standards",
+};
+
+const ids = (names: string[]) => [...new Set(names.map((n) => conceptIds[n]).filter(Boolean))];
+
+/** Aisyah's profile as the live feed sees it. */
+export const profile = {
+  skills: ids(["Excel", "Month-end close", "Reconciliation", "Accounts payable", "SAP"]).map((id) => ({ id })),
+  route: ids([cvMatch, ...bets].flatMap((r) => r.gaps)),
+  // AI capabilities that reach her tasks; the Mirror will supply these once it exists
+  exposed: ["document-ai", "reconciliation-automation", "report-generation", "tabular-forecasting"],
+};
+
+/** Verified courses by concept id, gathered from the sample roles' roadmaps. */
+export const resources: Record<string, Step[]> = {};
+for (const step of [cvMatch, ...bets].flatMap((r) => r.steps)) {
+  const id = conceptIds[step.skill];
+  if (id && !(resources[id] ?? []).some((s) => s.url === step.url)) (resources[id] ??= []).push(step);
+}
 
 export function riskLabel(risk: number) {
   return risk < 20 ? "Low" : risk < 35 ? "Low – Moderate" : risk < 55 ? "Moderate" : "High";

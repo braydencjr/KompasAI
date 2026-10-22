@@ -1,0 +1,80 @@
+concept_id,isco_code,weight,note
+"# Family links are hand-drafted (they carry Malaysian occupation demand). Skill links are drafted from ESCO by gemini-2.5-flash, checked and reviewed (kompas links-draft / links-apply); the note cites the ESCO item(s). Essential 1.0 / optional 0.5.",,,
+finance-accounting,2411,1.0,
+finance-accounting,3313,1.0,
+finance-accounting,4311,1.0,
+finance-accounting,1211,0.5,
+finance-accounting,2413,0.5,
+software-development,2511,0.5,
+software-development,2512,1.0,
+software-development,2513,1.0,
+software-development,2514,1.0,
+software-development,2519,1.0,
+data-analytics,2120,1.0,
+data-analytics,3314,1.0,
+data-analytics,2521,0.5,
+data-analytics,2413,0.5,
+sustainability-reporting,2133,1.0,
+ai-governance,2421,0.5,
+ai-governance,2529,0.5,
+ai-engineering,2519,1.0,
+ai-engineering,2512,0.5,
+ai-engineering,2120,0.5,
+financial-modelling,1211,0.5,hand-drafted; no ESCO item
+data-engineering,2120,1.0,"ESCO: design database scheme (essential, data scientist); establish data processes (essential, data scientist); normalise data (essential, data scientist); perform data cleansing (essential, data scientist); integrate ICT data (optional, data scientist); manage ICT data architecture (optional, data scientist)"
+data-visualisation,2120,0.5,hand-drafted; no ESCO item
+forecasting,2120,0.5,hand-drafted; no ESCO item
+machine-learning,2120,0.5,"ESCO: build predictive models (optional, statistician); perform data mining (optional, data scientist)"
+python,2120,0.5,hand-drafted; no ESCO item
+sql,2120,0.5,hand-drafted; no ESCO item
+data-visualisation,2133,1.0,"ESCO: prepare visual data (essential, environmental scientist)"
+ghg-accounting,2133,1.0,hand-drafted; no ESCO item
+sustainability-standards,2133,1.0,hand-drafted; no ESCO item
+month-end-close,2411,1.0,hand-drafted; no ESCO item
+ai-risk-frameworks,2411,0.5,hand-drafted; no ESCO item
+excel,2411,0.5,hand-drafted; no ESCO item
+financial-modelling,2411,0.5,hand-drafted; no ESCO item
+ghg-accounting,2411,0.5,hand-drafted; no ESCO item
+reconciliation,2411,0.5,hand-drafted; no ESCO item
+sap-erp,2411,0.5,hand-drafted; no ESCO item
+sustainability-standards,2411,0.5,hand-drafted; no ESCO item
+excel,2413,1.0,hand-drafted; no ESCO item
+financial-modelling,2413,1.0,hand-drafted; no ESCO item
+forecasting,2413,1.0,"ESCO: prepare financial projections (essential, financial analyst); financial forecasting (optional, financial analyst)"
+data-visualisation,2413,0.5,hand-drafted; no ESCO item
+power-bi,2413,0.5,hand-drafted; no ESCO item
+ai-risk-frameworks,2421,0.5,hand-drafted; no ESCO item
+responsible-ai,2421,0.5,hand-drafted; no ESCO item
+process-automation,2511,1.0,hand-drafted; no ESCO item
+python,2511,0.5,"ESCO: Python (computer programming) (optional, ICT system analyst)"
+sap-erp,2511,0.5,"ESCO: SAP R3 (optional, ICT system analyst)"
+typescript,2511,0.5,"ESCO: TypeScript (optional, ICT system analyst)"
+machine-learning,2512,0.5,"ESCO: utilise machine learning (optional, software developer)"
+python,2512,0.5,"ESCO: Python (computer programming) (optional, software developer)"
+sql,2512,0.5,hand-drafted; no ESCO item
+typescript,2512,0.5,"ESCO: TypeScript (optional, software developer)"
+react,2513,1.0,hand-drafted; no ESCO item
+typescript,2513,0.5,"ESCO: TypeScript (optional, web developer)"
+process-automation,2514,0.5,hand-drafted; no ESCO item
+python,2514,0.5,"ESCO: Python (computer programming) (optional, ICT application developer)"
+typescript,2514,0.5,"ESCO: TypeScript (optional, ICT application developer)"
+ai-fundamentals,2519,1.0,"ESCO: principles of artificial intelligence (essential, ICT intelligent systems designer)"
+machine-learning,2519,1.0,hand-drafted; no ESCO item
+llm-applications,2519,0.5,hand-drafted; no ESCO item
+python,2519,0.5,"ESCO: Python (computer programming) (optional, software tester); Python (computer programming) (optional, ICT intelligent systems designer)"
+sql,2521,1.0,"ESCO: DB2 (optional, database administrator); IBM Informix (optional, database administrator); Microsoft Access (optional, database administrator); Oracle Relational Database (optional, database administrator)"
+power-bi,2521,0.5,hand-drafted; no ESCO item
+accounts-payable,3313,1.0,"ESCO: allocate bills (essential, accounting assistant)"
+excel,3313,1.0,hand-drafted; no ESCO item
+month-end-close,3313,1.0,hand-drafted; no ESCO item
+reconciliation,3313,1.0,hand-drafted; no ESCO item
+sap-erp,3313,0.5,hand-drafted; no ESCO item
+data-engineering,3314,1.0,"ESCO: normalise data (essential, data analyst)"
+cloud-platforms,3314,0.5,"ESCO: cloud technologies (optional, data analyst)"
+data-visualisation,3314,0.5,"ESCO: deliver visual presentation of data (optional, statistical assistant); deliver visual presentation of data (optional, data analyst)"
+forecasting,3314,0.5,"ESCO: carry out statistical forecasts (optional, statistical assistant)"
+power-bi,3314,0.5,hand-drafted; no ESCO item
+accounts-payable,4311,1.0,"ESCO: allocate bills (essential, billing clerk)"
+excel,4311,1.0,hand-drafted; no ESCO item
+reconciliation,4311,1.0,hand-drafted; no ESCO item
+month-end-close,4311,0.5,hand-drafted; no ESCO item

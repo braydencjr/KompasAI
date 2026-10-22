@@ -1,15 +1,18 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useProfile } from "./Profile";
+import { SidebarSnapshot } from "./Signals";
+import { STEPS, useOptionalJourney } from "./journey/JourneyProvider";
 
-const nav = [
-  { label: "Home", href: "/", icon: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
-  { label: "The Mirror", href: "#", icon: "M12 3v18M5 5h14v14H5z" },
-  { label: "Ghost CV", href: "#", icon: "M6 3h9l4 4v14H6zM9 12h7M9 16h5" },
-  { label: "Signal Ladder", href: "#", icon: "M7 3v18M17 3v18M7 8h10M7 13h10M7 18h10" },
-  { label: "My Roadmap", href: "/#plan", icon: "M5 19c4 0 4-14 8-14s4 14 6 14" },
-];
+const ICONS: Record<string, string> = {
+  you: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
+  future: "M6 3h9l4 4v14H6zM9 12h7M9 16h5",
+  bets: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  route: "M5 19c4 0 4-14 8-14s4 14 6 14",
+  ping: "M12 3a6 6 0 0 1 6 6v4l2 3H4l2-3V9a6 6 0 0 1 6-6zM10 20a2 2 0 0 0 4 0",
+};
 
 function Icon({ d }: { d: string }) {
   return (
@@ -20,8 +23,44 @@ function Icon({ d }: { d: string }) {
   );
 }
 
+// Kompas never reads names from a CV (privacy), so the name is whatever the person types, kept in this browser
+const NAME_KEY = "kompas:username";
+
+function useUserName() {
+  const [name, setName] = useState("");
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      setName(localStorage.getItem(NAME_KEY) ?? "");
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  function save(value: string) {
+    const clean = value.trim().slice(0, 40);
+    setName(clean);
+    setEditing(false);
+    try {
+      if (clean) localStorage.setItem(NAME_KEY, clean);
+      else localStorage.removeItem(NAME_KEY);
+    } catch {}
+  }
+
+  return { name: name || "User", editing, setEditing, save, inputRef };
+}
+
 export default function Sidebar() {
-  const pathname = usePathname();
+  const { source, cv } = useProfile();
+  const journey = useOptionalJourney();
+  const fromCv = source === "cv";
+  const current = STEPS.findIndex((s) => s.id === journey?.step);
+  const user = useUserName();
+  const displayName = fromCv ? user.name : "Aisyah (sample)";
 
   return (
     <aside className="sidebar glass">
@@ -30,31 +69,49 @@ export default function Sidebar() {
         Kompas
       </Link>
 
-      <nav className="nav">
-        {nav.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link key={item.label} href={item.href} className={`nav-item${active ? " active" : ""}`}>
-              <Icon d={item.icon} />
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="nav j-rail" aria-label="Your journey">
+        <span className="j-rail-line" aria-hidden><span style={{ height: `${(Math.max(current, 0) / (STEPS.length - 1)) * 100}%` }} /></span>
+        {STEPS.map((s, i) => (
+          <a key={s.id} href={`#${s.id}`}
+            className={`nav-item${i === current ? " active" : ""}${i < current ? " done" : ""}`}
+            onClick={(e) => {
+              if (!journey) return;
+              e.preventDefault();
+              journey.go(s.id);
+            }}>
+            <span className="nav-node"><Icon d={ICONS[s.id]} /></span>
+            <span>{s.label}</span>
+          </a>
+        ))}
       </nav>
 
-      <div className="snapshot">
-        <span className="pulse" />
-        <div>
-          <div className="snapshot-title">Live signals</div>
-          <div className="snapshot-date">Snapshot · 20 Oct 2026</div>
-        </div>
-      </div>
+      <SidebarSnapshot />
 
       <div className="user">
-        <div className="avatar">A</div>
-        <div>
-          <div className="user-name">Aisyah</div>
-          <div className="user-role">Accounts Executive</div>
+        <div className="avatar" aria-hidden>{displayName[0].toUpperCase()}</div>
+        <div className="user-text">
+          {fromCv && user.editing ? (
+            <input
+              ref={user.inputRef}
+              className="user-name-input"
+              defaultValue={user.name === "User" ? "" : user.name}
+              placeholder="Your name"
+              aria-label="Your name"
+              maxLength={40}
+              onBlur={(e) => user.save(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") user.save(e.currentTarget.value);
+                if (e.key === "Escape") user.setEditing(false);
+              }}
+            />
+          ) : fromCv ? (
+            <button className="user-name user-name-edit" onClick={() => user.setEditing(true)} title="Click to change your name">
+              {displayName}
+            </button>
+          ) : (
+            <div className="user-name">{displayName}</div>
+          )}
+          <div className="user-role">{fromCv ? cv?.jobs[0]?.title ?? "From your CV" : "Accounts Executive"}</div>
         </div>
       </div>
     </aside>

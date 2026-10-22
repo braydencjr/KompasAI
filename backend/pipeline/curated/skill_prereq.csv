@@ -1,0 +1,14 @@
+skill_id,requires_id,rationale
+# Learning order for The Route: a skill is placed after the skills it requires.,,
+financial-modelling,excel,Models are built in spreadsheets
+power-bi,data-visualisation,Power BI applies general visualisation principles
+data-engineering,sql,Pipelines are built on SQL
+machine-learning,python,Most ML tooling is in Python
+mlops,machine-learning,MLOps runs ML models in production
+llm-agents,llm-applications,Agents build on LLM application basics
+rag,llm-applications,RAG is an LLM application pattern
+context-engineering,llm-applications,Prompting is part of building LLM applications
+agentic-coding,ai-assisted-dev,Agentic workflows extend AI-assisted development
+ai-risk-frameworks,ai-fundamentals,Assessing AI risk needs AI basics
+responsible-ai,ai-fundamentals,Responsible AI practice needs AI basics
+sustainability-standards,ghg-accounting,Disclosure standards report GHG inventories

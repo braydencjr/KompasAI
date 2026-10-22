@@ -1,0 +1,18 @@
+capability_id,skill_id,rationale
+# Capability bridge (PRD 8.5): which AI capabilities reach which skills. v0 hand-drafted; review with the team.,,
+document-ai,accounts-payable,"Invoice and receipt extraction automates AP data entry"
+document-ai,reconciliation,"Statement and document parsing feeds automated matching"
+reconciliation-automation,reconciliation,"Automated matching and anomaly detection do first-pass reconciliation"
+reconciliation-automation,month-end-close,"Close checklists and variance checks are increasingly automated"
+reconciliation-automation,accounts-payable,"Duplicate and anomalous payments are flagged automatically"
+tabular-forecasting,forecasting,"Forecast models generate baselines from historical tables"
+tabular-forecasting,financial-modelling,"Driver-based models can be drafted from tabular data"
+report-generation,month-end-close,"Management report commentary can be drafted automatically"
+report-generation,data-visualisation,"Charts and narrative summaries are generated from data"
+report-generation,sustainability-standards,"Disclosure drafts can be generated from reported data"
+report-generation,excel,"Spreadsheet summaries and formulas are generated on request"
+code-generation,python,"Code assistants write routine Python"
+code-generation,sql,"Queries are generated from plain-language questions"
+code-generation,typescript,"Code assistants write routine TypeScript"
+code-generation,react,"UI components are scaffolded automatically"
+conversational-support,process-automation,"Support assistants take over scripted workflows"

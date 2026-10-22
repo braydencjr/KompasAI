@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Role } from "../data/bets";
+import { GapSignal, SignalPill } from "./Signals";
 
 const HOURS_PER_WEEK = 5;
 
@@ -34,23 +35,42 @@ export function useStepProgress(role: Role) {
   return { done, toggle, gapClosed };
 }
 
-export function SkillColumns({ role, gapClosed }: { role: Role; gapClosed: (gap: string) => boolean }) {
+type SkillColumnsProps = {
+  role: Role;
+  gapClosed: (gap: string) => boolean;
+  /** skill -> the CV line it came from, shown on hover */
+  quotes?: Record<string, string>;
+  onRemove?: (skill: string) => void;
+  haveLabel?: string;
+};
+
+export function SkillColumns({ role, gapClosed, quotes, onRemove, haveLabel = "Skills you have" }: SkillColumnsProps) {
   return (
     <div className="plan-skills">
       <div>
-        <div className="label">Skills you have · {role.have.length}</div>
+        <div className="label">{haveLabel} · {role.have.length}</div>
         <div className="chips">
-          {role.have.map((s) => (
-            <span key={s} className="chip chip-have">✓ {s}</span>
+          {role.have.map((s, i) => (
+            <span key={s} className={`chip chip-have${quotes ? " pop" : ""}`} style={{ "--i": i } as React.CSSProperties}
+              title={quotes?.[s] ? `From your CV: “${quotes[s]}”` : undefined}>
+              ✓ {s}
+              {onRemove && (
+                <button className="chip-x" aria-label={`Remove ${s}`} onClick={() => onRemove(s)}>×</button>
+              )}
+            </span>
           ))}
         </div>
       </div>
       <div>
         <div className="label">Skill gaps · {role.gaps.length}</div>
+        {role.gaps.length === 0 && (
+          <p className="muted small">None. You have every skill Kompas tracks for this role.</p>
+        )}
         <div className="chips">
           {role.gaps.map((g) => (
             <span key={g} className={`chip chip-gap${gapClosed(g) ? " closed" : ""}`}>
               {gapClosed(g) ? "✓" : "+"} {g}
+              <GapSignal skill={g} />
             </span>
           ))}
         </div>
@@ -86,7 +106,7 @@ export default function Roadmap({ role, done, toggle, vertical = false }: Roadma
 
       <ol className={`track${vertical ? " track-vertical" : ""}`}>
         {role.steps.map((s, i) => (
-          <li key={s.url + s.title} className={`track-step${done[i] ? " done" : ""}`}>
+          <li key={`${s.skill}|${s.url}|${s.title}`} className={`track-step${done[i] ? " done" : ""}`}>
             <button
               className="step-node"
               onClick={() => toggle(i)}
@@ -97,16 +117,18 @@ export default function Roadmap({ role, done, toggle, vertical = false }: Roadma
             <div className="track-card">
               <div className="track-top">
                 <span className="track-skill">{s.skill}</span>
-                <span className={`signal-pill signal-${s.signal.replace(" ", "-").toLowerCase()}`}>{s.signal}</span>
+                <SignalPill skill={s.skill} fallback={s.signal} />
               </div>
               <h4>{s.title}</h4>
               <div className="muted small">{s.provider}</div>
               <p className="track-why">{s.why}</p>
               <div className="track-foot">
-                <span className="meta">{s.hours} h · {s.cost}</span>
-                <a href={s.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                  Learn ↗
-                </a>
+                <span className="meta">{s.url ? `${s.hours} h · ${s.cost}` : "No verified course"}</span>
+                {s.url && (
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                    Learn ↗
+                  </a>
+                )}
               </div>
             </div>
           </li>

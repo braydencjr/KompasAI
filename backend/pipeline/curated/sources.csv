@@ -1,0 +1,6 @@
+id,name,rung,grain,volume,url,licence_note,coverage_note
+arxiv,arXiv API,1,month,count,https://info.arxiv.org/help/api/,"Metadata CC0; max one request every 3 s","AI research papers in cs.AI, cs.CL, cs.LG and cs.CV. Measures research activity, not jobs."
+github,GitHub repositories,1,month,count,https://docs.github.com/en/rest/search/search,"GitHub API terms of service","Public repositories tagged with topics. Untagged repos are invisible. Tech-heavy."
+hn_front,Hacker News stories,1,month,count,https://hn.algolia.com/api,"Public HN API","Stories with 100+ points. Tech-heavy, English-language, US-centric audience."
+hn_hiring,"Hacker News ""Who is hiring?""",2,month,count,https://hn.algolia.com/api,"Public HN API","Monthly hiring thread. Tech roles only, mostly US/EU and remote. Used as evidence for tech skills only."
+dosm_jmi,DOSM Job Market Insights,3,quarter,share,https://www.dosm.gov.my/portal-main/release-content/big-data-analytics-job-market-insights-q22026,"DOSM open data","Online job ads from major private recruitment platforms only; not every Malaysian vacancy. Demand is measured per occupation and translated to skills."

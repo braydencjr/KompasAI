@@ -1,0 +1,51 @@
+id,label,kind,parent_id,esco_uri,arxiv_terms,github_topics
+# github_topics: a leading ~ (e.g. ~python) counts the topic for trends but keeps it out of the feed: it says how a repo is built, not what it's about,,,,,,
+# Families: broad groups that Malaysian occupation data can see directly,,,,,,
+software-development,Software development,family,,,,
+finance-accounting,Finance and accounting,family,,,,
+data-analytics,Data and analytics,family,,,,
+sustainability-reporting,Sustainability and ESG,family,,,,
+ai-governance,AI governance and risk,family,,,,
+ai-engineering,AI engineering,family,software-development,,,
+# Finance and operations skills (lead persona),,,,,,
+excel,Excel,skill,finance-accounting,,,excel
+month-end-close,Month-end close,skill,finance-accounting,,,
+reconciliation,Reconciliation,skill,finance-accounting,,,
+accounts-payable,Accounts payable,skill,finance-accounting,,,
+sap-erp,SAP / ERP,skill,finance-accounting,,,sap|erp
+financial-modelling,Financial modelling,skill,finance-accounting,,,financial-modeling
+forecasting,Forecasting,skill,data-analytics,,,forecasting|time-series-forecasting
+data-visualisation,Data visualisation,skill,data-analytics,,,data-visualization|dashboard
+power-bi,Power BI,skill,data-visualisation,,,powerbi|power-bi
+sql,SQL,skill,data-analytics,,,sql
+data-engineering,Data engineering,skill,data-analytics,,,data-engineering|etl|dbt|apache-airflow
+process-automation,Process automation,skill,software-development,,,rpa|workflow-automation|n8n|power-automate
+ghg-accounting,GHG accounting,skill,sustainability-reporting,,,carbon-accounting|ghg-emissions|carbon-footprint
+sustainability-standards,Sustainability standards,skill,sustainability-reporting,,,esg|sustainability-reporting
+ai-fundamentals,AI fundamentals,skill,ai-governance,,,
+ai-risk-frameworks,AI risk frameworks,skill,ai-governance,,AI governance|AI risk management|AI audit,ai-governance
+responsible-ai,Responsible AI,skill,ai-governance,,algorithmic fairness|responsible AI,responsible-ai|ai-ethics
+# Software and AI engineering skills,,,,,,
+python,Python,skill,software-development,,,~python
+typescript,TypeScript,skill,software-development,,,~typescript
+react,React,skill,software-development,,,~react|~reactjs
+rust,Rust,skill,software-development,,,~rust
+kubernetes,Kubernetes,skill,software-development,,,kubernetes|k8s
+cloud-platforms,Cloud platforms,skill,software-development,,,aws|azure|google-cloud
+ai-assisted-dev,AI-assisted software development,skill,software-development,,,ai-coding|copilot
+agentic-coding,Agentic coding workflows,skill,ai-assisted-dev,,coding agent|software engineering agent|SWE-bench,claude-code|coding-agent|agent-skills|ai-coding-agent
+llm-applications,LLM application development,skill,ai-engineering,,,llm|generative-ai|large-language-models|openai
+llm-agents,LLM agents,skill,ai-engineering,,LLM agent|language model agent|multi-agent,ai-agents|llm-agent|autonomous-agents|agentic-ai|multi-agent-systems
+rag,Retrieval-augmented generation,skill,ai-engineering,,retrieval-augmented generation,rag|retrieval-augmented-generation
+context-engineering,Prompt and context engineering,skill,ai-engineering,,prompt engineering,prompt-engineering|context-engineering
+mcp,Model Context Protocol,skill,ai-engineering,,,mcp|model-context-protocol|mcp-server
+machine-learning,Machine learning,skill,ai-engineering,,,machine-learning|deep-learning|pytorch
+mlops,MLOps,skill,ai-engineering,,,mlops
+vector-databases,Vector databases,skill,ai-engineering,,,vector-database|vector-search|embeddings
+# Capabilities: what AI can do (rung-1 bridge to tasks and skills),,,,,,
+document-ai,Document understanding and extraction,capability,,,document understanding|key information extraction|invoice,document-ai|ocr|document-understanding
+reconciliation-automation,Automated reconciliation and anomaly detection,capability,,,transaction anomaly detection|financial fraud detection|account reconciliation,anomaly-detection|fraud-detection
+tabular-forecasting,Forecasting from tabular data,capability,,,time series forecasting|tabular foundation model,time-series|tabular-data
+conversational-support,Conversational assistants for customer support,capability,,,customer service dialogue|task-oriented dialogue,chatbot|conversational-ai|customer-support
+report-generation,Report and summary generation,capability,,,abstractive summarization|report generation,summarization
+code-generation,Code generation,capability,,,code generation|program synthesis,code-generation

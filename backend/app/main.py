@@ -1,10 +1,20 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import APP_VERSION, CORS_ORIGINS
-from app.routers import health, simulations, upload
+from app.routers import health, signals, simulations, upload
 
-app = FastAPI(title="Kompas API", version=APP_VERSION)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # the signal engine's live pollers (only when KOMPAS_LIVE=1 / KOMPAS_REPLAY=1)
+    async with signals.background():
+        yield
+
+
+app = FastAPI(title="Kompas API", version=APP_VERSION, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,3 +28,4 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(simulations.router, prefix="/api")
+app.include_router(signals.router, prefix="/api/signals")
