@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { riskLabel, type Bet } from "../../data/bets";
 import { toBet } from "../../lib/adapters";
 import { isBet, type BetKind, type Evidence, type Journey, type Reason, type RoleScore, type StayOption } from "../../lib/journey";
@@ -12,8 +12,8 @@ import Sparkline from "../Sparkline";
 import { useJourney } from "./JourneyProvider";
 import { Estimate, ScenarioToggle } from "./shared";
 
-/** Your Kompas: stay and strengthen the current job, or switch (the safest move, the fastest-growing one, the one with
- * the biggest impact). Which leads follows Your 2028's verdict; every option says why, with its evidence (PRD 5.4). */
+/** Your Kompas: an upskilling suggestion for the current job, then the two best switches (the fastest-growing job you
+ * fit and the safest move). The headline follows Your 2028's verdict; every option says why, with its evidence (PRD 5.4). */
 
 type Kind = "stay" | BetKind;
 
@@ -22,6 +22,14 @@ const KIND: Record<Kind, { label: string; note: string }> = {
   safe: { label: "Safest switch", note: "Its key skills hold up whether AI moves at its current pace or fast" },
   rising: { label: "Fastest-growing", note: "Strongest demand among the jobs you fit" },
   impact: { label: "Biggest impact", note: "Best fit with the goals you chose" },
+};
+
+const COLUMNS = ["rising", "safe"] as const;
+
+/** how each column is ranked, in words (the engine's rules: journey.WEIGHTS_DOC) */
+const COLUMN_RULE: Record<(typeof COLUMNS)[number], string> = {
+  rising: "Ranked by demand for the job times how well you fit it.",
+  safe: "Ranked by fit, among jobs where most key skills hold up against AI.",
 };
 
 const HEAD: Record<Journey["direction"]["lead"], { title: string; body: string }> = {
@@ -58,7 +66,8 @@ type Option = {
   title: string;
   match: number | null;
   aiShare: number | null;
-  sdg: { sdg: number; name: string } | null;
+  /** one line about this job, from its own numbers */
+  blurb: string;
   learn: string[];
   reasons: Reason[];
   /** the dashboard card shape: trend, growth and the full roadmap */
@@ -67,23 +76,37 @@ type Option = {
   stretch: boolean;
 };
 
+/** Why this job sits in its column, in its own numbers: the skills you have, and its demand (fastest-growing) or how
+ * much of it holds up against AI (safest). */
+function blurbFor(kind: BetKind, r: RoleScore, stretch: boolean) {
+  const skills = `You have ${r.have.length} of its ${r.breakdown.length} skills`;
+  const why =
+    kind === "safe"
+      ? `${Math.round(r.safe_share * 100)}% of its key skills hold up even if AI moves fast`
+      : r.family_status
+        ? `${r.family?.label ?? "Its field"} demand: ${r.family_status.toLowerCase()}${r.mycol ? ", on Malaysia's critical jobs list" : ""}`
+        : "no hiring data for it yet";
+  return `${stretch ? "A bigger step. " : ""}${skills}; ${why}.`;
+}
+
 function fromRole(kind: BetKind, r: RoleScore, stretch = false): Option {
   return {
-    kind, isco: r.isco, title: r.title, match: r.match, aiShare: r.ai_exposure,
-    sdg: r.sdgs[0] ? { sdg: r.sdgs[0].sdg, name: r.sdgs[0].name } : null,
+    kind, isco: r.isco, title: r.title, match: r.match, aiShare: r.ai_exposure, blurb: blurbFor(kind, r, stretch),
     learn: r.gaps.map((g) => g.label), reasons: r.reasons ?? [], bet: r.trend ? toBet(kind, r) : null, stretch,
   };
 }
 
 function fromStay(s: StayOption, r: RoleScore | undefined): Option {
   return {
-    kind: "stay", isco: s.isco, title: s.title, match: s.match, aiShare: s.shares.moderate,
-    sdg: r?.sdgs[0] ? { sdg: r.sdgs[0].sdg, name: r.sdgs[0].name } : null, learn: s.learn, reasons: s.reasons,
+    kind: "stay", isco: s.isco, title: s.title, match: s.match, aiShare: s.shares.moderate, blurb: KIND.stay.note,
+    learn: s.learn, reasons: s.reasons,
     bet: r?.trend ? { ...toBet("safe", r), kind: "Stay and strengthen", gaps: s.learn } : null, stretch: false,
   };
 }
 
-function OptionCard({ o, chosen, onChoose, onRoadmap }: { o: Option; chosen: boolean; onChoose: () => void; onRoadmap: () => void }) {
+type CardProps = { o: Option; chosen: boolean; onChoose: () => void; onRoadmap: () => void; wide?: boolean; rank?: number };
+
+function OptionCard({ o, chosen, onChoose, onRoadmap, wide = false, rank }: CardProps) {
   const profile = useProfile();
   const [why, setWhy] = useState(false);
   // the fit reason's evidence: the CV lines that show each skill the job needs
@@ -95,21 +118,16 @@ function OptionCard({ o, chosen, onChoose, onRoadmap }: { o: Option; chosen: boo
     return have.filter((h) => quotes[h]).map((h) => ({ type: "quote", label: h, text: quotes[h] }));
   };
 
-  return (
-    <article className={`kp-card bet ${o.kind}${chosen ? " chosen" : ""}`}>
+  const summary = (
+    <>
       <header className="kp-card-head">
-        <span className={`kp-kind ${o.kind}`}>{KIND[o.kind].label}</span>
-        {o.sdg && (
-          <span className={`kp-sdg sdg-${o.sdg.sdg}`} title={`Serves UN Sustainable Development Goal ${o.sdg.sdg}: ${o.sdg.name}`}>
-            <b>SDG {o.sdg.sdg}</b> {o.sdg.name}
-          </span>
-        )}
+        {rank ? <span className={`kp-rank ${o.kind}`}>#{rank}</span> : <span className={`kp-kind ${o.kind}`}>{KIND[o.kind].label}</span>}
       </header>
 
       <div className="kp-title">
         <div>
           <h3>{o.title}</h3>
-          <p className="muted">{o.stretch ? "A bigger step: no job reaches a 40% match for this yet" : KIND[o.kind].note}</p>
+          <p className="muted">{o.blurb}</p>
         </div>
         {o.match !== null && <Ring value={o.match} size={64} stroke={5} />}
       </div>
@@ -133,6 +151,11 @@ function OptionCard({ o, chosen, onChoose, onRoadmap }: { o: Option; chosen: boo
           </div>
         )}
       </div>
+    </>
+  );
+
+  const detail = (
+    <>
 
       {o.learn.length > 0 && (
         <div className="gaps">
@@ -177,31 +200,42 @@ function OptionCard({ o, chosen, onChoose, onRoadmap }: { o: Option; chosen: boo
           {chosen ? "Your route →" : o.kind === "stay" ? "Plan to strengthen it →" : "Choose this →"}
         </button>
       </div>
+    </>
+  );
+
+  return (
+    <article className={`kp-card bet ${o.kind}${chosen ? " chosen" : ""}${wide ? " wide" : ""}`}>
+      {wide ? (
+        <>
+          <div className="kp-col">{summary}</div>
+          <div className="kp-col">{detail}</div>
+        </>
+      ) : (
+        <>
+          {summary}
+          {detail}
+        </>
+      )}
     </article>
   );
 }
 
 export default function StepBets() {
-  const { data, catalog, sdgs, toggleSdg, chooseRole, go, role: chosen } = useJourney();
-  const [all, setAll] = useState(false);
-  const [sort, setSort] = useState<"match" | "demand" | "alignment">("match");
+  const { data, chooseRole, go, role: chosen } = useJourney();
   const [roadmap, setRoadmap] = useState<Bet | null>(null);
-  const ranked = useMemo(
-    () => [...(data?.roles ?? [])].sort((a, b) => (b[sort] as number) - (a[sort] as number) || b.match - a.match),
-    [data?.roles, sort],
-  );
   if (!data) return <div className="j-loading glass"><span className="sk sk-title" /><span className="sk sk-tile" /></div>;
 
-  const switches: (Option | { kind: BetKind; empty: string })[] = (["safe", "rising", "impact"] as const).map((k) => {
+  const byIsco = new Map(data.roles.map((r) => [r.isco, r]));
+  // each column: the engine's top picks for that kind; an older backend sends only its single bet
+  const columns = COLUMNS.map((k) => {
     const b = data.bets[k];
-    if (isBet(b)) return fromRole(k, b);
-    if (k === "impact" && sdgs.length === 0) return { kind: k, empty: "Pick the goals you care about above to see this option." };
-    const closest = b.closest && data.roles.find((r) => r.isco === b.closest!.isco);
-    return closest ? fromRole(k, closest, true) : { kind: k, empty: "No job fits this yet." };
+    const picks =
+      data.suggestions?.[k] ??
+      (isBet(b) ? [{ isco: b.isco, stretch: false }] : b.closest ? [{ isco: b.closest.isco, stretch: true }] : []);
+    return { kind: k, options: picks.flatMap((p) => (byIsco.has(p.isco) ? [fromRole(k, byIsco.get(p.isco)!, p.stretch)] : [])) };
   });
-  const stay = data.stay ? fromStay(data.stay, data.roles.find((r) => r.isco === data.stay!.isco)) : null;
+  const stay = data.stay ? fromStay(data.stay, byIsco.get(data.stay.isco)) : null;
   const lead = data.direction.lead;
-  const cards = lead === "switch" ? [...switches, ...(stay ? [stay] : [])] : [...(stay ? [stay] : []), ...switches];
   const choose = (isco: string) => {
     chooseRole(isco);
     go("route");
@@ -222,56 +256,41 @@ export default function StepBets() {
         </div>
       </section>
 
-      <section className="kp-goals">
-        <span className="label">What do you want your work to serve?</span>
-        <p className="muted kp-goals-note">
-          Goals from the United Nations&apos; 17 Sustainable Development Goals. Pick the ones you care about: the
-          &ldquo;Biggest impact&rdquo; option finds the job that serves them best.
-        </p>
-        <div className="j-lens-chips">
-          {catalog?.sdgs.map((g) => (
-            <button key={g.sdg} className={`j-sdg-toggle sdg-${g.sdg}${sdgs.includes(g.sdg) ? " on" : ""}`} onClick={() => toggleSdg(g.sdg)}
-              aria-pressed={sdgs.includes(g.sdg)} title={`UN Sustainable Development Goal ${g.sdg}`}>
-              <b>SDG {g.sdg}</b> {g.name}
-            </button>
-          ))}
-        </div>
+      {stay && (
+        <>
+          <section className="kp-options-head">
+            <span className="label">Upskilling suggestion</span>
+            <h3>Grow where you are</h3>
+            <p className="muted">The skills that keep your current job strong as AI changes it.</p>
+          </section>
+          <OptionCard o={stay} wide chosen={current === stay.isco} onChoose={() => choose(stay.isco)} onRoadmap={() => setRoadmap(stay.bet)} />
+        </>
+      )}
+
+      <section className="kp-options-head">
+        <span className="label">Suggested jobs</span>
+        <h3>Thinking of switching? Here are your best moves</h3>
+        <p className="muted">Jobs your skills already fit, in two lists: where demand is growing fastest, and where your skills are safest from AI.</p>
       </section>
 
-      <div className="kp-options">
-        {cards.map((o) => ("empty" in o ? (
-          <article key={o.kind} className={`kp-card ${o.kind} empty`}>
-            <span className={`kp-kind ${o.kind}`}>{KIND[o.kind].label}</span>
-            <p className="muted">{o.empty}</p>
-          </article>
-        ) : (
-          <OptionCard key={o.kind} o={o} chosen={current === o.isco} onChoose={() => choose(o.isco)} onRoadmap={() => setRoadmap(o.bet)} />
-        )))}
+      <div className="kp-columns">
+        {columns.map((c) => (
+          <section key={c.kind} className={`kp-column ${c.kind}`}>
+            <header className="kp-column-head">
+              <span className={`kp-kind ${c.kind}`}>{KIND[c.kind].label}</span>
+              <p className="muted small">{COLUMN_RULE[c.kind]}</p>
+            </header>
+            {c.options.length ? (
+              c.options.map((o, i) => (
+                <OptionCard key={o.isco} o={o} rank={i + 1} chosen={current === o.isco} onChoose={() => choose(o.isco)} onRoadmap={() => setRoadmap(o.bet)} />
+              ))
+            ) : (
+              <p className="muted kp-column-empty">No job fits this yet.</p>
+            )}
+          </section>
+        ))}
       </div>
 
-      <button className="link j-all-toggle" onClick={() => setAll(!all)}>{all ? "Hide the full ranking" : `See all ${data.roles.length} jobs ranked`}</button>
-      {all && (
-        <section className="j-ranking glass reveal">
-          <div className="j-ranking-sort">
-            Sort by
-            {(["match", "demand", "alignment"] as const).map((s) => (
-              <button key={s} className={sort === s ? "on" : ""} onClick={() => setSort(s)}>{s === "alignment" ? "your goals" : s}</button>
-            ))}
-          </div>
-          <ol>
-            {ranked.map((r) => (
-              <li key={r.isco}>
-                <span className="j-rank-title">{r.title}</span>
-                <span className="j-rank-bar"><span style={{ width: `${r.match}%` }} /></span>
-                <span className="j-rank-num">{r.match}%</span>
-                <span className="muted small">{r.family_status ? `${r.family_status} demand` : "no demand data"}{sdgs.length ? ` · ${Math.round(r.alignment * 100)}% of your goals` : ""}</span>
-                {r.covered ? <span className="muted small">you have every skill</span> : <button className="link" onClick={() => choose(r.isco)}>Plan a route</button>}
-              </li>
-            ))}
-          </ol>
-          <p className="muted small">{catalog?.rules.match} {catalog?.rules.weight}</p>
-        </section>
-      )}
       {roadmap && <RoadmapModal bet={roadmap} onClose={() => setRoadmap(null)} />}
       <Estimate>Match scores are estimates from your skills and today&apos;s market signals, not predictions. You decide.</Estimate>
     </div>

@@ -282,6 +282,28 @@ def pick_bets(roles: list[dict], current: str | None = None) -> dict[str, dict |
     return out
 
 
+SUGGESTIONS = 3
+
+
+def pick_suggestions(roles: list[dict], current: str | None = None, n: int = SUGGESTIONS) -> dict[str, list[dict]]:
+    """The top `n` jobs for Your Kompas's two columns, ranked by the same scores as the bets: fastest-growing
+    (demand × match, 40%+ match) and safest (match, with 70% of the essential weight holding up under both scenarios).
+    The columns don't repeat a job. When fewer than `n` qualify, the closest roles fill in, flagged as a stretch."""
+    candidates = [r for r in roles if r["gaps"] and r["isco"] != current]
+    taken: set[str] = set()
+    out = {}
+    for kind in ("rising", "safe"):
+        free = [r for r in candidates if r["isco"] not in taken]
+        ranked = sorted((r for r in free if r["scores"][kind] is not None),
+                        key=lambda r: (-r["scores"][kind], -r["match"], r["isco"]))[:n]
+        picks = [{"isco": r["isco"], "stretch": False} for r in ranked]
+        chosen = {p["isco"] for p in picks}
+        picks += [{"isco": r["isco"], "stretch": True} for r in free if r["isco"] not in chosen][: n - len(picks)]
+        taken |= {p["isco"] for p in picks}
+        out[kind] = picks
+    return out
+
+
 def is_bet(b: dict | None) -> bool:
     return bool(b) and "isco" in b
 
@@ -587,6 +609,7 @@ def build(cur: Curated, conn, snapshot_id: str, p: Profile) -> dict:
     mycol = mycol_codes(conn, st.as_of)
     roles = score_roles(cur, st, p, mycol)
     bets = pick_bets(roles, p.occupation)
+    suggestions = pick_suggestions(roles, p.occupation)
     first_bet = next((b for b in bets.values() if is_bet(b)), None)
     chosen = next((r for r in roles if r["isco"] == p.role), None) or first_bet or (roles[0] if roles else None)
     history = [Statuses(conn, row["id"]) for row in conn.execute(
@@ -597,7 +620,9 @@ def build(cur: Curated, conn, snapshot_id: str, p: Profile) -> dict:
     # an empty category shows its closest job instead, so that job needs its reasons too
     closest = [x for b in bets.values() if not is_bet(b) and b.get("closest")
                for x in roles if x["isco"] == b["closest"]["isco"]]
+    suggested = {s["isco"] for picks in suggestions.values() for s in picks}
     options = [b for b in bets.values() if is_bet(b)] + closest + ([current] if current else [])
+    options += [x for x in roles if x["isco"] in suggested and all(x is not o for o in options)]
     sig = skill_signals(cur, conn, st, {s["id"] for o in options for s in o["breakdown"]}
                         | {o["family"]["id"] for o in options if o.get("family")})
     for o in options:
@@ -619,7 +644,7 @@ def build(cur: Curated, conn, snapshot_id: str, p: Profile) -> dict:
             r = current["route"]
     return {
         "snapshot": {"id": st.id, "as_of": st.as_of}, "scenario": p.scenario, "sdgs": p.sdgs,
-        "mirror": m, "ghost": g, "bets": bets, "roles": roles, "route": r,
+        "mirror": m, "ghost": g, "bets": bets, "suggestions": suggestions, "roles": roles, "route": r,
         "stay": stay, "direction": direction(m),
         # what the live feed (/match) needs to follow this journey
         "feed_profile": {"skills": [{"id": s, "evidence": e} for s, e in p.skills.items() if s in cur.concepts],
