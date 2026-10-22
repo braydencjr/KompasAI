@@ -1,0 +1,148 @@
+alias,concept_id,case_sensitive
+# Words that are also everyday English (Excel, React, Rust, Spark) are case-sensitive.,,
+Excel,excel,true
+spreadsheets,excel,false
+month-end close,month-end-close,false
+month end close,month-end-close,false
+financial close,month-end-close,false
+reconciliation,reconciliation,false
+reconciliations,reconciliation,false
+bank reconciliation,reconciliation,false
+accounts payable,accounts-payable,false
+procure-to-pay,accounts-payable,false
+invoice processing,accounts-payable,false
+SAP,sap-erp,true
+S/4HANA,sap-erp,false
+NetSuite,sap-erp,false
+ERP,sap-erp,true
+financial modelling,financial-modelling,false
+financial modeling,financial-modelling,false
+FP&A,financial-modelling,true
+forecasting,forecasting,false
+demand forecasting,forecasting,false
+data visualisation,data-visualisation,false
+data visualization,data-visualisation,false
+Tableau,data-visualisation,false
+Looker,data-visualisation,true
+dashboards,data-visualisation,false
+Power BI,power-bi,false
+PowerBI,power-bi,false
+SQL,sql,false
+PostgreSQL,sql,false
+Postgres,sql,false
+MySQL,sql,false
+data engineering,data-engineering,false
+data engineer,data-engineering,false
+dbt,data-engineering,false
+Airflow,data-engineering,false
+Spark,data-engineering,true
+Snowflake,data-engineering,true
+Databricks,data-engineering,false
+ETL,data-engineering,true
+process automation,process-automation,false
+workflow automation,process-automation,false
+RPA,process-automation,true
+UiPath,process-automation,false
+Power Automate,process-automation,false
+n8n,process-automation,false
+Zapier,process-automation,false
+GHG,ghg-accounting,true
+greenhouse gas,ghg-accounting,false
+carbon accounting,ghg-accounting,false
+Scope 3,ghg-accounting,false
+emissions reporting,ghg-accounting,false
+ESG,sustainability-standards,true
+GRI,sustainability-standards,true
+ISSB,sustainability-standards,true
+IFRS S2,sustainability-standards,false
+sustainability reporting,sustainability-standards,false
+AI literacy,ai-fundamentals,false
+AI fundamentals,ai-fundamentals,false
+AI governance,ai-risk-frameworks,false
+AI risk,ai-risk-frameworks,false
+model risk,ai-risk-frameworks,false
+NIST AI RMF,ai-risk-frameworks,false
+EU AI Act,ai-risk-frameworks,false
+ISO 42001,ai-risk-frameworks,false
+responsible AI,responsible-ai,false
+AI ethics,responsible-ai,false
+algorithmic fairness,responsible-ai,false
+Python,python,false
+pandas,python,false
+Django,python,false
+FastAPI,python,false
+TypeScript,typescript,false
+React,react,true
+Next.js,react,false
+Rust,rust,true
+Kubernetes,kubernetes,false
+k8s,kubernetes,false
+AWS,cloud-platforms,true
+Azure,cloud-platforms,false
+GCP,cloud-platforms,true
+Google Cloud,cloud-platforms,false
+GitHub Copilot,ai-assisted-dev,false
+Copilot,ai-assisted-dev,true
+AI-assisted development,ai-assisted-dev,false
+AI pair programming,ai-assisted-dev,false
+AI coding tools,ai-assisted-dev,false
+Claude Code,agentic-coding,false
+Codex CLI,agentic-coding,false
+Cursor,agentic-coding,true
+Windsurf,agentic-coding,true
+Aider,agentic-coding,true
+coding agent,agentic-coding,false
+coding agents,agentic-coding,false
+agentic coding,agentic-coding,false
+agent skills,agentic-coding,false
+LLM,llm-applications,true
+LLMs,llm-applications,true
+large language model,llm-applications,false
+large language models,llm-applications,false
+GenAI,llm-applications,false
+generative AI,llm-applications,false
+OpenAI API,llm-applications,false
+AI agent,llm-agents,false
+AI agents,llm-agents,false
+LLM agents,llm-agents,false
+agentic,llm-agents,false
+multi-agent,llm-agents,false
+LangGraph,llm-agents,false
+CrewAI,llm-agents,false
+AutoGen,llm-agents,true
+RAG,rag,true
+retrieval-augmented generation,rag,false
+retrieval augmented generation,rag,false
+prompt engineering,context-engineering,false
+context engineering,context-engineering,false
+MCP,mcp,true
+Model Context Protocol,mcp,false
+machine learning,machine-learning,false
+ML,machine-learning,true
+deep learning,machine-learning,false
+PyTorch,machine-learning,false
+TensorFlow,machine-learning,false
+MLOps,mlops,false
+vector database,vector-databases,false
+vector databases,vector-databases,false
+pgvector,vector-databases,false
+Pinecone,vector-databases,true
+Qdrant,vector-databases,false
+Weaviate,vector-databases,false
+OCR,document-ai,true
+document AI,document-ai,false
+document understanding,document-ai,false
+intelligent document processing,document-ai,false
+invoice extraction,document-ai,false
+anomaly detection,reconciliation-automation,false
+fraud detection,reconciliation-automation,false
+time series forecasting,tabular-forecasting,false
+time-series forecasting,tabular-forecasting,false
+chatbot,conversational-support,false
+chatbots,conversational-support,false
+conversational AI,conversational-support,false
+voice agent,conversational-support,false
+summarization,report-generation,false
+summarisation,report-generation,false
+report generation,report-generation,false
+code generation,code-generation,false
