@@ -1,4 +1,4 @@
-export type Signal = "Act now" | "Emerging" | "Stable" | "Watch";
+export type Signal = "Act now" | "Emerging" | "Stable" | "Watch" | "Declining" | "Stalled";
 
 export type Step = {
   skill: string;
@@ -17,7 +17,7 @@ export type Role = {
   summary: string;
   match: number;
   signal: Signal;
-  sdg: { goal: string; reason: string };
+  sdg?: { goal: string; reason: string };
   have: string[];
   gaps: string[];
   steps: Step[];
@@ -34,6 +34,7 @@ export type Opening = {
 };
 
 export type Bet = Role & {
+  sdg: { goal: string; reason: string };
   kind: "Safe Bet" | "Rising Bet" | "Impact Bet";
   note: string;
   /** share of the role's tasks AI could take over within 5 years */
@@ -314,6 +315,44 @@ export const bets: Bet[] = [
     ],
   },
 ];
+
+/** Skill names used on screen -> concept ids in pipeline/curated/concepts.csv. */
+export const conceptIds: Record<string, string> = {
+  Excel: "excel",
+  "Month-end close": "month-end-close",
+  Reconciliation: "reconciliation",
+  "Accounts payable": "accounts-payable",
+  SAP: "sap-erp",
+  "Financial modelling": "financial-modelling",
+  Forecasting: "forecasting",
+  "Power BI": "power-bi",
+  "Data visualisation": "data-visualisation",
+  SQL: "sql",
+  Python: "python",
+  "Process automation": "process-automation",
+  "AI fundamentals": "ai-fundamentals",
+  "AI risk frameworks": "ai-risk-frameworks",
+  "Responsible AI": "responsible-ai",
+  "GHG accounting": "ghg-accounting",
+  "Sustainability standards": "sustainability-standards",
+};
+
+const ids = (names: string[]) => [...new Set(names.map((n) => conceptIds[n]).filter(Boolean))];
+
+/** Aisyah's profile as the live feed sees it. */
+export const profile = {
+  skills: ids(["Excel", "Month-end close", "Reconciliation", "Accounts payable", "SAP"]).map((id) => ({ id })),
+  route: ids([cvMatch, ...bets].flatMap((r) => r.gaps)),
+  // AI capabilities that reach her tasks; the Mirror will supply these once it exists
+  exposed: ["document-ai", "reconciliation-automation", "report-generation", "tabular-forecasting"],
+};
+
+/** Verified courses by concept id, gathered from the sample roles' roadmaps. */
+export const resources: Record<string, Step[]> = {};
+for (const step of [cvMatch, ...bets].flatMap((r) => r.steps)) {
+  const id = conceptIds[step.skill];
+  if (id && !(resources[id] ?? []).some((s) => s.url === step.url)) (resources[id] ??= []).push(step);
+}
 
 export function riskLabel(risk: number) {
   return risk < 20 ? "Low" : risk < 35 ? "Low – Moderate" : risk < 55 ? "Moderate" : "High";

@@ -1,9 +1,11 @@
-import CvMatch from "./components/CvMatch";
+import CvUpload from "./components/CvUpload";
+import LiveFeed from "./components/LiveFeed";
+import ProfilePanel from "./components/ProfilePanel";
+import { SnapshotHud } from "./components/Signals";
 import TrendingCareers from "./components/TrendingCareers";
 import Shell from "./components/Shell";
 import SimulatorProvider from "./components/SimulatorProvider";
-import UploadCard from "./components/UploadCard";
-import { bets, cvMatch } from "./data/bets";
+import { bets } from "./data/bets";
 
 export default function Home() {
   return (
@@ -18,21 +20,20 @@ export default function Home() {
           Upload your resume and Kompas maps your skills against live AI and job-market signals,
           then shows the careers that fit you and where the market is heading.
         </p>
-        <div className="hud">
-          <span>Snapshot <strong>2026.10.20</strong></span>
-          <span>Sources <strong>06</strong></span>
-          <span>Scenario <strong>Moderate</strong></span>
-        </div>
+        <SnapshotHud />
       </section>
 
-      <UploadCard />
+      <CvUpload />
 
-      <CvMatch role={cvMatch} />
+      <ProfilePanel />
 
       <TrendingCareers bets={bets} />
 
+      <LiveFeed />
+
       <footer className="foot muted">
         Resources checked 20 Oct 2026. Projections are estimates based on current signals, not predictions.
+        CVs are read by Gemini 2.5 Flash (Google) and never stored.
       </footer>
       </SimulatorProvider>
     </Shell>

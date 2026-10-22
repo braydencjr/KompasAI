@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Role } from "../data/bets";
+import { GapSignal, SignalPill } from "./Signals";
 
 const HOURS_PER_WEEK = 5;
 
@@ -34,14 +35,29 @@ export function useStepProgress(role: Role) {
   return { done, toggle, gapClosed };
 }
 
-export function SkillColumns({ role, gapClosed }: { role: Role; gapClosed: (gap: string) => boolean }) {
+type SkillColumnsProps = {
+  role: Role;
+  gapClosed: (gap: string) => boolean;
+  /** skill -> the CV line it came from, shown on hover */
+  quotes?: Record<string, string>;
+  onRemove?: (skill: string) => void;
+  haveLabel?: string;
+};
+
+export function SkillColumns({ role, gapClosed, quotes, onRemove, haveLabel = "Skills you have" }: SkillColumnsProps) {
   return (
     <div className="plan-skills">
       <div>
-        <div className="label">Skills you have · {role.have.length}</div>
+        <div className="label">{haveLabel} · {role.have.length}</div>
         <div className="chips">
-          {role.have.map((s) => (
-            <span key={s} className="chip chip-have">✓ {s}</span>
+          {role.have.map((s, i) => (
+            <span key={s} className={`chip chip-have${quotes ? " pop" : ""}`} style={{ "--i": i } as React.CSSProperties}
+              title={quotes?.[s] ? `From your CV: “${quotes[s]}”` : undefined}>
+              ✓ {s}
+              {onRemove && (
+                <button className="chip-x" aria-label={`Remove ${s}`} onClick={() => onRemove(s)}>×</button>
+              )}
+            </span>
           ))}
         </div>
       </div>
@@ -51,6 +67,7 @@ export function SkillColumns({ role, gapClosed }: { role: Role; gapClosed: (gap:
           {role.gaps.map((g) => (
             <span key={g} className={`chip chip-gap${gapClosed(g) ? " closed" : ""}`}>
               {gapClosed(g) ? "✓" : "+"} {g}
+              <GapSignal skill={g} />
             </span>
           ))}
         </div>
@@ -97,7 +114,7 @@ export default function Roadmap({ role, done, toggle, vertical = false }: Roadma
             <div className="track-card">
               <div className="track-top">
                 <span className="track-skill">{s.skill}</span>
-                <span className={`signal-pill signal-${s.signal.replace(" ", "-").toLowerCase()}`}>{s.signal}</span>
+                <SignalPill skill={s.skill} fallback={s.signal} />
               </div>
               <h4>{s.title}</h4>
               <div className="muted small">{s.provider}</div>

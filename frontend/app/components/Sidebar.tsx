@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useProfile } from "./Profile";
+import { SidebarSnapshot } from "./Signals";
 
 const nav = [
   { label: "Home", href: "/", icon: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
@@ -22,6 +24,8 @@ function Icon({ d }: { d: string }) {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { source, cv } = useProfile();
+  const fromCv = source === "cv";
 
   return (
     <aside className="sidebar glass">
@@ -42,19 +46,13 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="snapshot">
-        <span className="pulse" />
-        <div>
-          <div className="snapshot-title">Live signals</div>
-          <div className="snapshot-date">Snapshot · 20 Oct 2026</div>
-        </div>
-      </div>
+      <SidebarSnapshot />
 
       <div className="user">
-        <div className="avatar">A</div>
+        <div className="avatar">{fromCv ? "Y" : "A"}</div>
         <div>
-          <div className="user-name">Aisyah</div>
-          <div className="user-role">Accounts Executive</div>
+          <div className="user-name">{fromCv ? "Your profile" : "Aisyah (sample)"}</div>
+          <div className="user-role">{fromCv ? cv?.jobs[0]?.title ?? "From your CV" : "Accounts Executive"}</div>
         </div>
       </div>
     </aside>
