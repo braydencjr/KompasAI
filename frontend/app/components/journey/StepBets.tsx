@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { riskLabel, type Bet } from "../../data/bets";
 import { toBet } from "../../lib/adapters";
 import { isBet, type BetKind, type Evidence, type Journey, type Reason, type RoleScore, type StayOption } from "../../lib/journey";
@@ -182,14 +182,8 @@ function OptionCard({ o, chosen, onChoose, onRoadmap }: { o: Option; chosen: boo
 }
 
 export default function StepBets() {
-  const { data, catalog, sdgs, chooseRole, go, role: chosen } = useJourney();
-  const [all, setAll] = useState(false);
-  const [sort, setSort] = useState<"match" | "demand" | "alignment">("match");
+  const { data, sdgs, chooseRole, go, role: chosen } = useJourney();
   const [roadmap, setRoadmap] = useState<Bet | null>(null);
-  const ranked = useMemo(
-    () => [...(data?.roles ?? [])].sort((a, b) => (b[sort] as number) - (a[sort] as number) || b.match - a.match),
-    [data?.roles, sort],
-  );
   if (!data) return <div className="j-loading glass"><span className="sk sk-title" /><span className="sk sk-tile" /></div>;
 
   // "Biggest impact" needs goals to aim at; with none picked, leave it out rather than show an empty card
@@ -243,29 +237,6 @@ export default function StepBets() {
         )))}
       </div>
 
-      <button className="link j-all-toggle" onClick={() => setAll(!all)}>{all ? "Hide the full ranking" : `See all ${data.roles.length} jobs ranked`}</button>
-      {all && (
-        <section className="j-ranking glass reveal">
-          <div className="j-ranking-sort">
-            Sort by
-            {(["match", "demand", "alignment"] as const).map((s) => (
-              <button key={s} className={sort === s ? "on" : ""} onClick={() => setSort(s)}>{s === "alignment" ? "your goals" : s}</button>
-            ))}
-          </div>
-          <ol>
-            {ranked.map((r) => (
-              <li key={r.isco}>
-                <span className="j-rank-title">{r.title}</span>
-                <span className="j-rank-bar"><span style={{ width: `${r.match}%` }} /></span>
-                <span className="j-rank-num">{r.match}%</span>
-                <span className="muted small">{r.family_status ? `${r.family_status} demand` : "no demand data"}{sdgs.length ? ` · ${Math.round(r.alignment * 100)}% of your goals` : ""}</span>
-                {r.covered ? <span className="muted small">you have every skill</span> : <button className="link" onClick={() => choose(r.isco)}>Plan a route</button>}
-              </li>
-            ))}
-          </ol>
-          <p className="muted small">{catalog?.rules.match} {catalog?.rules.weight}</p>
-        </section>
-      )}
       {roadmap && <RoadmapModal bet={roadmap} onClose={() => setRoadmap(null)} />}
       <Estimate>Match scores are estimates from your skills and today&apos;s market signals, not predictions. You decide.</Estimate>
     </div>

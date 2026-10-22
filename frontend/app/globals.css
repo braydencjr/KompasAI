@@ -4369,16 +4369,6 @@ h3 {
 .j-breakdown td { padding: 5px 6px; border-top: 1px solid var(--hair); }
 .j-breakdown tr.gap td:first-child { opacity: 0.7; }
 .j-breakdown tfoot td { color: var(--muted); }
-.j-all-toggle { align-self: center; }
-.j-ranking { padding: 18px 22px; border-radius: 22px; }
-.j-ranking-sort { display: flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
-.j-ranking-sort button { border: 0; font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer; background: transparent; color: var(--muted); text-transform: capitalize; }
-.j-ranking-sort button.on { background: var(--ink); color: #fff; }
-.j-ranking ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.j-ranking li { display: grid; grid-template-columns: minmax(150px, 1.4fr) 2fr 44px auto auto; gap: 12px; align-items: center; font-size: 13px; }
-.j-rank-bar { height: 6px; border-radius: 999px; background: var(--hair); overflow: hidden; }
-.j-rank-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #b7a9ee); transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
-.j-rank-num { font-family: var(--mono); font-size: 12px; }
 
 /* ---------- The Route ---------- */
 .j-route-step { display: flex; flex-direction: column; gap: 18px; }
@@ -4459,8 +4449,6 @@ h3 {
 @media (max-width: 960px) {
   .j-piles, .j-bets, .j-ping-grid, .j-reorder { grid-template-columns: 1fr; }
   .j-route-head { grid-template-columns: 1fr; }
-  .j-ranking li { grid-template-columns: 1fr 60px 44px; }
-  .j-ranking li > :nth-child(4), .j-ranking li > :nth-child(5) { grid-column: 1 / -1; }
   .j-paper { padding: 28px 22px; }
   .j-demo-controls { flex-wrap: wrap; }
 }
