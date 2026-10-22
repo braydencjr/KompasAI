@@ -182,7 +182,7 @@ function OptionCard({ o, chosen, onChoose, onRoadmap }: { o: Option; chosen: boo
 }
 
 export default function StepBets() {
-  const { data, catalog, sdgs, toggleSdg, chooseRole, go, role: chosen } = useJourney();
+  const { data, catalog, sdgs, chooseRole, go, role: chosen } = useJourney();
   const [all, setAll] = useState(false);
   const [sort, setSort] = useState<"match" | "demand" | "alignment">("match");
   const [roadmap, setRoadmap] = useState<Bet | null>(null);
@@ -192,10 +192,11 @@ export default function StepBets() {
   );
   if (!data) return <div className="j-loading glass"><span className="sk sk-title" /><span className="sk sk-tile" /></div>;
 
-  const switches: (Option | { kind: BetKind; empty: string })[] = (["safe", "rising", "impact"] as const).map((k) => {
+  // "Biggest impact" needs goals to aim at; with none picked, leave it out rather than show an empty card
+  const kinds = (["safe", "rising", "impact"] as const).filter((k) => k !== "impact" || sdgs.length > 0);
+  const switches: (Option | { kind: BetKind; empty: string })[] = kinds.map((k) => {
     const b = data.bets[k];
     if (isBet(b)) return fromRole(k, b);
-    if (k === "impact" && sdgs.length === 0) return { kind: k, empty: "Pick the goals you care about above to see this option." };
     const closest = b.closest && data.roles.find((r) => r.isco === b.closest!.isco);
     return closest ? fromRole(k, closest, true) : { kind: k, empty: "No job fits this yet." };
   });
@@ -222,20 +223,13 @@ export default function StepBets() {
         </div>
       </section>
 
-      <section className="kp-goals">
-        <span className="label">What do you want your work to serve?</span>
-        <p className="muted kp-goals-note">
-          Goals from the United Nations&apos; 17 Sustainable Development Goals. Pick the ones you care about: the
-          &ldquo;Biggest impact&rdquo; option finds the job that serves them best.
+      <section className="kp-options-head">
+        <span className="label">Suggested jobs</span>
+        <h3>Thinking of switching? Here are your best moves</h3>
+        <p className="muted">
+          Jobs your skills already fit, ranked by where hiring is heading. Your current job is here too, if you&apos;d
+          rather grow where you are.
         </p>
-        <div className="j-lens-chips">
-          {catalog?.sdgs.map((g) => (
-            <button key={g.sdg} className={`j-sdg-toggle sdg-${g.sdg}${sdgs.includes(g.sdg) ? " on" : ""}`} onClick={() => toggleSdg(g.sdg)}
-              aria-pressed={sdgs.includes(g.sdg)} title={`UN Sustainable Development Goal ${g.sdg}`}>
-              <b>SDG {g.sdg}</b> {g.name}
-            </button>
-          ))}
-        </div>
       </section>
 
       <div className="kp-options">

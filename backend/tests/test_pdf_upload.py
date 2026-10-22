@@ -66,8 +66,8 @@ def test_rejects_pdf_with_no_text():
     assert "No readable text" in res.json()["detail"]
 
 
-def test_rejects_non_pdf_types():
-    res = post("photo.png", b"\x89PNG\r\n\x1a\n" + b"0" * 64, "image/png")
+def test_rejects_unsupported_file_types():
+    res = post("photo.heic", b"fake-heic-bytes" * 8, "image/heic")
     assert res.status_code == 415
 
 

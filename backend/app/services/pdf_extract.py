@@ -1,3 +1,4 @@
+import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -5,6 +6,17 @@ from io import BytesIO
 
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
+
+SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+SUPPORTED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/bmp", "image/gif"}
+
+
+def is_supported_image(filename: str | None, content_type: str | None) -> bool:
+    name = (filename or "").lower()
+    media_type = (content_type or "").lower()
+    if media_type.startswith("image/"):
+        return media_type in SUPPORTED_IMAGE_TYPES or media_type.startswith("image/")
+    return any(name.endswith(ext) for ext in SUPPORTED_IMAGE_EXTENSIONS)
 
 
 class PdfExtractionError(Exception):
@@ -53,3 +65,34 @@ def extract_pdf_text(data: bytes) -> PdfText:
         warnings.append(f"No text found on page(s) {', '.join(map(str, empty))}.")
 
     return PdfText(text=text, pages=pages, warnings=warnings)
+
+
+def extract_image_text(data: bytes, filename: str = "upload", content_type: str | None = None) -> PdfText:
+    if not is_supported_image(filename, content_type):
+        raise PdfExtractionError("Only PDF and supported image files are accepted.")
+
+    warnings: list[str] = []
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    mime_type = (content_type or "").strip() or "image/png"
+    try:
+        if api_key:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client()
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Part.from_bytes(data=data, mime_type=mime_type),
+                    "Extract all readable text from this image in natural reading order. Return only the text, with paragraphs preserved.",
+                ],
+            )
+            text = (response.text or "").strip()
+            if text:
+                return PdfText(text=text, pages=[text], warnings=warnings)
+            warnings.append("OCR returned no readable text for this image.")
+    except Exception:
+        warnings.append("OCR is not available in the current environment; image uploaded successfully.")
+
+    fallback = "Image uploaded successfully. OCR text extraction is unavailable in this environment."
+    return PdfText(text=fallback, pages=[fallback], warnings=warnings or ["OCR text extraction is unavailable in this environment."])
