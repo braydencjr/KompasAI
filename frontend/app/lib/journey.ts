@@ -152,6 +152,8 @@ export type Journey = {
   mirror: Mirror;
   ghost: Ghost;
   bets: Record<BetKind, Bet>;
+  /** Your Kompas's two columns: the top jobs per kind; stretch = below the bar, the closest that fits */
+  suggestions?: Record<"rising" | "safe", { isco: string; stretch: boolean }[]>;
   roles: RoleScore[];
   route: Route | null;
   /** staying in the current job, as an option beside the switches */
