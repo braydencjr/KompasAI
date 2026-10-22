@@ -30,6 +30,8 @@ type Props = {
   emptyNote?: React.ReactNode;
   /** progress kept elsewhere (the journey); default: this browser's per-role progress */
   progress?: ReturnType<typeof useStepProgress>;
+  /** two cards instead of one: the skill match first, then the route under its own heading */
+  split?: { label: string; tags?: React.ReactNode };
 };
 
 const FORMULA =
@@ -60,52 +62,108 @@ export function Breakdown({ rows }: { rows: SkillRow[] }) {
   );
 }
 
-export default function CvMatch({ role, intro, breakdown, origin, details, footer, skillQuotes, onRemoveSkill, haveLabel, animate, label, emptyNote, progress }: Props) {
+export default function CvMatch({ role, intro, breakdown, origin, details, footer, skillQuotes, onRemoveSkill, haveLabel, animate, label, emptyNote, progress, split }: Props) {
   const local = useStepProgress(role);
   const { done, toggle, gapClosed } = progress ?? local;
   const [showHow, setShowHow] = useState(false);
 
+  const match = (
+    <>
+      {intro}
+      <header className="plan-head">
+        <div className="plan-title">
+          <div className="plan-tags">
+            <span className="label">{label ?? "Best fit from your CV"}</span>
+            {origin}
+            {role.sdg && <span className="chip chip-blue">{role.sdg.goal}</span>}
+          </div>
+          <h2>{role.title}</h2>
+          <p className="muted">{role.summary}</p>
+          <SimButton roleId={role.id} />
+        </div>
+        <div className="plan-score">
+          <Ring value={role.match} size={84} stroke={6} />
+          <div>
+            <div className="profile-stat-title">Skill match</div>
+            <div className="muted small">{role.signal ? `${role.signal} demand` : "No demand signal yet"} · estimate</div>
+            <button className="plan-how" onClick={() => setShowHow(!showHow)} aria-expanded={showHow}>
+              {showHow ? "Hide the calculation" : "How is this calculated?"}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {showHow && (breakdown?.length ? <Breakdown rows={breakdown} /> : <p className="muted small plan-empty">{FORMULA}</p>)}
+
+      {details}
+
+      <SkillColumns role={role} gapClosed={gapClosed} quotes={skillQuotes} onRemove={onRemoveSkill} haveLabel={haveLabel} />
+    </>
+  );
+
+  // split mode: the page already names the job, so this card is just the score (left) and the skills behind it (right)
+  const splitMatch = (
+    <>
+      <div className="plan-match">
+        <div className="plan-match-score">
+          <span className="label">{label ?? "Your skill match"}</span>
+          <Ring value={role.match} size={112} stroke={7} />
+          <div>
+            <div className="profile-stat-title">Skill match</div>
+            <div className="muted small">{role.signal ? `${role.signal} demand` : "No demand signal yet"} · estimate</div>
+            <button className="plan-how" onClick={() => setShowHow(!showHow)} aria-expanded={showHow}>
+              {showHow ? "Hide the calculation" : "How is this calculated?"}
+            </button>
+          </div>
+          <SimButton roleId={role.id} />
+        </div>
+        <SkillColumns role={role} gapClosed={gapClosed} quotes={skillQuotes} onRemove={onRemoveSkill} haveLabel={haveLabel} />
+      </div>
+
+      {showHow && (breakdown?.length ? <Breakdown rows={breakdown} /> : <p className="muted small plan-empty">{FORMULA}</p>)}
+
+      {details}
+    </>
+  );
+
+  const route = (
+    <>
+      {role.steps.length > 0 ? (
+        <Roadmap role={role} done={done} toggle={toggle} />
+      ) : emptyNote !== undefined ? (
+        emptyNote
+      ) : (
+        <p className="muted small plan-empty">No verified course for these gaps yet. They&apos;re still worth learning.</p>
+      )}
+
+      {footer}
+    </>
+  );
+
+  if (split) {
+    return (
+      <div className="plan-split">
+        <section id="plan" className={`plan glass${animate ? " reveal" : ""}`}>
+          <div className="plan-inner">{splitMatch}</div>
+        </section>
+        <section className={`plan glass${animate ? " reveal" : ""}`}>
+          <div className="plan-inner">
+            <div className="plan-tags">
+              <span className="label">{split.label}</span>
+              {split.tags}
+            </div>
+            {route}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <section id="plan" className={`plan glass${animate ? " reveal" : ""}`}>
       <div className="plan-inner">
-        {intro}
-        <header className="plan-head">
-          <div className="plan-title">
-            <div className="plan-tags">
-              <span className="label">{label ?? "Best fit from your CV"}</span>
-              {origin}
-              {role.sdg && <span className="chip chip-blue">{role.sdg.goal}</span>}
-            </div>
-            <h2>{role.title}</h2>
-            <p className="muted">{role.summary}</p>
-            <SimButton roleId={role.id} />
-          </div>
-          <div className="plan-score">
-            <Ring value={role.match} size={84} stroke={6} />
-            <div>
-              <div className="profile-stat-title">Skill match</div>
-              <div className="muted small">{role.signal ? `${role.signal} demand` : "No demand signal yet"} · estimate</div>
-              <button className="plan-how" onClick={() => setShowHow(!showHow)} aria-expanded={showHow}>
-                {showHow ? "Hide the calculation" : "How is this calculated?"}
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {showHow && (breakdown?.length ? <Breakdown rows={breakdown} /> : <p className="muted small plan-empty">{FORMULA}</p>)}
-
-        {details}
-
-        <SkillColumns role={role} gapClosed={gapClosed} quotes={skillQuotes} onRemove={onRemoveSkill} haveLabel={haveLabel} />
-        {role.steps.length > 0 ? (
-          <Roadmap role={role} done={done} toggle={toggle} />
-        ) : emptyNote !== undefined ? (
-          emptyNote
-        ) : (
-          <p className="muted small plan-empty">No verified course for these gaps yet. They&apos;re still worth learning.</p>
-        )}
-
-        {footer}
+        {match}
+        {route}
       </div>
     </section>
   );

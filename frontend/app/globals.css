@@ -5669,3 +5669,28 @@ button.cvp-tag.ai:hover { background: #fde68a; }
 }
 
 @keyframes jobs-spin { to { transform: rotate(360deg); } }
+
+/* small line above a page title, e.g. "Your learning route" above the job it leads to */
+.j-head-kicker {
+  display: block;
+  margin-bottom: 6px;
+  font-size: clamp(18px, 2vw, 22px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+}
+
+/* The Route: the skill match and the route as two cards, one above the other */
+.plan-split { display: flex; flex-direction: column; gap: 18px; }
+.plan-split > .plan + .plan .plan-tags { margin-bottom: 0; }
+
+/* the skill match card: the score on the left, the skills you have and the gaps stacked on the right */
+.plan-match { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: 32px; align-items: start; }
+.plan-match-score { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.plan-match-score .label { margin: 0; }
+.plan-match-score .sim-entry { margin-top: 0; }
+.plan-match .plan-skills { grid-template-columns: 1fr; gap: 12px; }
+
+@media (max-width: 800px) {
+  .plan-match { grid-template-columns: 1fr; gap: 20px; }
+}

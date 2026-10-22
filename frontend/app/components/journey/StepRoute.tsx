@@ -37,23 +37,15 @@ export default function StepRoute() {
       <CvMatch
         key={`${role.id}-${r.steps.length}`}
         role={role}
-        label="04 — Your route"
-        origin={<span className="chip chip-origin">{r.hours_left} h left · {r.done}/{r.steps.length} done</span>}
+        label="Your skill match"
+        split={{
+          label: "Your route",
+          tags: <span className="chip chip-origin">{r.hours_left} h left · {r.done}/{r.steps.length} done</span>,
+        }}
         progress={progress}
         animate
-        footer={r.sdg_contribution.length > 0 && (
-          <div className="alt-roles">
-            <div className="label">What this route contributes to</div>
-            <div className="j-bet-sdgs">
-              {r.sdg_contribution.map((c) => (
-                <span key={c.sdg} className={`j-sdg sdg-${c.sdg}`} title={`Through ${c.steps.join(", ")}`}><b>{c.sdg}</b> {c.name}</span>
-              ))}
-            </div>
-          </div>
-        )}
       />
       <div className="j-cta">
-        <button className="btn btn-ghost" onClick={() => go("future")}>See your 2028 CV fill in</button>
         <button className="btn btn-primary" onClick={next}>What if the world moves? →</button>
       </div>
     </>

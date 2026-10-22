@@ -29,7 +29,15 @@ export default function Journey() {
     <div className="j-journey">
       {step !== "you" && <header className="j-head" key={`head-${step}`}>
         <span className="eyebrow">{index === 0 ? "AI watches the market. You grow." : `${String(index).padStart(2, "0")} · ${STEPS[index].label}`}</span>
-        <h1>{COPY[step].title}</h1>
+        {step === "route" && data?.route ? (
+          // the route page is named after the job it leads to
+          <h1>
+            <span className="j-head-kicker">{COPY.route.title}</span>
+            {data.route.role.title}
+          </h1>
+        ) : (
+          <h1>{COPY[step].title}</h1>
+        )}
         <p>{COPY[step].sub}</p>
         {data && (
           <div className="hud">
