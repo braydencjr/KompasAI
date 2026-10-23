@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { profile as sampleProfile } from "../data/bets";
-import { extractProfile, readLines, type CvProfile, type CvRole, type Profile } from "../lib/kompas";
+import { extractProfile, readLines, rescoreProfile, type CvProfile, type CvRole, type Profile } from "../lib/kompas";
 
 // No login: the profile lives in this browser only (PRD NFR-3).
 const STORAGE_KEY = "kompas:profile";
@@ -55,25 +55,51 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [scan, setScan] = useState<Scan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-      // profiles saved before the API added `trace` have the old role shape: drop them
-      if (saved?.source === "cv" && Array.isArray(saved.cv?.roles) && saved.cv?.signals) setState(saved);
-      else localStorage.removeItem(STORAGE_KEY);
-    } catch {}
-  }, []);
+  // bumped by every upload or reset, so a slow refresh of an older profile can't overwrite a newer one
+  const epoch = useRef(0);
 
   const save = useCallback((next: Stored) => {
     setState(next);
     try {
       if (next.source === "sample") localStorage.removeItem(STORAGE_KEY);
       else localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {}
+    } catch (e) {
+      // usually a full storage quota (other apps on this address count too). Never leave an older CV behind to
+      // come back on reload, and say so instead of failing silently.
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+      console.warn("Kompas couldn't save your profile in this browser", e);
+      setError("This browser's storage for this site is full, so your CV won't be remembered after a reload. "
+        + "Clear the site data for this address (DevTools → Application → Storage → Clear site data) and upload again.");
+    }
   }, []);
 
+  useEffect(() => {
+    let saved: Stored | null = null;
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+      // profiles saved before the API added `trace` have the old role shape: drop them
+      if (raw?.source === "cv" && Array.isArray(raw.cv?.roles) && raw.cv?.signals) saved = raw;
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    if (!saved?.cv) return;
+    const restored = saved;
+    setState(restored);
+
+    // the saved copy shows instantly; then re-score it on today's market data, since the CV itself isn't kept
+    const at = epoch.current;
+    rescoreProfile(restored.cv!).then((cv) => {
+      if (!cv || epoch.current !== at) return;
+      const roleIsco = cv.roles.some((r) => r.isco === restored.roleIsco)
+        ? restored.roleIsco
+        : (cv.recommended ?? cv.roles[0]?.isco ?? null);
+      save({ ...restored, cv, roleIsco });
+    });
+  }, [save]);
+
   async function analyse(file: File) {
+    epoch.current += 1;
     setError(null);
     const local = /\.(txt|md)$/i.test(file.name) ? textLines(await file.text()) : null;
     setScan({ name: file.name, lines: local, result: null });
@@ -126,6 +152,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       if (!state.skills.includes(id)) save({ ...state, skills: [...state.skills, id] });
     },
     reset: () => {
+      epoch.current += 1;
       setError(null);
       setScan(null);
       save(SAMPLE);

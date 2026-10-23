@@ -5741,3 +5741,27 @@ button.cvp-tag.ai:hover { background: #fde68a; }
 @media (max-width: 800px) {
   .plan-match { grid-template-columns: 1fr; gap: 20px; }
 }
+
+/* typing your job: the closest jobs Kompas knows, as a list to pick from */
+button.current-job-change { border: 0; background: none; cursor: pointer; font: inherit; font-size: 13px; color: var(--accent-ink); }
+.job-search { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.job-search-box { display: flex; align-items: center; gap: 12px; }
+.job-search-box input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 15px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px rgba(61, 155, 233, 0.45);
+  outline: none;
+}
+.job-search-box input:focus { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 4px var(--accent-soft); }
+.job-search-results { list-style: none; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 14px; background: #fff; box-shadow: 0 10px 30px -14px rgba(20, 40, 80, 0.4), inset 0 0 0 1px var(--hair); }
+.job-search-results li { display: flex; flex-direction: column; gap: 1px; padding: 8px 12px; border-radius: 10px; cursor: pointer; }
+.job-search-results li.on { background: var(--accent-soft); }
+.job-search-none { display: flex; flex-direction: column; gap: 8px; }
+.job-search-all { display: flex; flex-wrap: wrap; gap: 6px; }
+.job-search-all .chip { border: 0; cursor: pointer; font: inherit; font-size: 12.5px; }

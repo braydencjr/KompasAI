@@ -183,6 +183,21 @@ export async function extractProfile(file: File): Promise<{ profile: CvProfile }
   }
 }
 
+/** A saved profile re-scored against the latest market snapshot (no CV needed). null when the API can't help. */
+export async function rescoreProfile(cv: CvProfile): Promise<CvProfile | null> {
+  try {
+    const res = await fetch(`${API_URL}/profile/rescore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cv),
+      signal: AbortSignal.timeout(20_000),
+    });
+    return res.ok ? ((await res.json()) as CvProfile) : null;
+  } catch {
+    return null;
+  }
+}
+
 export type LiveJob = {
   id: string | null;
   title: string;
