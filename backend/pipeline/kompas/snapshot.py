@@ -4,7 +4,7 @@ import json
 import shutil
 
 from . import config
-from .aggregate import build_series
+from .aggregate import build_group_series, build_series
 from .config import PARAMS, Params
 from .curated import Curated
 from .evidence import collect
@@ -21,8 +21,9 @@ def build(conn, cur: Curated, as_of: str, p: Params = PARAMS, export: bool = Fal
     retag(conn, cur)
     cut = cutoff(as_of)
     series = build_series(conn, cur, cut, p)
-    states = score_all(series, cur, as_of, p)
-    ev = collect(conn, cur, series, states, cut)
+    groups = build_group_series(conn, cur, cut)
+    states = score_all(series, cur, as_of, p, groups)
+    ev = collect(conn, cur, series, states, cut, groups)
     feed = rank(conn, cut, p)
 
     sources = []

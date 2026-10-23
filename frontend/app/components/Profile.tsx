@@ -59,8 +59,14 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-      // profiles saved before the API added `trace` have the old role shape: drop them
-      if (saved?.source === "cv" && Array.isArray(saved.cv?.roles) && saved.cv?.signals) setState(saved);
+      // profiles saved before the API added `trace` have the old role shape, ones saved before `malaysia_market`
+      // have Malaysian job-market figures as skill evidence, and ones whose whole-group Malaysian rung has no
+      // `share_pct` describe it with other figures than the market panel: drop them, so the CV is read again
+      const current = (cv: CvProfile) => "malaysia_market" in cv
+        && (cv.malaysia_market?.groups ?? []).every((g) => "movement" in g)
+        && Object.values(cv.signals).every((s) => s.rungs.every((r) => !r.groups?.length || "share_pct" in r));
+      if (saved?.source === "cv" && Array.isArray(saved.cv?.roles) && saved.cv?.signals && current(saved.cv))
+        setState(saved);
       else localStorage.removeItem(STORAGE_KEY);
     } catch {}
   }, []);

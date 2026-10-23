@@ -233,7 +233,7 @@ export type ConceptDetail = {
   status: LiveStatus;
   family_status: LiveStatus | null;
   projected: Record<Scenario, LiveStatus>;
-  rungs: Record<"1" | "2" | "3", { active: boolean; declining: boolean; trend: number | null; low_confidence: boolean; sources: string[]; active_sources: string[]; level: "concept" | "family" }>;
+  rungs: Record<"1" | "2" | "3", { active: boolean; declining: boolean; trend: number | null; low_confidence: boolean; sources: string[]; active_sources: string[]; level: "concept" | "family" | "group"; groups?: string[] }>;
 };
 
 export type EvidenceItem = {

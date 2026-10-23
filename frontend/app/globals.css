@@ -4986,7 +4986,13 @@ h3 {
 
 /* how strongly a signal moves, shown as how full its bar is */
 .rung.mv-rising-fast i { width: 100%; background: var(--green); }
+.rung.mv-up i { width: 85%; background: #34d399; }
 .rung.mv-slightly-up i { width: 65%; background: #6ee7b7; }
+.rung.mv-down i { width: 20%; background: #fb7185; }
+.rung.mv-up .rung-move { color: var(--green); }
+.rung.mv-down .rung-move { color: var(--rose); }
+/* a Malaysian signal measured for the skill's whole occupation group, not the skill itself */
+.rung-basis { display: block; font-size: 0.72em; font-weight: 400; color: var(--faint); }
 .rung.mv-flat i { width: 45%; background: #94a3b8; }
 .rung.mv-slightly-down i { width: 30%; background: #fda4af; }
 .rung.mv-falling i { width: 15%; background: var(--rose); }
@@ -5008,8 +5014,30 @@ h3 {
 }
 
 .mcard-ev:hover { background: var(--accent-soft); }
+/* the Malaysian job market panel above the skill cards */
+.my-market {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(15, 30, 60, 0.035);
+  color: var(--ink);
+  transition: background 0.2s;
+}
+.my-market:hover { background: var(--accent-soft); }
+.my-market ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.my-market li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.my-group { font-weight: 600; min-width: 140px; }
+.my-share-now { font-variant-numeric: tabular-nums; font-weight: 500; }
+.my-share-now.up { color: var(--green); }
+.my-share-now.down { color: var(--rose); }
+.my-was { font-weight: 400; font-size: 13px; }
+.my-count { font-size: 13px; font-variant-numeric: tabular-nums; flex-basis: 100%; padding-left: 152px; }
+@media (max-width: 560px) { .my-count { padding-left: 0; } }
 .mcard-ev-label { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
-.mcard-ev-title { font-size: 15px; font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mcard-ev-title { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
 .mcard-ev-meta { font-size: 13px; color: var(--muted); }
 
 .flow-tally {

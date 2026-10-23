@@ -34,6 +34,44 @@ def build_series(conn, cur: Curated, cutoff: str, params: Params) -> Series:
     return out
 
 
+def occupation_groups(cur: Curated, cid: str) -> list[str]:
+    """MASCO major groups (the first digit of ISCO-08 / MASCO 2020) of the occupations that need a concept, or
+    of its nearest ancestor's when it has none of its own."""
+    for c in (cid, *cur.ancestors(cid)):
+        occs = cur.concept_occupations.get(c)
+        if occs:
+            return sorted({isco[0] for isco, _ in occs})
+    return []
+
+
+def build_group_series(conn, cur: Curated, cutoff: str) -> dict[str, tuple[list[str], list[Point]]]:
+    """Per concept: (major groups, the share of all Malaysian online job offerings in those groups per quarter),
+    from DOSM's release workbooks. A major group spans very different jobs (accountants and software developers
+    are both Professionals), so this is context for a concept's rung 3, never a measurement of the concept."""
+    offerings: dict[str, dict[str, int]] = defaultdict(dict)
+    avail: dict[str, str] = {}
+    for r in conn.execute(
+        "SELECT period, published_at, metrics FROM raw_doc WHERE source = 'dosm_jmi' "
+        "AND kind = 'occupation_group_stat' AND published_at <= ?", (cutoff,)
+    ):
+        m = json.loads(r["metrics"])
+        offerings[r["period"]][m["masco_major_group"]] = m["offerings"]
+        avail[r["period"]] = max(avail.get(r["period"], ""), r["published_at"])
+    out = {}
+    for cid in cur.concepts:
+        groups = occupation_groups(cur, cid)
+        if not groups:
+            continue
+        # a quarter counts only if the total and every one of the concept's groups were published
+        points = [Point(p, sum(offerings[p][g] for g in groups) / offerings[p]["TOTAL"],
+                        sum(offerings[p][g] for g in groups), avail[p])
+                  for p in sorted(offerings)
+                  if offerings[p].get("TOTAL") and all(g in offerings[p] for g in groups)]
+        if points:
+            out[cid] = (groups, points)
+    return out
+
+
 def _complete(period: str, cutoff: str) -> bool:
     return available_at(period) <= cutoff
 

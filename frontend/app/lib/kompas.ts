@@ -84,6 +84,11 @@ export const kompas = {
     call<Match>("/match", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(profile) }),
 };
 
+/** ["professional", "technician", "clerical"] -> "professional, technician and clerical" */
+export function listWords(words: string[]): string {
+  return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
 /** Subscribes to new and rising feed items. Returns an unsubscribe function. */
 export function onFeedEvent(handler: (artifactId: string) => void): () => void {
   if (typeof EventSource === "undefined") return () => {};
@@ -140,6 +145,8 @@ export type CvProfile = {
   recommended: string | null;
   /** market evidence per concept: your skills, the roles' skills and their job families */
   signals: Record<string, SkillSignal>;
+  /** absent on CV results saved before it existed */
+  malaysia_market?: MalaysiaMarket | null;
   /** short computed findings, each traceable to a number on the page */
   insights: { kind: "focus" | "rising" | "falling" | "ai" | "fit"; text: string }[];
   snapshot: { id: string; as_of: string } | null;
@@ -151,10 +158,30 @@ export type CvRole = RoleScore;
 export type SkillSignal = {
   status: LiveStatus;
   projected: { moderate: LiveStatus; fast: LiveStatus };
-  rungs: { rung: 1 | 2 | 3; name: string; movement: "rising fast" | "slightly up" | "flat" | "slightly down" | "falling" | "no data"; sources: string[] }[];
+  // "up"/"down" only for a Malaysian rung measured for the skill's whole occupation groups (`groups`), which is
+  // context and never moves the status
+  rungs: {
+    rung: 1 | 2 | 3; name: string; movement: "rising fast" | "up" | "slightly up" | "flat" | "slightly down" | "down" | "falling" | "no data";
+    sources: string[]; groups: string[];
+    /** with `groups`: those groups' share of all job openings now and in the `previous` quarter; `movement` follows it */
+    share_pct?: number | null; previous_share_pct?: number | null; previous?: string | null;
+  }[];
   meaning: string | null;
   evidence: SignalItem[];
   evidence_count: number;
+};
+
+/** Malaysian online job ads (DOSM) for the occupation groups behind your skills, latest quarter vs the one before */
+export type MalaysiaMarket = {
+  quarter: string;
+  previous: string;
+  url: string;
+  all: { ads: number; change_pct: number | null };
+  groups: {
+    group: string; ads: number; change_pct: number | null; share_pct: number; previous_share_pct: number;
+    /** the share's direction, in the same words as the skill cards' "Hired in Malaysia" row */
+    movement: SkillSignal["rungs"][number]["movement"];
+  }[];
 };
 
 /** The CV's text lines, fast, for the scanner. null when the API can't read it (the scanner then shows bars). */
