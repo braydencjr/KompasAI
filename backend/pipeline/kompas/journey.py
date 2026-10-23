@@ -377,7 +377,8 @@ def ghost(cur: Curated, st: Statuses, p: Profile, roles: list[dict]) -> dict:
 # ---------- The Route ----------
 
 
-def route(cur: Curated, st: Statuses, p: Profile, role: dict | None) -> dict | None:
+def route(cur: Curated, st: Statuses, p: Profile, role: dict | None, resources: dict | None = None) -> dict | None:
+    """resources: skill -> learning resources (default: the curated table)."""
     if role is None:
         return None
     have = set(p.skills)
@@ -404,7 +405,7 @@ def route(cur: Curated, st: Statuses, p: Profile, role: dict | None) -> dict | N
         remaining.remove(nxt)
     steps = []
     for i, cid in enumerate(order, start=1):
-        options = sorted(cur.resources.get(cid, []), key=lambda r: (["free", "free-to-audit", "low-cost", "paid"].index(r.cost), r.hours))
+        options = sorted((cur.resources if resources is None else resources).get(cid, []), key=lambda r: (["free", "free-to-audit", "low-cost", "paid"].index(r.cost), r.hours))
         res = options[0] if options else None
         status = st.get(cid, p.scenario)
         steps.append({
@@ -685,7 +686,7 @@ def stay_option(cur: Curated, p: Profile, m: dict, g: dict, current: dict | None
 # ---------- the whole journey ----------
 
 
-def build(cur: Curated, conn, snapshot_id: str, p: Profile) -> dict:
+def build(cur: Curated, conn, snapshot_id: str, p: Profile, resources: dict | None = None) -> dict:
     st = Statuses(conn, snapshot_id)
     mycol = mycol_codes(conn, st.as_of)
     roles = score_roles(cur, st, p, mycol)
@@ -695,7 +696,7 @@ def build(cur: Curated, conn, snapshot_id: str, p: Profile) -> dict:
     chosen = next((r for r in roles if r["isco"] == p.role), None) or first_bet or (roles[0] if roles else None)
     history = [Statuses(conn, row["id"]) for row in conn.execute(
         "SELECT id FROM snapshot WHERE as_of <= ? ORDER BY as_of DESC LIMIT 6", (st.as_of,)).fetchall()[::-1]]
-    m, r = mirror(cur, st, p), route(cur, st, p, chosen)
+    m, r = mirror(cur, st, p), route(cur, st, p, chosen, resources)
     g = ghost(cur, st, p, roles)
     current = next((x for x in roles if x["isco"] == p.occupation), None)
     # an empty category shows its closest job instead, so that job needs its reasons too
@@ -714,13 +715,13 @@ def build(cur: Curated, conn, snapshot_id: str, p: Profile) -> dict:
         o["trend"] = trend
         o["growth"] = round(100 * (trend[-1] / trend[0] - 1)) if trend and trend[0] else 0
         o["trend_from"] = history[0].as_of if history else None
-        o["route"] = route(cur, st, p, o)
+        o["route"] = route(cur, st, p, o, resources)
     stay = stay_option(cur, p, m, g, current, sig)
     if current and stay:
         # staying means adding the skills that strengthen the job: that is its route
         strengthen = {**current, "gaps": [{"id": cid, "label": _label(cur, cid), "weight": 0.5,
                                            "status": st.get(cid, p.scenario)} for cid in stay["learn_ids"]]}
-        current["route"] = route(cur, st, p, strengthen)
+        current["route"] = route(cur, st, p, strengthen, resources)
         if chosen is current:
             r = current["route"]
     return {

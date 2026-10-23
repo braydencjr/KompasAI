@@ -117,6 +117,64 @@ def insights(skills: list[dict], roles: list[dict], exposed: list[dict]) -> list
     return out
 
 
+def score(found: dict[str, dict], cur: Curated, conn, st: "journey.Statuses") -> dict:
+    """Everything about a CV that depends on the market data rather than the CV itself: each skill's status, the
+    AI capabilities that reach it, the best-fit roles and the evidence. `found` maps concept id -> how the CV shows
+    it ({"quote", "found_by"}). Run at upload, and again by rescore() when the data moves on."""
+    def item(cid: str, info: dict) -> dict:
+        row = st.rows.get(cid)
+        return {"id": cid, "label": cur.concepts[cid].label, "status": st.measured(cid),
+                "projected": row["projected"] if row else None, "evidence_count": row["evidence"] if row else 0,
+                "family": _family(cur, cid), **info}
+
+    skills = [item(cid, info) for cid, info in found.items() if cur.concepts[cid].kind == "skill"]
+    # AI capabilities the CV names (document AI, anomaly detection): tools the person has used, not skills a role asks for
+    ai_tools = [item(cid, info) for cid, info in found.items() if cur.concepts[cid].kind == "capability"]
+    have = {s["id"] for s in skills}
+
+    exposed = []
+    for cap, links in cur.capability_skills.items():
+        hit = [(skill, why) for skill, why in links if skill in have]
+        if hit:
+            exposed.append({"id": cap, "label": cur.concepts[cap].label, "status": st.measured(cap),
+                            "because": [{"skill": cur.concepts[s].label, "why": why} for s, why in hit]})
+
+    # the same scorer as the Three Bets, so a role's match is the same number on every step
+    mycol = journey.mycol_codes(conn, st.as_of or "9999-12-31")
+    scored = journey.score_roles(cur, st, journey.Profile(skills={cid: "claimed" for cid in have}), mycol)
+    roles = [r for r in scored if r["match"] > 0][:TOP_ROLES]
+    # market evidence for your skills, the shown roles' skills and their job families
+    sig = journey.skill_signals(cur, conn, st, have | {b["id"] for r in roles for b in r["breakdown"]}
+                  | {r["family"]["id"] for r in roles if r.get("family")})
+    by_id = {s["id"]: s for s in skills}
+    for r in roles:
+        r["reasons"] = journey.reasons(r, by_id, sig)
+    pick = journey.recommend(roles)
+    return {
+        "skills": skills, "ai_tools": ai_tools, "exposed": exposed, "roles": roles,
+        "recommended": pick["isco"] if pick else None, "signals": sig,
+        "insights": insights(skills, roles, exposed),
+        "snapshot": {"id": st.id, "as_of": st.as_of} if st.id else None,
+        "trace": {
+            "signals": {"measured": sum(s["status"] is not None for s in skills), "of": len(skills),
+                        "sources": _sources(cur, conn)},
+            "roles": {"scored": len(scored), "catalogue": len(cur.role_titles), "shown": len(roles)},
+        },
+    }
+
+
+def rescore(profile: dict, cur: Curated, conn) -> dict:
+    """A saved profile, re-scored against the latest snapshot without the CV: what the CV said (skills with their
+    quotes, jobs, summary) is kept; statuses, roles, evidence and insights are recomputed. The browser keeps the
+    profile, so this is how a saved one stays current (the CV itself is never stored)."""
+    found = {s["id"]: {k: s[k] for k in ("quote", "found_by") if k in s}
+             for s in [*profile.get("skills", []), *profile.get("ai_tools", [])]
+             if isinstance(s, dict) and s.get("id") in cur.concepts}
+    scored = score(found, cur, conn, journey.Statuses.latest(conn))
+    trace = {**(profile.get("trace") or {}), **scored["trace"]}
+    return {**profile, **{k: v for k, v in scored.items() if k != "trace"}, "trace": trace}
+
+
 def analyse(text: str, cur: Curated, conn, client=None) -> dict:
     cv_norm = _norm(text)
     st = journey.Statuses.latest(conn)
@@ -146,36 +204,18 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
         if cur.concepts[cid].kind != "family":
             found.setdefault(cid, {"quote": _line_around(text, start), "found_by": "dictionary"})
 
-    def item(cid: str, info: dict) -> dict:
-        row = st.rows.get(cid)
-        return {"id": cid, "label": cur.concepts[cid].label, "status": st.measured(cid),
-                "projected": row["projected"] if row else None, "evidence_count": row["evidence"] if row else 0,
-                "family": _family(cur, cid), **info}
-
-    skills = [item(cid, info) for cid, info in found.items() if cur.concepts[cid].kind == "skill"]
-    # AI capabilities the CV names (document AI, anomaly detection): tools the person has used, not skills a role asks for
-    ai_tools = [item(cid, info) for cid, info in found.items() if cur.concepts[cid].kind == "capability"]
+    method = "llm" if extraction else "dictionary"
+    scored = score(found, cur, conn, st)
+    skills = scored["skills"]
     have = {s["id"] for s in skills}
 
-    exposed = []
-    for cap, links in cur.capability_skills.items():
-        hit = [(skill, why) for skill, why in links if skill in have]
-        if hit:
-            exposed.append({"id": cap, "label": cur.concepts[cap].label, "status": st.measured(cap),
-                            "because": [{"skill": cur.concepts[s].label, "why": why} for s, why in hit]})
-
-    # the same scorer as the Three Bets, so a role's match is the same number on every step
-    mycol = journey.mycol_codes(conn, st.as_of or "9999-12-31")
-    scored = journey.score_roles(cur, st, journey.Profile(skills={cid: "claimed" for cid in have}), mycol)
-    roles = [r for r in scored if r["match"] > 0][:TOP_ROLES]
-    method = "llm" if extraction else "dictionary"
     # market evidence for your skills, the shown roles' skills and their job families
-    sig = journey.skill_signals(cur, conn, st, have | {b["id"] for r in roles for b in r["breakdown"]}
-                  | {r["family"]["id"] for r in roles if r.get("family")})
+    sig = journey.skill_signals(cur, conn, st, have | {b["id"] for r in scored["roles"] for b in r["breakdown"]}
+                  | {r["family"]["id"] for r in scored["roles"] if r.get("family")})
     by_id = {s["id"]: s for s in skills}
-    for r in roles:
+    for r in scored["roles"]:
         r["reasons"] = journey.reasons(r, by_id, sig)
-    pick = journey.recommend(roles)
+    pick = journey.recommend(scored["roles"])
     # the occupation groups behind your skills' "Hired in Malaysia" signal, for the one Malaysian job market panel
     groups = {g for cid in have for r3 in [(st.rows.get(cid) or {}).get("rungs", {}).get("3") or {}]
               if r3.get("level") == "group" for g in r3.get("groups") or []}
@@ -189,15 +229,15 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
                    if extraction else None,
         "jobs": jobs,
         "skills": skills,
-        "ai_tools": ai_tools,
+        "ai_tools": scored["ai_tools"],
         "unrecognised": unrecognised,
         "discarded_unverified": discarded,
-        "exposed": exposed,
-        "roles": roles,
+        "exposed": scored["exposed"],
+        "roles": scored["roles"],
         "recommended": pick["isco"] if pick else None,
         "signals": sig,
         "malaysia_market": journey.malaysia_market(conn, st.as_of, sorted(groups)),
-        "insights": insights(skills, roles, exposed),
+        "insights": scored["insights"],
         "snapshot": {"id": st.id, "as_of": st.as_of} if st.id else None,
         # what each stage did, with real counts, for "How Kompas read this"
         "trace": {
@@ -206,10 +246,8 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
             "skills": {"llm": sum(i["found_by"] == "llm" for i in found.values()),
                        "dictionary": sum(i["found_by"] == "dictionary" for i in found.values()),
                        "dropped_unverified": discarded, "unrecognised": len(unrecognised),
-                       "ai_tools": len(ai_tools)},
+                       "ai_tools": len(scored["ai_tools"])},
             "jobs": {"found": len(jobs), "mapped": sum(1 for j in jobs if j["occupation"])},
-            "signals": {"measured": sum(s["status"] is not None for s in skills), "of": len(skills),
-                        "sources": _sources(cur, conn)},
-            "roles": {"scored": len(scored), "catalogue": len(cur.role_titles), "shown": len(roles)},
+            **scored["trace"],
         },
     }

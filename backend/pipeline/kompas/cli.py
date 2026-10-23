@@ -180,6 +180,16 @@ def cmd_esco_sync(args, conn, cur):
     print(f"wrote curated/occupation_task.csv ({sum(counts.values())} tasks)")
 
 
+def cmd_esco_aliases(args, conn, cur):
+    """Refreshes curated/occupation_alias.csv: the names people use for each catalogue job, from the ESCO API."""
+    from .connectors import esco
+
+    counts = esco.sync_aliases(list(cur.role_titles))
+    for isco, n in counts.items():
+        print(f"{isco} {cur.role_titles[isco]}: {n} names")
+    print(f"wrote curated/occupation_alias.csv ({sum(counts.values())} names)")
+
+
 def cmd_esco_skills(args, conn, cur):
     """Refreshes curated/occupation_skill_esco.csv: each role's ESCO skills, the evidence for its skill links."""
     from .connectors import esco
@@ -326,6 +336,7 @@ def main(argv=None):
 
     sub.add_parser("esco-sync", help="refresh The Mirror's task lists from the ESCO API").set_defaults(fn=cmd_esco_sync)
     sub.add_parser("esco-skills", help="fetch each role's ESCO skills (evidence for role skill links)").set_defaults(fn=cmd_esco_skills)
+    sub.add_parser("esco-aliases", help="fetch the names people use for each catalogue job (job search)").set_defaults(fn=cmd_esco_aliases)
     sub.add_parser("links-draft", help="draft role skill links from ESCO with Gemini, for review").set_defaults(fn=cmd_links_draft)
     sub.add_parser("links-apply", help="merge the reviewed draft into concept_occupation.csv").set_defaults(fn=cmd_links_apply)
     sub.add_parser("validate", help="check the curated tables").set_defaults(fn=cmd_validate)

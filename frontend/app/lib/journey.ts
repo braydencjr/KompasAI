@@ -13,7 +13,8 @@ export type Sdg = { sdg: number; name: string; target?: string; rationale?: stri
 export type Catalog = {
   latest_snapshot: string;
   snapshots: { id: string; as_of: string }[];
-  occupations: { isco: string; title: string; occupation: string; esco_occupation: string | null; tasks: number; mycol: string | null }[];
+  /** aliases: what people call jobs in this group (ESCO names), for the job search */
+  occupations: { isco: string; title: string; occupation: string; aliases?: string[]; esco_occupation: string | null; tasks: number; mycol: string | null }[];
   sdgs: Sdg[];
   skills: { id: string; label: string }[];
   scenarios: { id: Scenario; label: string }[];

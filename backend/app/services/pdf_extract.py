@@ -14,8 +14,8 @@ SUPPORTED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/bmp", "
 def is_supported_image(filename: str | None, content_type: str | None) -> bool:
     name = (filename or "").lower()
     media_type = (content_type or "").lower()
-    if media_type.startswith("image/"):
-        return media_type in SUPPORTED_IMAGE_TYPES or media_type.startswith("image/")
+    if media_type:
+        return media_type in SUPPORTED_IMAGE_TYPES
     return any(name.endswith(ext) for ext in SUPPORTED_IMAGE_EXTENSIONS)
 
 

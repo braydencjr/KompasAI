@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { listWords, type CvProfile, type MalaysiaMarket, type SkillSignal } from "../lib/kompas";
 import { useJourney } from "./journey/JourneyProvider";
 import { signalClass } from "./Signals";
+import { matchJobs, type JobOption } from "../lib/jobMatch";
 
 const STAGES = ["Read your CV", "Find your skills", "Your skills in the market"] as const;
 
@@ -181,33 +182,119 @@ function Stickers({ cv }: { cv: CvProfile }) {
   );
 }
 
-/** The job The Mirror looks at: read from the CV, with a quiet way to correct it. */
+/** The job The Mirror looks at: read from the CV, or typed by the user. People between jobs, or changing career,
+ * pick the job they're aiming for instead. */
 function CurrentJob({ cv }: { cv: CvProfile }) {
   const { catalog, occupation, set } = useJourney();
+  const [editing, setEditing] = useState(false);
   const job = cv.jobs.find((j) => j.occupation);
   const title = catalog?.occupations.find((o) => o.isco === occupation)?.title
     ?? (job?.occupation?.isco === occupation ? job?.occupation?.title : undefined);
+  const fromCv = job?.occupation?.isco === occupation;
+
   return (
     <div className="current-job">
-      <span className="label">Your current job</span>
-      <div className="current-job-row">
-        {occupation && title ? (
+      <span className="label">Your current job, or the job you&apos;re aiming for</span>
+      {editing || !(occupation && title) ? (
+        <JobSearch
+          jobs={catalog?.occupations ?? []}
+          intro={occupation && title ? null : "We couldn't tell your job from your CV."}
+          onPick={(isco) => {
+            set({ occupation: isco, overrides: {} });
+            setEditing(false);
+          }}
+          onCancel={occupation && title ? () => setEditing(false) : undefined}
+        />
+      ) : (
+        <div className="current-job-row">
           <p>
             <strong>{title}</strong>
-            {job?.occupation?.isco === occupation && <span className="muted"> · from &ldquo;{job.title}&rdquo; on your CV</span>}
+            {fromCv && <span className="muted"> · from &ldquo;{job!.title}&rdquo; on your CV</span>}
           </p>
-        ) : (
-          <p className="muted">We couldn&apos;t tell your current job from your CV. Pick the closest one:</p>
-        )}
-        <label className="current-job-change">
-          <span>{occupation ? "Change" : "Choose"}</span>
-          <select value={occupation ?? ""} onChange={(e) => set({ occupation: e.target.value || null, overrides: {} })}
-            aria-label="Your current job">
-            <option value="">Choose a job…</option>
-            {catalog?.occupations.map((o) => <option key={o.isco} value={o.isco}>{o.title}</option>)}
-          </select>
-        </label>
+          <button className="current-job-change" onClick={() => setEditing(true)}>Change</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Type a job, see the closest ones Kompas knows, pick one. */
+function JobSearch({ jobs, intro, onPick, onCancel }: {
+  jobs: JobOption[];
+  intro: string | null;
+  onPick: (isco: string) => void;
+  onCancel?: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const results = query.trim() ? matchJobs(query, jobs) : [];
+
+  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => setActive(0), [query]);
+
+  return (
+    <div className="job-search">
+      <p className="muted small">
+        {intro ? `${intro} ` : ""}Type your job title. Not working right now, or changing career? Type the job
+        you&apos;re most interested in.
+      </p>
+      <div className="job-search-box">
+        <input
+          ref={inputRef}
+          value={query}
+          placeholder="e.g. PR executive, nurse, Java engineer"
+          aria-label="Your job, or the job you're aiming for"
+          role="combobox"
+          aria-expanded={results.length > 0}
+          aria-controls="job-search-results"
+          aria-activedescendant={results[active] ? `job-${results[active].job.isco}` : undefined}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setActive((i) => Math.min(i + 1, results.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setActive((i) => Math.max(i - 1, 0));
+            } else if (e.key === "Enter" && results[active]) {
+              onPick(results[active].job.isco);
+            } else if (e.key === "Escape") {
+              onCancel?.();
+            }
+          }}
+        />
+        {onCancel && <button className="link small" onClick={onCancel}>Cancel</button>}
       </div>
+
+      {query.trim() && (
+        results.length ? (
+          <>
+          {!results[0].complete && (
+            <p className="muted small">No exact match: Kompas covers {jobs.length} jobs so far. These are the closest:</p>
+          )}
+          <ul id="job-search-results" className="job-search-results" role="listbox" aria-label="Closest jobs">
+            {results.map(({ job: o, via }, i) => (
+              <li key={o.isco} id={`job-${o.isco}`} role="option" aria-selected={i === active}
+                className={i === active ? "on" : ""} onMouseEnter={() => setActive(i)} onMouseDown={(e) => {
+                  e.preventDefault();
+                  onPick(o.isco);
+                }}>
+                <strong>{o.title}</strong>
+                <span className="muted small">{via ? `Also called “${via}” · ` : ""}{o.occupation}</span>
+              </li>
+            ))}
+          </ul>
+          </>
+        ) : (
+          <div className="job-search-none">
+            <p className="muted small">No close match yet: Kompas covers {jobs.length} jobs so far. Pick the nearest one:</p>
+            <div className="job-search-all">
+              {jobs.map((o) => <button key={o.isco} className="chip" onClick={() => onPick(o.isco)}>{o.title}</button>)}
+            </div>
+          </div>
+        )
+      )}
     </div>
   );
 }
