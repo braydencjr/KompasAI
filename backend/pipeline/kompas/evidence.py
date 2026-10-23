@@ -28,8 +28,12 @@ def _item(row, value=None, value_label=None, title=None) -> dict:
     }
 
 
-def collect(conn, cur: Curated, series: Series, states: dict[str, ConceptState], cutoff: str) -> EvidenceSet:
+def collect(conn, cur: Curated, series: Series, states: dict[str, ConceptState], cutoff: str,
+            groups: dict | None = None) -> EvidenceSet:
     ev = EvidenceSet()
+    for cid, st in states.items():
+        if st.rungs[3].level == "group" and cid in (groups or {}):
+            _Collect.dosm_groups(conn, ev, cid, st.rungs[3].groups, groups[cid][1][-1].period, cutoff)
     for cid, st in states.items():
         for source, ss in st.sources.items():
             if ss.latest_period is None:
@@ -44,6 +48,15 @@ def collect(conn, cur: Curated, series: Series, states: dict[str, ConceptState],
 
 
 class _Collect:
+    @staticmethod
+    def dosm_groups(conn, ev, cid, groups, period, cutoff):
+        ids = [f"dosmg:{period}:{g}" for g in groups]
+        for r in conn.execute(f"SELECT * FROM raw_doc WHERE id IN ({','.join('?' * len(ids))}) AND published_at <= ?",
+                              (*ids, cutoff)):
+            n = json.loads(r["metrics"])["offerings"]
+            ev.add(cid, _item(r, n, "online job offerings", f"{r['title'].split(':')[0]}: {n:,} online job offerings in "
+                                                            f"Malaysia ({r['period']})"))
+
     @staticmethod
     def hn_front(conn, cur, ev, cid, periods, cutoff):
         rows = conn.execute(

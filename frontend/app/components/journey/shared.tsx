@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import type { LiveStatus } from "../../lib/kompas";
+import { listWords, type LiveStatus } from "../../lib/kompas";
 import { journeyApi, ladder, type Brief, type ConceptDetail, type EvidenceItem, type JourneyRequest } from "../../lib/journey";
 import { signalClass } from "../Signals";
 import { useJourney } from "./JourneyProvider";
@@ -86,11 +86,17 @@ export const useLadder = () => useContext(LadderCtx);
 const RUNGS = [
   { key: "1", name: "Talked about", sub: "research, open source, tech news" },
   { key: "2", name: "Hiring abroad", sub: "job posts outside Malaysia" },
-  { key: "3", name: "Hiring in Malaysia", sub: "DOSM online job offerings" },
+  { key: "3", name: "Hiring in Malaysia", sub: "Malaysian job openings posted online" },
 ] as const;
 
+// DOSM / MASCO 2020 major occupation groups, in everyday words (as journey.GROUP_WORDS)
+const MAJOR_GROUPS: Record<string, string> = {
+  "1": "manager", "2": "professional", "3": "technician", "4": "clerical", "5": "service and sales",
+  "6": "farming and fishing", "7": "trades", "8": "machine operator", "9": "elementary",
+};
+
 const SOURCE_NAMES: Record<string, string> = {
-  arxiv: "arXiv", github: "GitHub", hn_front: "Hacker News", hn_hiring: "HN Who is hiring", dosm_jmi: "DOSM JMI",
+  arxiv: "arXiv", github: "GitHub", hn_front: "Hacker News", hn_hiring: "HN Who is hiring", dosm_jmi: "Malaysia Job Market Insights",
 };
 
 export function LadderProvider({ children }: { children: React.ReactNode }) {
@@ -143,10 +149,15 @@ export function LadderProvider({ children }: { children: React.ReactNode }) {
                             {r.sub}
                             {rung?.sources.length ? ` · ${rung.sources.map((s) => SOURCE_NAMES[s] ?? s).join(", ")}` : " · no data"}
                             {family ? " · measured for the job family" : ""}
+                            {r.key === "3" && rung?.level === "group" && rung.groups?.length
+                              ? ` · based on all ${listWords(rung.groups.map((g) => MAJOR_GROUPS[g] ?? g))} job openings, so it doesn't change the status`
+                              : ""}
                             {rung?.active && rung.low_confidence ? " · low confidence" : ""}
                           </span>
                         </div>
-                        <span className="j-rung-trend">{rung?.trend == null ? "–" : `${rung.trend > 0 ? "+" : ""}${rung.trend.toFixed(1)}`}</span>
+                        {/* a whole-group Malaysian rung's score is for its share of openings, which can rise while
+                            openings fall: the skill cards show the change in openings instead, so no score here */}
+                        <span className="j-rung-trend">{rung?.trend == null || rung.level === "group" ? "–" : `${rung.trend > 0 ? "+" : ""}${rung.trend.toFixed(1)}`}</span>
                       </li>
                     );
                   })}

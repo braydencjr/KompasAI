@@ -12,6 +12,7 @@ Connections come from a pool (one per process): db.connect() is called per API r
 connection to Supabase each time would cost more than the query."""
 
 import functools
+import hashlib
 import os
 import re
 import sqlite3
@@ -90,8 +91,25 @@ def _column(c, identity: bool) -> str:
     return decl
 
 
+def _schema_hash(script: str) -> str:
+    return hashlib.sha256(script.encode()).hexdigest()[:16]
+
+
+def _schema_current(conn: psycopg.Connection, script: str) -> bool:
+    """True when this exact schema script was already applied. The script's ALTER TABLE statements need an
+    exclusive lock on every table, so re-running them on each server start would wait behind any ingestion or
+    snapshot write in progress until Supabase's statement timeout cancels the start."""
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key = 'pg_schema_hash'").fetchone()
+    except psycopg.errors.UndefinedTable:
+        return False
+    return row is not None and row[0] == _schema_hash(script)
+
+
 def _create_schema(conn: psycopg.Connection):
     script, columns = schema()
+    if _schema_current(conn, script):
+        return
     with conn.transaction():
         conn.execute("SELECT pg_advisory_xact_lock(%s)", (LOCK_KEY,))   # several processes may start at once
         conn.execute(script)   # no parameters: psycopg sends it as one multi-statement query
@@ -101,6 +119,8 @@ def _create_schema(conn: psycopg.Connection):
             for col, decl in defs.items():
                 if (table, col) not in have:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+        conn.execute("INSERT INTO meta (key, value) VALUES ('pg_schema_hash', %s) "
+                     "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (_schema_hash(script),))
 
 
 # ---------- SQL translation ----------
@@ -298,8 +318,12 @@ def pool(url: str) -> ConnectionPool:
             p = ConnectionPool(url, min_size=1, max_size=int(os.environ.get("KOMPAS_PG_POOL", "8")),
                                kwargs={"autocommit": True, "prepare_threshold": None}, configure=_configure,
                                check=ConnectionPool.check_connection, open=True, name="kompas")
-            with p.connection() as conn:
-                _create_schema(conn)
+            try:
+                with p.connection() as conn:
+                    _create_schema(conn)
+            except BaseException:
+                p.close()   # the next request tries again with a new pool
+                raise
             _pools[url] = p
         return _pools[url]
 

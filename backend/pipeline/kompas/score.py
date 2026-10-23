@@ -32,14 +32,17 @@ class RungState:
     low_confidence: bool = True
     sources: list[str] = field(default_factory=list)       # sources with data on this rung
     active_sources: list[str] = field(default_factory=list)
-    level: str = "concept"                                 # concept | family (borrowed from an ancestor)
+    # concept | family (borrowed from an ancestor) | group (DOSM major groups of the concept's occupations:
+    # context only, never active or declining, so it can't move the status)
+    level: str = "concept"
+    groups: list[str] = field(default_factory=list)        # level "group": the MASCO major groups behind it
 
     def to_dict(self) -> dict:
         return {
             "active": self.active, "declining": self.declining,
             "trend": None if self.trend is None else round(self.trend, 3),
             "low_confidence": self.low_confidence, "sources": self.sources,
-            "active_sources": self.active_sources, "level": self.level,
+            "active_sources": self.active_sources, "level": self.level, "groups": self.groups,
         }
 
 
@@ -155,7 +158,8 @@ def project(status: str, as_of: str, p: Params) -> dict[str, str]:
     return out
 
 
-def score_all(series: Series, cur: Curated, as_of: str, p: Params) -> dict[str, ConceptState]:
+def score_all(series: Series, cur: Curated, as_of: str, p: Params,
+              groups: dict[str, tuple[list[str], list[Point]]] | None = None) -> dict[str, ConceptState]:
     by_concept: dict[str, dict[str, SourceState]] = {cid: {} for cid in cur.concepts}
     for (cid, source), pts in series.items():
         if cid in by_concept:
@@ -176,6 +180,14 @@ def score_all(series: Series, cur: Curated, as_of: str, p: Params) -> dict[str, 
             borrowed = states[family].rungs[3]
             st.rungs[3] = RungState(borrowed.active, borrowed.declining, borrowed.trend, borrowed.low_confidence,
                                     list(borrowed.sources), list(borrowed.active_sources), level="family")
+
+    # Still no Malaysian figures: show where hiring for the concept's major occupation groups is heading.
+    for cid, st in states.items():
+        if not st.rungs[3].sources and cid in (groups or {}):
+            names, pts = groups[cid]
+            g = source_state("dosm_jmi", pts, "share", p)
+            st.rungs[3] = RungState(False, False, g.trend, g.low_confidence, ["dosm_jmi"], [], level="group",
+                                    groups=names)
 
     for cid, st in states.items():
         st.status = status_from(st.rungs)

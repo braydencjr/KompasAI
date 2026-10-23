@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { CvProfile, SkillSignal } from "../lib/kompas";
+import { listWords, type CvProfile, type MalaysiaMarket, type SkillSignal } from "../lib/kompas";
 import { useJourney } from "./journey/JourneyProvider";
 import { signalClass } from "./Signals";
 
@@ -135,6 +135,7 @@ export default function CvFlow({ fileName, lines, cv, animate }: Props) {
             abroad hiring for it, and Malaysian employers hiring for it
             {cv.snapshot && <> (data as of <strong>{fmtDate(cv.snapshot.as_of)}</strong>)</>}.
           </StageHead>
+          {cv.malaysia_market && <MalaysiaMarket m={cv.malaysia_market} />}
           <Market cv={cv} />
           <NextUp cv={cv} onNext={next} />
         </div>
@@ -212,15 +213,61 @@ function CurrentJob({ cv }: { cv: CvProfile }) {
 }
 
 const SIGNAL_LABEL: Record<number, string> = { 1: "Talked about", 2: "Hired abroad", 3: "Hired in Malaysia" };
-
 /** One of the three signals, as a bar filled by how strongly it moves. */
 function Rung({ rung }: { rung: SkillSignal["rungs"][number] }) {
   return (
     <div className={`rung mv-${rung.movement.replaceAll(" ", "-")}`} title={rung.sources.length ? `From ${rung.sources.join(", ")}` : undefined}>
-      <span className="rung-name">{SIGNAL_LABEL[rung.rung]}</span>
+      <span className="rung-name">
+        {SIGNAL_LABEL[rung.rung]}
+        {rung.groups?.length ? (
+          <span className="rung-basis">
+            Based on all {listWords(rung.groups)} job openings
+            {rung.share_pct != null && rung.previous_share_pct != null && rung.previous
+              ? `: ${rung.share_pct}% of all openings, ${rung.share_pct > rung.previous_share_pct ? "up from" : rung.share_pct < rung.previous_share_pct ? "down from" : "the same as"} ${rung.previous_share_pct}% in ${quarter(rung.previous).split(" ")[0]}`
+              : ""}
+          </span>
+        ) : null}
+      </span>
       <span className="rung-bar"><i /></span>
       <span className="rung-move">{rung.movement === "no data" ? "No data yet" : rung.movement}</span>
     </div>
+  );
+}
+
+/** "2026Q2" -> "Q2 2026" */
+const quarter = (q: string) => `${q.slice(4)} ${q.slice(0, 4)}`;
+
+const pct = (n: number | null) => (n == null ? "" : `${n > 0 ? "+" : n < 0 ? "−" : "±"}${Math.abs(n)}%`);
+
+/** Online job openings in Malaysia for the occupation groups behind your skills, shown once: many skills share a
+ *  group, so per-card figures would repeat. It leads with each group's share of all openings, which is what the
+ *  cards' "Hired in Malaysia" row follows; the count comes second and neutral, because it can fall in a shrinking
+ *  market while the share rises. */
+function MalaysiaMarket({ m }: { m: MalaysiaMarket }) {
+  const prev = quarter(m.previous).split(" ")[0];
+  const dir = (mv: string | undefined) => (mv?.includes("up") ? "up" : mv?.includes("down") ? "down" : "flat");
+  return (
+    <a className="my-market" href={m.url} target="_blank" rel="noopener noreferrer">
+      <span className="mcard-ev-label">Malaysian job market · {quarter(m.quarter)}</span>
+      <span className="mcard-ev-meta">
+        Share of all job openings posted online, compared with {prev}. A bigger share means more demand than for
+        other jobs, even when the whole market shrinks.
+      </span>
+      <ul>
+        {m.groups.map((g) => (
+          <li key={g.group}>
+            <span className="my-group">{g.group[0].toUpperCase() + g.group.slice(1)} jobs</span>
+            <span className={`my-share-now ${dir(g.movement)}`}>
+              {g.share_pct}% of all openings{" "}
+              {dir(g.movement) === "up" ? "▲" : dir(g.movement) === "down" ? "▼" : "●"}{" "}
+              <span className="my-was">{g.share_pct === g.previous_share_pct ? "same as" : dir(g.movement) === "down" || g.share_pct < g.previous_share_pct ? "down from" : "up from"} {g.previous_share_pct}%</span>
+            </span>
+            <span className="my-count muted">{g.ads.toLocaleString("en-MY")} openings, {pct(g.change_pct)} (all jobs {pct(m.all.change_pct)})</span>
+          </li>
+        ))}
+      </ul>
+      <span className="mcard-ev-meta">All jobs: {m.all.ads.toLocaleString("en-MY")} openings in {quarter(m.quarter)}, {pct(m.all.change_pct)} on {prev}</span>
+    </a>
   );
 }
 

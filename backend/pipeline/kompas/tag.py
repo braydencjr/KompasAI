@@ -91,12 +91,11 @@ def retag(conn: sqlite3.Connection, cur: Curated, tagger: Tagger | None = None) 
         "SELECT id, kind, title, text, topics, metrics, content_hash FROM raw_doc "
         "WHERE tagged_hash IS NULL OR tagged_hash != content_hash"
     ).fetchall()
-    for r in rows:
-        conn.execute("DELETE FROM tag WHERE doc_id = ?", (r["id"],))
-        conn.executemany(
-            "INSERT INTO tag (doc_id, concept_id, method, span) VALUES (?, ?, ?, ?)",
-            [(r["id"], cid, method, span[:200]) for cid, (method, span) in tagger.tag_doc(r).items()],
-        )
-        conn.execute("UPDATE raw_doc SET tagged_hash = ? WHERE id = ?", (r["content_hash"], r["id"]))
+    # three batched statements rather than three per document: on Postgres each statement is a network round
+    # trip, and a dictionary change retags every stored document
+    tags = [(r["id"], cid, method, span[:200]) for r in rows for cid, (method, span) in tagger.tag_doc(r).items()]
+    conn.executemany("DELETE FROM tag WHERE doc_id = ?", [(r["id"],) for r in rows])
+    conn.executemany("INSERT INTO tag (doc_id, concept_id, method, span) VALUES (?, ?, ?, ?)", tags)
+    conn.executemany("UPDATE raw_doc SET tagged_hash = ? WHERE id = ?", [(r["content_hash"], r["id"]) for r in rows])
     conn.commit()
     return len(rows)

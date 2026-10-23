@@ -436,6 +436,20 @@ def route(cur: Curated, st: Statuses, p: Profile, role: dict | None) -> dict | N
 
 
 RUNG_NAMES = {"1": "Talk: research, GitHub, Hacker News", "2": "Hiring abroad", "3": "Hiring in Malaysia"}
+# DOSM's major occupation groups in everyday words, for "based on all professional and technician job ads"
+GROUP_WORDS = {"1": "manager", "2": "professional", "3": "technician", "4": "clerical", "5": "service and sales",
+               "6": "farming and fishing", "7": "trades", "8": "machine operator", "9": "elementary"}
+
+
+def _share_movement(change_pct: int | None) -> str:
+    """The Malaysian rung measured for a skill's whole occupation groups, in words. It follows the groups' share of
+    all job openings against the previous quarter (relative change), the figures the Malaysian job market panel
+    shows: a bigger share is higher demand relative to the rest of the market, even when the whole market shrinks.
+    It never moves the status, so it is "up"/"down", never "rising fast"/"falling"."""
+    if change_pct is None:
+        return "no data"
+    return ("up" if change_pct >= 5 else "slightly up" if change_pct >= 1 else "down" if change_pct <= -5
+            else "slightly down" if change_pct <= -1 else "flat")
 
 
 def _movement(rung: dict | None) -> str:
@@ -465,6 +479,57 @@ def _title(e, skill: str) -> str:
     return title if len(title) <= 90 else title[:89] + "…"
 
 
+def malaysia_ads(conn, as_of: str):
+    """A function giving, for a set of DOSM major groups, their online job ads in the latest published quarter
+    against the quarter before: count, change, and share of all ads. None when two quarters aren't available."""
+    import json
+
+    from .periods import cutoff
+
+    ads: dict[str, dict[str, int]] = {}
+    urls: dict[str, str] = {}
+    for r in conn.execute("SELECT period, metrics, url FROM raw_doc WHERE source = 'dosm_jmi' "
+                          "AND kind = 'occupation_group_stat' AND published_at <= ?", (cutoff(as_of),)):
+        ads.setdefault(r["period"], {})[json.loads(r["metrics"])["masco_major_group"]] = \
+            int(json.loads(r["metrics"])["offerings"])
+        urls[r["period"]] = r["url"]
+
+    def figures(groups: list[str]) -> dict | None:
+        usable = [p for p in sorted(ads) if ads[p].get("TOTAL") and all(g in ads[p] for g in groups)]
+        if len(usable) < 2 or not groups:
+            return None
+        now, before = usable[-1], usable[-2]
+        n, m = sum(ads[now][g] for g in groups), sum(ads[before][g] for g in groups)
+        share, prev_share = n / ads[now]["TOTAL"], m / ads[before]["TOTAL"]
+        return {"quarter": now, "previous": before, "ads": n, "previous_ads": m,
+                "change_pct": round(100 * (n / m - 1)) if m else None,
+                "share_change_pct": round(100 * (share / prev_share - 1)) if prev_share else None,
+                "share_pct": round(100 * n / ads[now]["TOTAL"], 1),
+                "previous_share_pct": round(100 * m / ads[before]["TOTAL"], 1),
+                "groups": [GROUP_WORDS[g] for g in groups if g in GROUP_WORDS],
+                "url": urls[now], "source": "DOSM Job Market Insights"}
+    return figures
+
+
+def malaysia_market(conn, as_of: str | None, groups: list[str]) -> dict | None:
+    """The Malaysian job market for the given major groups, shown once above the skill cards (many skills share
+    a group, so per-card figures would repeat): each group's job ads and change on the previous quarter, and all
+    ads together. None without two published quarters."""
+    if not as_of or not groups:
+        return None
+    figures = malaysia_ads(conn, as_of)
+    total = figures(["TOTAL"])
+    if not total:
+        return None
+    rows = [f for f in (figures([g]) for g in sorted(groups)) if f and f["quarter"] == total["quarter"]]
+    return {"quarter": total["quarter"], "previous": total["previous"], "url": total["url"],
+            "all": {"ads": total["ads"], "change_pct": total["change_pct"]},
+            "groups": [{"group": f["groups"][0], "ads": f["ads"], "change_pct": f["change_pct"],
+                        "share_pct": f["share_pct"], "previous_share_pct": f["previous_share_pct"],
+                        # the same words as the skill cards' "Hired in Malaysia" row, from the same share figures
+                        "movement": _share_movement(f["share_change_pct"])} for f in rows]}
+
+
 def skill_signals(cur: Curated, conn, st, ids: set[str]) -> dict[str, dict]:
     """The market evidence behind each skill's status: what each rung of the Signal Ladder is doing and the
     strongest items it rests on (hiring posts first, then the highest-scoring stories and repo counts)."""
@@ -483,24 +548,40 @@ def skill_signals(cur: Curated, conn, st, ids: set[str]) -> dict[str, dict]:
         for r in conn.execute(f"SELECT * FROM evidence WHERE snapshot_id = ? AND id IN ({','.join('?' * len(chunk))})",
                               (st.id, *chunk)):
             items[r["id"]] = r
+    malaysia = malaysia_ads(conn, st.as_of)
+
+    def rung(k: str, r: dict | None) -> dict:
+        r = r or {}
+        out = {"rung": int(k), "name": RUNG_NAMES[k], "movement": _movement(r),
+               "sources": [cur.sources[s].name for s in r.get("sources", []) if s in cur.sources], "groups": []}
+        if r.get("level") == "group":
+            # the DOSM occupation groups it is measured for, and their share of all openings vs the previous quarter
+            fig = malaysia(r.get("groups") or [])
+            out.update(groups=[GROUP_WORDS[g] for g in r.get("groups") or [] if g in GROUP_WORDS],
+                       movement=_share_movement(fig["share_change_pct"] if fig else None),
+                       share_pct=fig["share_pct"] if fig else None,
+                       previous_share_pct=fig["previous_share_pct"] if fig else None,
+                       previous=fig["previous"] if fig else None)
+        return out
+
     out = {}
     for cid in ids:
         row = st.rows.get(cid)
         if not row:
             continue
-        evidence = sorted((items[e] for e in ev_ids.get(cid, []) if e in items),
+        # a major group's job ads describe a whole group of jobs, not the skill: they're shown once, in the
+        # Malaysian job market panel (malaysia_market), never as a skill's evidence
+        evidence = sorted((items[e] for e in ev_ids.get(cid, []) if e in items and items[e]["kind"] != "occupation_group_stat"),
                           key=lambda e: (-cur.sources[e["source"]].rung if e["source"] in cur.sources else 0,
                                          -(e["value"] or 0)))
         out[cid] = {
             "status": row["status"], "projected": row["projected"],
-            "rungs": [{"rung": int(k), "name": RUNG_NAMES[k], "movement": _movement(row["rungs"].get(k)),
-                       "sources": [cur.sources[s].name for s in (row["rungs"].get(k) or {}).get("sources", [])
-                                   if s in cur.sources]} for k in ("1", "2", "3")],
+            "rungs": [rung(k, row["rungs"].get(k)) for k in ("1", "2", "3")],
             "meaning": explain.MEANING.get(row["status"]),
             "evidence": [{"title": _title(e, cur.concepts[cid].label), "url": e["url"], "date": e["published_at"][:10],
                           "source": cur.sources[e["source"]].name if e["source"] in cur.sources else e["source"],
                           "value": e["value"], "value_label": e["value_label"]} for e in evidence[:3]],
-            "evidence_count": len(ev_ids.get(cid, [])),
+            "evidence_count": len(evidence),
         }
     return out
 

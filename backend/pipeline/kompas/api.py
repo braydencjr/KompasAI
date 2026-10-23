@@ -6,6 +6,7 @@ Served by backend/app under /api/signals; `kompas serve [--live] [--replay]` run
 import asyncio
 import json
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -42,8 +43,11 @@ def _snapshot_id(conn, snapshot: str | None) -> str:
 
 
 # Uvicorn waits for open connections to close before it stops or reloads, and an event stream never closes on its
-# own: without this, `fastapi dev` hangs on "Waiting for connections to close" after every file change. Streams end
-# when the server is told to exit (the hook sse-starlette uses); browsers reconnect to the new server by themselves.
+# own: without a way out, `fastapi dev` hangs on "Waiting for connections to close" after every file change, and
+# answers no requests meanwhile. Streams end when the server is told to exit (the hook sse-starlette uses). Newer
+# uvicorn installs its signal handlers before importing the app, so that hook can miss; each stream therefore also
+# ends after STREAM_MAX_SECONDS, and browsers reconnect by themselves.
+STREAM_MAX_SECONDS = 20
 _exiting = False
 try:
     from uvicorn.server import Server
@@ -280,9 +284,12 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
                     conn.close()
                     for r in missed:
                         yield frame({"seq": r["seq"], "type": r["type"], "at": r["at"], "item": json.loads(r["payload"])})
-                yield ": connected\n\n"
-                idle = 0
+                # the browser reconnects 1 s after the stream ends, sending Last-Event-ID, so nothing is missed
+                yield "retry: 1000\n: connected\n\n"
+                idle, started = 0, time.monotonic()
                 while not _exiting and not await request.is_disconnected():
+                    if time.monotonic() - started > STREAM_MAX_SECONDS:
+                        break   # see STREAM_MAX_SECONDS
                     try:
                         event = await asyncio.wait_for(q.get(), timeout=1)
                     except asyncio.TimeoutError:

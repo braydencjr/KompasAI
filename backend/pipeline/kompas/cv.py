@@ -176,6 +176,9 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
     for r in roles:
         r["reasons"] = journey.reasons(r, by_id, sig)
     pick = journey.recommend(roles)
+    # the occupation groups behind your skills' "Hired in Malaysia" signal, for the one Malaysian job market panel
+    groups = {g for cid in have for r3 in [(st.rows.get(cid) or {}).get("rungs", {}).get("3") or {}]
+              if r3.get("level") == "group" for g in r3.get("groups") or []}
 
     return {
         "method": method,
@@ -193,6 +196,7 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
         "roles": roles,
         "recommended": pick["isco"] if pick else None,
         "signals": sig,
+        "malaysia_market": journey.malaysia_market(conn, st.as_of, sorted(groups)),
         "insights": insights(skills, roles, exposed),
         "snapshot": {"id": st.id, "as_of": st.as_of} if st.id else None,
         # what each stage did, with real counts, for "How Kompas read this"
