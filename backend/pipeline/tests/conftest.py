@@ -9,6 +9,12 @@ from kompas.http import Http
 from kompas.periods import available_at, months
 
 
+@pytest.fixture(autouse=True)
+def no_live_courses(monkeypatch):
+    """The Route's ImpactMojo courses are fetched live: tests never reach the network for them."""
+    monkeypatch.setenv("KOMPAS_IMPACTMOJO", "0")
+
+
 @pytest.fixture
 def cur():
     return curated.load()

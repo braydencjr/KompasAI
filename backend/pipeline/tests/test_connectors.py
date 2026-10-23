@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from kompas import db
-from kompas.connectors import arxiv, github, hn
+from kompas.connectors import arxiv, github, hn, impactmojo
 from kompas.http import FetchError
 from kompas.ingest import Options, start_run
 
@@ -271,3 +271,46 @@ def test_hn_poll_isolates_bad_items(conn, cur):
     assert new == ["hn:1"] and run.status == "partial", run.findings
     assert run.counts["failed"] == 1 and run.counts["skipped"] == 2, run.findings
     assert conn.execute("SELECT value FROM artifact_metric WHERE artifact_id = 'hn:1'").fetchone()[0] == 50
+
+
+IMPACTMOJO_COURSES = {"count": 4, "courses": [
+    {"slug": "powerbi", "title": "Power BI for Practitioners", "url": "https://www.impactmojo.in/courses/powerBI/",
+     "tier": "flagship", "slides": None, "tags": ["power bi", "dax"], "description": "Dashboards for programmes."},
+    {"slug": "time-series", "title": "Time Series Analysis 101", "url": "https://www.impactmojo.in/101-courses/time-series.html",
+     "tier": "101", "slides": 100, "tags": ["statistics"], "description": "Trends, seasonality and forecasting."},
+    {"slug": "time-series", "title": "Time Series Analysis 101: Practice Workbook", "tier": "101", "slides": 100,
+     "url": "https://www.impactmojo.in/101-courses/practice/time-series.html", "tags": [], "description": "forecasting"},
+    {"slug": "social-protection", "title": "Social Protection and Welfare Delivery", "tier": "flagship",
+     "url": "https://www.impactmojo.in/courses/social-protection/", "tags": ["DBT", "welfare"], "description": "Cash transfers."},
+]}
+
+
+def test_impactmojo_matches_courses_to_skills(conn, cur, monkeypatch):
+    monkeypatch.setenv("KOMPAS_IMPACTMOJO", "1")
+    calls = []
+    http = mock_http(lambda req: calls.append(req) or httpx.Response(200, json=IMPACTMOJO_COURSES))
+    found = impactmojo.resources(cur, conn, http=http)
+    assert [r.title for r in found["power-bi"]] == ["Power BI for Practitioners"]
+    assert found["power-bi"][0].hours == 8 and found["power-bi"][0].cost == "free"
+    # matched from the description; the practice workbook repeats the course and is left out
+    assert [r.title for r in found["forecasting"]] == ["Time Series Analysis 101"]
+    # "DBT" here is Direct Benefit Transfer: acronym-only matches don't count
+    assert "data-engineering" not in found
+    impactmojo.resources(cur, conn, http=http)
+    assert len(calls) == 1      # cached for a day
+
+
+def test_impactmojo_falls_back_to_stale_cache(conn, cur):
+    ok = mock_http(lambda req: httpx.Response(200, json=IMPACTMOJO_COURSES))
+    impactmojo.courses(conn, http=ok)
+    conn.execute("UPDATE course_cache SET fetched_at = '2020-01-01T00:00:00+00:00'")
+    down = mock_http(lambda req: httpx.Response(503), retries=0)
+    stale = impactmojo.courses(conn, http=down)
+    assert stale["cached"] and len(stale["courses"]) == 4
+    conn.execute("DELETE FROM course_cache")
+    with pytest.raises(FetchError):
+        impactmojo.courses(conn, http=down)
+
+
+def test_impactmojo_off_returns_nothing(conn, cur):
+    assert impactmojo.resources(cur, conn, http=mock_http(lambda req: httpx.Response(500))) == {}

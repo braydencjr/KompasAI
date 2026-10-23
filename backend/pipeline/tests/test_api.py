@@ -50,3 +50,28 @@ def test_api_end_to_end(conn, cur):
     assert any(c["concept_id"] == "reconciliation" for c in body["ping"])
 
     assert client.post("/match", json={"skills": [{"id": "made-up-skill"}]}).status_code == 422
+
+
+
+def test_rescore_recomputes_market_data_and_keeps_what_the_cv_said(conn, cur):
+    seed(conn, cur)
+    snapshot.build(conn, cur, "2026-09-01")
+    client = TestClient(create_app(live_mode=False, replay=False))
+    stale = {
+        "file": "cv.pdf", "summary": "Kept as is", "jobs": [{"title": "Analyst"}],
+        "skills": [{"id": "reconciliation", "label": "Reconciliation", "status": "Declining", "quote": "Monthly recs",
+                    "found_by": "llm"},
+                   {"id": "not-a-concept", "quote": "x"}],
+        "roles": [], "signals": {}, "snapshot": {"id": "old", "as_of": "2020-01-01"},
+        "trace": {"text": {"chars": 10, "lines": 1}},
+    }
+    r = client.post("/profile/rescore", json=stale)
+    assert r.status_code == 200, r.text
+    fresh = r.json()
+    assert fresh["summary"] == "Kept as is" and fresh["jobs"] == stale["jobs"]
+    assert [s["id"] for s in fresh["skills"]] == ["reconciliation"]   # unknown concepts are dropped
+    assert fresh["skills"][0]["quote"] == "Monthly recs"               # the CV's evidence is kept
+    assert fresh["skills"][0]["status"] == "Act now"                   # the status comes from today's snapshot
+    assert fresh["snapshot"]["id"] == "2026-09-01"
+    assert fresh["trace"]["text"] == {"chars": 10, "lines": 1} and "roles" in fresh["trace"]
+    assert client.post("/profile/rescore", json={"nope": 1}).status_code == 422

@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS feed_event (
 
 -- JSearch answers, cached for a day (connectors/jsearch.py).
 CREATE TABLE IF NOT EXISTS job_cache (query TEXT PRIMARY KEY, fetched_at TEXT NOT NULL, payload TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS course_cache (provider TEXT PRIMARY KEY, fetched_at TEXT NOT NULL, payload TEXT NOT NULL);
 
 CREATE TABLE IF NOT EXISTS fetch_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

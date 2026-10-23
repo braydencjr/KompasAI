@@ -5,6 +5,7 @@ Served by backend/app under /api/signals; `kompas serve [--live] [--replay]` run
 
 import asyncio
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Literal
@@ -17,6 +18,8 @@ from pydantic import BaseModel, Field
 from . import brief, curated, cv, db, explain, ingest, journey, live
 from .config import PARAMS
 from .http import FetchError
+
+log = logging.getLogger("kompas.api")
 
 # PRD FR-4.2 demand multipliers, reused to weight personal feed items
 STATUS_WEIGHT = {"Act now": 1.2, "Emerging": 1.1, "Stable": 1.0, "Watch": 0.9, "Declining": 0.7, "Stalled": 0.6}
@@ -429,6 +432,14 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
             raise HTTPException(413, "That's much longer than a CV. Upload just the CV itself.")
         return {"file": file.filename if file else None, **cv.analyse(text, cur, conn)}
 
+    @app.post("/profile/rescore")
+    def rescore_profile(profile: dict, conn=Depends(get_conn)):
+        """A profile saved in the browser, re-scored against the latest snapshot. No CV needed: the skills it found
+        (with their quotes) are kept, and statuses, roles, evidence and insights are recomputed."""
+        if not isinstance(profile.get("skills"), list):
+            raise HTTPException(422, "Expected a profile from /profile/extract")
+        return cv.rescore(profile, cur, conn)
+
     # ---------- user journey (PRD 5) ----------
 
     def _profile(req: JourneyRequest) -> journey.Profile:
@@ -443,13 +454,29 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
                                overrides=req.overrides, scenario=req.scenario, sdgs=sorted(set(req.sdgs)),
                                role=req.role, completed=req.completed, pace=req.pace)
 
+    def _resources(conn) -> dict:
+        """Learning resources for The Route: the curated table plus ImpactMojo's live catalog. When ImpactMojo
+        can't be reached (and nothing is cached), the curated table alone still gives each covered step a link."""
+        from .connectors import impactmojo
+
+        try:
+            live_courses = impactmojo.resources(cur, conn)
+        except FetchError as e:
+            log.warning("ImpactMojo unavailable, using curated resources only: %s", e)
+            live_courses = {}
+        return {cid: cur.resources.get(cid, []) + live_courses.get(cid, [])
+                for cid in cur.resources.keys() | live_courses.keys()}
+
     @app.get("/journey/catalog")
     def journey_catalog(conn=Depends(get_conn)):
         """Occupations for The Mirror, SDGs for the lens, snapshots for The Ping, and the scoring rules."""
         sid = _snapshot_id(conn, None)
         mycol = journey.mycol_codes(conn, "9999-12-31")
         masco = {isco: code for (system, code), isco in cur.occupation_codes.items() if system == "MASCO"}
+        from .connectors import esco
+        names = esco.aliases()
         occupations = [{"isco": isco, "title": title, "occupation": cur.occupation_titles[isco],
+                        "aliases": names.get(isco, []),
                         "esco_occupation": cur.tasks[isco][0].occupation if isco in cur.tasks else None,
                         "tasks": len(cur.tasks.get(isco, [])), "mycol": mycol.get(masco.get(isco, ""))}
                        for isco, title in sorted(cur.role_titles.items(), key=lambda x: x[1])]
@@ -468,7 +495,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     @app.post("/journey")
     def journey_build(req: JourneyRequest, conn=Depends(get_conn)):
         """The Mirror, Ghost CV, Three Bets, full ranking and Route for one profile, snapshot and scenario."""
-        return journey.build(cur, conn, _snapshot_id(conn, req.snapshot), _profile(req))
+        return journey.build(cur, conn, _snapshot_id(conn, req.snapshot), _profile(req), _resources(conn))
 
     @app.post("/journey/ping")
     def journey_ping(req: PingRequest, conn=Depends(get_conn)):
@@ -482,7 +509,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         result (PRD FR-10.4), or the fixed template."""
         p = _profile(req)
         if req.kind == "bets":
-            facts, terms, template = brief.bets_facts(journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p))
+            facts, terms, template = brief.bets_facts(journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p, _resources(conn)))
         else:
             if not req.from_snapshot:
                 raise HTTPException(422, "from_snapshot is required for a ping brief")
