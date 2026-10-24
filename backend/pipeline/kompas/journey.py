@@ -15,7 +15,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
-from . import explain, exposure, narrate, open_signal, similar
+from . import explain, exposure, narrate, open_signal, open_skills, similar
 from .connectors import ilo
 from .curated import Curated
 from .snapshot import _reason
@@ -123,7 +123,7 @@ class Statuses:
 
 def measure_open(conn, statuses: list[Statuses], ids) -> None:
     """Gives every ESCO skill in `ids` a status in each snapshot, measuring the ones not measured yet."""
-    ids = sorted({i for i in ids if str(i).startswith("esco-")})
+    ids = sorted({i for i in ids if open_skills.is_open(i)})
     todo = [s for s in statuses if s.id and any(i not in s.rows for i in ids)]
     if not ids or not todo:
         return

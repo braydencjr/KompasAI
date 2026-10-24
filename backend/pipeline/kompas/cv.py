@@ -183,6 +183,18 @@ def rescore(profile: dict, cur: Curated, conn) -> dict:
     found = {s["id"]: {k: s[k] for k in ("quote", "found_by", "name", "group") if k in s}
              for s in [*profile.get("skills", []), *profile.get("ai_tools", [])]
              if isinstance(s, dict) and s.get("id") in cur.concepts}
+    # skills ESCO couldn't match at upload (it was down, say) get another try; a match joins the scored skills
+    unrecognised = [u for u in profile.get("unrecognised") or [] if isinstance(u, dict) and u.get("name")]
+    if unrecognised:
+        esco, _why = open_skills.resolve(conn, cur, [u["name"] for u in unrecognised], "a CV")
+        by_name = open_skills.register_names(conn, cur, sorted(
+            open_skills.unmatched_for_good(conn, [u["name"] for u in unrecognised if not esco.get(u["name"])])))
+        for u in unrecognised:
+            cid, how = (esco[u["name"]], "llm") if esco.get(u["name"]) else (by_name.get(u["name"]), "name")
+            if cid:
+                found.setdefault(cid, {"quote": u.get("quote") or "", "found_by": how, "name": u["name"],
+                                       "group": u.get("group")})
+        unrecognised = [u for u in unrecognised if not (esco.get(u["name"]) or by_name.get(u["name"]))]
     st = journey.Statuses.latest(conn)
     scored = score(found, cur, conn, st)
     have = {s["id"] for s in scored["skills"]}
@@ -191,10 +203,20 @@ def rescore(profile: dict, cur: Curated, conn) -> dict:
               if r3.get("level") == "group" for g in r3.get("groups") or []}
     trace = {**(profile.get("trace") or {}), **scored["trace"]}
     return {**profile, **{k: v for k, v in scored.items() if k != "trace"},
+            "unrecognised": unrecognised, "groups": group_skills(scored["skills"], unrecognised),
+            # so the page can say why a category has no signal yet: the catalogue being down isn't the skill's fault
+            "esco_down": open_skills.esco_down(),
             "malaysia_market": journey.malaysia_market(conn, st.as_of, sorted(groups)), "trace": trace}
 
 
 MAX_GROUPS = 6
+
+
+def kompas_skill(tagger: Tagger, cur: Curated, name: str) -> str | None:
+    """The Kompas skill a name the reader wrote stands for ("Bank Reconciliation" -> Reconciliation), by the same
+    aliases the raw data is tagged with; the longest match wins. Only skills: capabilities come from the CV text."""
+    hits = [(len(span), cid) for cid, _m, span, _ in tagger.find_all(name) if cur.concepts[cid].kind == "skill"]
+    return max(hits)[1] if hits else None
 
 
 def group_skills(skills: list[dict], unrecognised: list[dict]) -> list[dict]:
@@ -228,24 +250,32 @@ def read(text: str, cur: Curated, conn, client=None) -> dict:
 
     extraction, llm_error = llm.extract_cv(text, cur, {i: o.title for i, o in idx.occupations.items()
                                                        if o.origin == "ilo"}, client=client)
+    tagger = Tagger(cur)
+    read_skills = []      # the reader's skills that quote the CV, for giving dictionary matches their category
     if extraction:
         others = []
         for s in extraction["skills"]:
             if not verbatim(s["quote"], cv_norm):
                 discarded += 1
                 continue
-            if s["skill_id"] in cur.concepts:
-                found.setdefault(s["skill_id"], {"quote": s["quote"], "found_by": "llm", "name": s["name"],
-                                                 "group": s.get("group")})
+            read_skills.append(s)
+            # a skill Kompas tracks keeps the reader's category; only the rest go to ESCO (slow, and sometimes down)
+            cid = s["skill_id"] if s["skill_id"] in cur.concepts else kompas_skill(tagger, cur, s["name"])
+            if cid:
+                found.setdefault(cid, {"quote": s["quote"], "found_by": "llm", "name": s["name"],
+                                       "group": s.get("group")})
             else:
                 others.append(s)
         # skills Kompas doesn't track: the ESCO skill that is the same skill, when there is one
         esco, why = open_skills.resolve(conn, cur, [s["name"] for s in others], "a CV", client=client) if others else ({}, None)
         llm_error = llm_error or why
+        # no ESCO skill is the same ("data entry"): kept under its own name and measured by it
+        by_name = open_skills.register_names(conn, cur, sorted(
+            open_skills.unmatched_for_good(conn, [s["name"] for s in others if not esco.get(s["name"])])))
         for s in others:
-            if esco.get(s["name"]):
-                found.setdefault(esco[s["name"]], {"quote": s["quote"], "found_by": "llm", "name": s["name"],
-                                                   "group": s.get("group")})
+            cid, how = (esco[s["name"]], "llm") if esco.get(s["name"]) else (by_name.get(s["name"]), "name")
+            if cid:
+                found.setdefault(cid, {"quote": s["quote"], "found_by": how, "name": s["name"], "group": s.get("group")})
             else:
                 unrecognised.append({"name": s["name"], "quote": s["quote"], "group": s.get("group")})
         for j in extraction["jobs"]:
@@ -264,10 +294,13 @@ def read(text: str, cur: Curated, conn, client=None) -> dict:
                          "occupation": {"isco": isco, "title": journey.occupation_title(cur, isco) or j["title"]}
                          if isco else None})
 
-    # explicit tool and skill names the model may have skipped; the only extractor without an API key
-    for cid, _method, _span, start in Tagger(cur).find_all(text):
-        if cur.concepts[cid].kind != "family":
-            found.setdefault(cid, {"quote": _line_around(text, start), "found_by": "dictionary"})
+    # explicit tool and skill names the model may have skipped; the only extractor without an API key. A match on a
+    # line the reader quoted joins that skill's category, so it doesn't start a category of its own
+    for cid, _method, _span, start in tagger.find_all(text):
+        if cur.concepts[cid].kind != "family" and cid not in found:
+            line = _line_around(text, start)
+            group = next((r.get("group") for r in read_skills if r["quote"] in line or line in r["quote"]), None)
+            found[cid] = {"quote": line, "found_by": "dictionary", **({"group": group} if group else {})}
 
     # what Malaysian postings ask for in your own job, measured in the background for the journey that follows
     if jobs and jobs[0]["occupation"]:
@@ -291,6 +324,7 @@ def read(text: str, cur: Curated, conn, client=None) -> dict:
         "ai_tools": ai_tools,
         "unrecognised": unrecognised,
         "groups": groups,
+        "esco_down": open_skills.esco_down(),
         "discarded_unverified": discarded,
         # what each stage did, with real counts, for "How Kompas read this"
         "trace": {

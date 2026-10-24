@@ -438,8 +438,37 @@ def _m7_story_career(conn):
     _add_columns(conn, "story_plain", {"career": "INTEGER", "topic": "TEXT"})
 
 
+def _m8_esco_catalogue(conn):
+    """The whole ESCO skills catalogue, for matching skills without ESCO's search API (connectors/esco_catalogue.py)."""
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS esco_skill (
+      uri TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      alt_labels TEXT NOT NULL DEFAULT '[]',
+      skill_type TEXT,          -- skill | knowledge
+      reuse_level TEXT,         -- transversal | cross-sector | sector-specific | occupation-specific
+      description TEXT,
+      version TEXT NOT NULL,    -- the ESCO release it came from, e.g. v1.2.1
+      loaded_at TEXT NOT NULL
+    )""")
+
+
+def _m9_esco_pick(conn):
+    """The model's answer per skill name and catalogue version (an ESCO skill, or NULL for none), so a name is
+    looked at once instead of on every visit (kompas/open_skills.py)."""
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS esco_pick (
+      name_key TEXT NOT NULL,
+      version TEXT NOT NULL,
+      skill_id TEXT,
+      picked_at TEXT NOT NULL,
+      PRIMARY KEY (name_key, version)
+    )""")
+
+
 MIGRATIONS = [(1, _m1_ingestion), (2, _m2_legacy_streams), (3, _m3_alias_suggestions), (4, _m4_reference_data),
-              (5, _m5_trending), (6, _m6_plain_words), (7, _m7_story_career)]
+              (5, _m5_trending), (6, _m6_plain_words), (7, _m7_story_career), (8, _m8_esco_catalogue),
+              (9, _m9_esco_pick)]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
 

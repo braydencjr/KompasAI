@@ -41,9 +41,9 @@ def _title(doc) -> str:
 
 
 def measure(conn, snapshots: list[tuple[str, str]], ids: list[str], p: Params = PARAMS) -> None:
-    """Measures each ESCO skill in `ids` for each (snapshot id, as_of) that hasn't got it yet, in one pass over
+    """Measures each ESCO or name-matched skill in `ids` for each (snapshot id, as_of) that hasn't got it yet, in one pass over
     the raw records, and stores the results."""
-    ids = sorted({i for i in ids if i.startswith("esco-")})
+    ids = sorted({i for i in ids if open_skills.is_open(i)})
     if not ids or not snapshots:
         return
     q = ",".join("?" * len(ids))

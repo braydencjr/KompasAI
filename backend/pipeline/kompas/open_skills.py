@@ -7,14 +7,18 @@ so CVs and postings that name it match each other, and kompas/open_signal.py can
 """
 
 import json
+import logging
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 from . import llm
 from .curated import Concept, Curated
+from .connectors import esco_catalogue
 from .http import FetchError, Http
 from .periods import utcnow
+
+log = logging.getLogger("kompas.open_skills")
 
 SEARCH = "https://ec.europa.eu/esco/api/search"
 CANDIDATES = 8
@@ -24,6 +28,19 @@ SOURCE = "ESCO (European Commission, CC BY 4.0)"
 
 def skill_id(uri: str) -> str:
     return "esco-" + uri.rstrip("/").rsplit("/", 1)[-1]
+
+
+# skills found in CVs and postings that aren't Kompas's own: an ESCO skill ("esco-..."), or, when ESCO has no
+# skill that is the same, the name itself ("name-..."), measured by that name in the raw data
+OPEN_PREFIXES = ("esco-", "name-")
+
+
+def is_open(cid) -> bool:
+    return str(cid).startswith(OPEN_PREFIXES)
+
+
+def name_id(name: str) -> str:
+    return "name-" + re.sub(r"[^a-z0-9]+", "-", _key(name)).strip("-")
 
 
 def _key(name: str) -> str:
@@ -43,16 +60,22 @@ def _search(http: Http, name: str) -> list[dict]:
 
 
 def candidates(conn, names: list[str], http: Http | None = None) -> dict[str, list[dict]]:
-    """ESCO's closest skills per name, cached in esco_lookup (ESCO changes once a year or so)."""
+    """ESCO's closest skills per name: from the stored catalogue (esco_skill) when it is loaded, which needs no
+    network; otherwise from ESCO's search API, cached in esco_lookup (ESCO changes once a year or so)."""
     keys = sorted({f"{CANDIDATES}|{_key(n)}" for n in names if _key(n)})
     if not keys:
         return {}
+    ix = esco_catalogue.index(conn)
+    if ix:
+        return {k.split("|", 1)[1]: esco_catalogue.search(ix, k.split("|", 1)[1], CANDIDATES) for k in keys}
     q = ",".join("?" * len(keys))
     out = {r["query"]: json.loads(r["payload"])
            for r in conn.execute(f"SELECT query, payload FROM esco_lookup WHERE query IN ({q})", keys)}
     missing = [k for k in keys if k not in out]
+    if missing and esco_down():
+        missing = []      # recently unreachable: use what's cached and don't make the request wait on it
     if missing:
-        http = http or Http(timeout=15)
+        http = http or Http(timeout=8, retries=1)
 
         def one(k: str):
             try:
@@ -61,6 +84,9 @@ def candidates(conn, names: list[str], http: Http | None = None) -> dict[str, li
                 return k, None      # not cached: tried again next time
         with ThreadPoolExecutor(max_workers=6) as pool:
             found = list(pool.map(one, missing))
+        if all(v is None for _, v in found):
+            _down_until[0] = time.monotonic() + DOWN_FOR
+            log.warning("ESCO search unreachable; skipping it for %d minutes", DOWN_FOR // 60)
         now = utcnow()
         rows = [(k, now, json.dumps(v)) for k, v in found if v is not None]
         conn.executemany("INSERT INTO esco_lookup (query, fetched_at, payload) VALUES (?, ?, ?) ON CONFLICT (query) "
@@ -70,8 +96,17 @@ def candidates(conn, names: list[str], http: Http | None = None) -> dict[str, li
     return {k.split("|", 1)[1]: v for k, v in out.items()}
 
 
+DOWN_FOR = 600        # seconds ESCO is left alone after every search in a batch failed
+_down_until = [0.0]
+
+
+def esco_down() -> bool:
+    return time.monotonic() < _down_until[0]
+
+
 def _concept(cid: str, label: str, uri: str) -> Concept:
-    return Concept(cid, label[0].upper() + label[1:], "skill", None, uri, (), (), (), origin="esco")
+    return Concept(cid, label[0].upper() + label[1:], "skill", None, uri or None, (), (), (),
+                   origin="name" if cid.startswith("name-") else "esco")
 
 
 def register(conn, cur: Curated, picks: list[tuple[str, str, str]]) -> None:
@@ -107,11 +142,18 @@ def resolve(conn, cur: Curated, names: list[str], context: str = "a CV", client=
             http: Http | None = None) -> tuple[dict[str, str | None], str | None]:
     """(name -> ESCO skill id, or None when ESCO has nothing that is that skill; why the model couldn't pick, or
     None). Without the model only an exact ESCO label counts, which leaves most skills unmatched: say so."""
-    found = candidates(conn, names, http)
-    items = [{"name": n, "candidates": found.get(_key(n), [])} for n in dict.fromkeys(names)]
+    version = catalogue_version(conn)
+    remembered = _remembered(conn, names, version)
+    asked = [n for n in dict.fromkeys(names) if _key(n) not in remembered]
+    found = candidates(conn, asked, http) if asked else {}
+    items = [{"name": n, "candidates": found.get(_key(n), [])} for n in asked]
+    out = {n: remembered.get(_key(n)) or None for n in names}
+    if version:   # with the stored catalogue, no candidates at all is a definite "no ESCO skill is this"
+        _remember(conn, [(i["name"], None) for i in items if not i["candidates"]], version)
     items = [i for i in items if i["candidates"]]
     if not items:
-        return {n: None for n in names}, None
+        return out, ("the ESCO skills catalogue is unreachable, so skills outside Kompas's list will be matched on "
+                     "your next visit" if esco_down() else None)
     # in parallel batches: one call over 40 skills takes long enough to matter during a CV upload
     batches = [items[i:i + PICK_BATCH] for i in range(0, len(items), PICK_BATCH)]
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -134,9 +176,61 @@ def resolve(conn, cur: Curated, names: list[str], context: str = "a CV", client=
         if name and p.get("uri") in cands:
             chosen.append((name, p["uri"], cands[p["uri"]]))
     register(conn, cur, chosen)
-    out = {n: None for n in names}
     out.update({name: skill_id(uri) for name, uri, _ in chosen})
+    if not error:    # the model answered every batch: remember its "none"s too
+        picked = {_key(n) for n, _, _ in chosen}
+        _remember(conn, [(n, skill_id(u)) for n, u, _ in chosen]
+                  + [(i["name"], None) for i in items if _key(i["name"]) not in picked], version)
     return out, error and f"skills outside Kompas's list were matched by exact name only ({error})"
+
+
+def catalogue_version(conn) -> str:
+    """The stored ESCO catalogue's version ('' when matching goes through the live API): picks are remembered
+    per version, so a new catalogue gets a fresh look."""
+    row = conn.execute("SELECT MAX(version) FROM esco_skill").fetchone()
+    return (row[0] if row else None) or ""
+
+
+def _remembered(conn, names: list[str], version: str) -> dict[str, str]:
+    """name key -> ESCO skill id, or '' for a remembered "no ESCO skill is this"."""
+    keys = sorted({_key(n) for n in names if _key(n)})
+    if not keys or not version:
+        return {}
+    q = ",".join("?" * len(keys))
+    return {r["name_key"]: r["skill_id"] or "" for r in conn.execute(
+        f"SELECT name_key, skill_id FROM esco_pick WHERE version = ? AND name_key IN ({q})", (version, *keys))}
+
+
+def _remember(conn, picks: list[tuple[str, str | None]], version: str) -> None:
+    if not picks or not version:
+        return
+    now = utcnow()
+    conn.executemany("INSERT INTO esco_pick (name_key, version, skill_id, picked_at) VALUES (?, ?, ?, ?) "
+                     "ON CONFLICT (name_key, version) DO UPDATE SET skill_id = excluded.skill_id, picked_at = excluded.picked_at",
+                     [(_key(n), version, sid, now) for n, sid in picks if _key(n)])
+    conn.commit()
+
+
+def unmatched_for_good(conn, names: list[str]) -> set[str]:
+    """Names the model has looked at against the stored catalogue and found no ESCO skill for."""
+    version = catalogue_version(conn)
+    got = _remembered(conn, names, version)
+    return {n for n in names if got.get(_key(n)) == ""}
+
+
+def register_names(conn, cur: Curated, names: list[str]) -> dict[str, str]:
+    """Skills no catalogue has ("data entry"), kept under their own name so they can be measured by it.
+    Returns name -> skill id."""
+    out = {n: name_id(n) for n in names if len(_key(n)) >= 3}
+    if not out:
+        return {}
+    now = utcnow()
+    conn.executemany(
+        "INSERT INTO open_skill (id, label, esco_uri, names, created_at) VALUES (?, ?, '', ?, ?) ON CONFLICT (id) DO NOTHING",
+        [(cid, n.strip(), json.dumps([_key(n)]), now) for n, cid in out.items()])
+    conn.commit()
+    _add(cur, {cid: _concept(cid, n.strip(), "") for n, cid in out.items()})
+    return out
 
 
 _loaded = [0.0]
@@ -153,7 +247,7 @@ def load_into(cur: Curated, conn, force: bool = False) -> None:
 
 
 def ensure_known(cur: Curated, conn, ids) -> None:
-    if any(i not in cur.concepts and str(i).startswith("esco-") for i in ids):
+    if any(i not in cur.concepts and is_open(i) for i in ids):
         load_into(cur, conn, force=True)
 
 

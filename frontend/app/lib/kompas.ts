@@ -147,6 +147,8 @@ export type CvProfile = {
   model: string | null;
   /** why the LLM wasn't used, when it wasn't */
   llm_note: string | null;
+  /** the ESCO skills catalogue was unreachable: skills only it can match wait for a later visit */
+  esco_down?: boolean;
   summary: string | null;
   jobs: { title: string; employer: string; period: string; quote: string; occupation: { isco: string; title: string } | null }[];
   skills: CvSkill[];
@@ -255,7 +257,8 @@ export async function rescoreProfile(cv: CvProfile): Promise<CvProfile | null> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cv),
-      signal: AbortSignal.timeout(20_000),
+      // the first re-score after new skills are found measures them and asks the LLM (about 20 s for a 26-skill CV)
+      signal: AbortSignal.timeout(60_000),
     });
     return res.ok ? ((await res.json()) as CvProfile) : null;
   } catch {

@@ -149,6 +149,13 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
               </li>
             );
           })}
+          {/* skills on the CV that no catalogue could match yet: still on the CV, just not measured */}
+          {(cv?.unrecognised ?? []).map((u) => (
+            <li key={`u:${u.name}`} className="cvp-skill unmeasured">
+              <span className="cvp-skill-text" title={`${u.name}: from your CV, but not in the skills catalogues Kompas measures, so there's no 2028 outlook for it yet.`}>{u.name}</span>
+              <span className="cvp-tag unmeasured">not measured yet</span>
+            </li>
+          ))}
         </ul>
       </section>
 

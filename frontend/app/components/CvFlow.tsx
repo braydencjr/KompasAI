@@ -138,7 +138,7 @@ export default function CvFlow({ fileName, lines, read, cv, animate }: Props) {
       {found && !cv && stage >= 3 && (
         <div className="flow-stage" ref={(el) => { refs.current[2] = el; }}>
           <StageHead n={3} title="Your skills in the market" busy>
-            Matching your {stickersOf(found).filter((g) => g.skillIds.length).length} skill categories against hiring posts, Malaysian job postings and the ILO&apos;s
+            Matching your {stickersOf(found).filter((g) => !g.tool && (g.skillIds.length || g.untracked.length)).length} skill categories against hiring posts, Malaysian job postings and the ILO&apos;s
             AI exposure scores…
           </StageHead>
           <Matching cv={found} />
@@ -175,7 +175,7 @@ function StageHead({ n, title, busy, children }: { n: number; title: string; bus
 /** Stage 3 while matching: each skill's card, being checked. */
 function Matching({ cv }: { cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognised" | "groups"> }) {
   // one card per category, the same as the finished view
-  const groups = stickersOf(cv).filter((g) => g.skillIds.length);
+  const groups = stickersOf(cv).filter((g) => !g.tool && (g.skillIds.length || g.untracked.length));
   return (
     <div className="market-cards" aria-hidden>
       {groups.map((g, i) => (
@@ -192,7 +192,7 @@ function Matching({ cv }: { cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognis
   );
 }
 
-type Sticker = { name: string; quote: string; skillIds: string[]; tool: boolean };
+type Sticker = { name: string; quote: string; skillIds: string[]; untracked: string[]; tool: boolean; labels?: string[] };
 
 /** One entry per broad group of the CV's skills: its name, the one CV line that best shows it, and the tracked
  * skills in it. Profiles saved before the reader grouped skills fall back to their job families. */
@@ -210,10 +210,13 @@ export function stickersOf(cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognise
   const out: Sticker[] = groups.map((g) => {
     const line = g.skills.map((id) => quote.get(id)).find(Boolean)
       ?? cv.unrecognised.find((u) => g.untracked.includes(u.name))?.quote ?? "";
-    return { name: g.name, quote: line, skillIds: g.skills, tool: false };
+    return { name: g.name, quote: line, skillIds: g.skills, untracked: g.untracked, tool: false };
   });
+  // "capabilities" are tasks in your work that AI can already do (report generation, customer enquiries), found in
+  // the CV's wording: not tools you used, and not skills the market scores
   if (cv.ai_tools.length) {
-    out.push({ name: "AI tools you used", quote: cv.ai_tools[0].quote, skillIds: cv.ai_tools.map((t) => t.id), tool: true });
+    out.push({ name: "Tasks AI can help with", quote: cv.ai_tools[0].quote, skillIds: cv.ai_tools.map((t) => t.id),
+               untracked: [], tool: true, labels: cv.ai_tools.map((t) => t.label) });
   }
   return out.filter((g) => g.quote);
 }
@@ -233,7 +236,10 @@ function Stickers({ cv }: { cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognis
         ))}
       </div>
       <p className="sticker-quote">
-        {picked ? <>From your CV: <q>{picked.quote}</q></> : <span className="muted small">Tap a group to see the line of your CV it came from.</span>}
+        {picked?.tool
+          ? <>AI can already do: <strong>{picked.labels?.join(", ")}</strong>. From your CV: <q>{picked.quote}</q></>
+          : picked ? <>From your CV: <q>{picked.quote}</q></>
+          : <span className="muted small">Tap a group to see the line of your CV it came from.</span>}
       </p>
     </div>
   );
@@ -415,22 +421,43 @@ function MalaysiaMarket({ m }: { m: MalaysiaMarket }) {
   );
 }
 
+const MARKET_SHOWN = 6;   // categories shown before "Show more"; the strongest come first
+
 function Market({ cv }: { cv: CvProfile }) {
+  const [all, setAll] = useState(false);
   const rank = (id: string) => ORDER[cv.signals[id]?.status ?? ""] ?? 9;
   // one card per broad group: the group's best skill sets its status, meaning, rungs and evidence
   const groups = stickersOf(cv)
-    .filter((g) => g.skillIds.length)
+    .filter((g) => !g.tool && (g.skillIds.length || g.untracked.length))
     .map((g) => {
       const best = [...g.skillIds].sort((x, y) => rank(x) - rank(y))[0];
-      return { ...g, best, sig: cv.signals[best], count: g.skillIds.length };
+      return { ...g, best, sig: best ? cv.signals[best] : undefined, count: g.skillIds.length + g.untracked.length };
     })
-    .sort((a, b) => rank(a.best) - rank(b.best));
+    .sort((a, b) => (a.best ? rank(a.best) : 10) - (b.best ? rank(b.best) : 10));
+  const hidden = groups.length - MARKET_SHOWN;
   return (
+    <>
     <div className="market-cards">
-      {groups.map((g, i) => {
+      {(all ? groups : groups.slice(0, MARKET_SHOWN)).map((g, i) => {
         const { sig } = g;
         const top = sig?.evidence[0];
-        const label = cv.skills.find((s) => s.id === g.best)?.label ?? g.name;
+        const label = cv.skills.find((s) => s.id === g.best)?.label ?? g.untracked[0] ?? g.name;
+        if (!g.best) {
+          return (
+            <article key={g.name} className="mcard" style={{ "--d": `${i * 110}ms` } as React.CSSProperties}>
+              <header className="mcard-head">
+                <h4>{g.name}</h4>
+                <span className="muted small">Not measured yet</span>
+              </header>
+              <p className="muted small">{g.count} {g.count === 1 ? "skill" : "skills"}: {g.untracked.join(", ")}</p>
+              <p className="mcard-meaning">
+                {cv.esco_down || cv.llm_note?.includes("ESCO")
+                  ? "The skills catalogue we match these against is unreachable right now. Kompas tries again the next time you open it."
+                  : "These skills aren't in the catalogues Kompas measures yet, so there's no hiring signal to show."}
+              </p>
+            </article>
+          );
+        }
         return (
           <article key={g.name} className={`mcard${sig && RISING.includes(sig.status) ? " up" : sig?.status === "Watch" ? " watch" : ""}`} style={{ "--d": `${i * 110}ms` } as React.CSSProperties}>
             <header className="mcard-head">
@@ -451,6 +478,12 @@ function Market({ cv }: { cv: CvProfile }) {
         );
       })}
     </div>
+    {hidden > 0 && (
+      <button type="button" className="btn btn-ghost market-more" onClick={() => setAll(!all)}>
+        {all ? "Show fewer categories" : `Show ${hidden} more ${hidden === 1 ? "category" : "categories"}`}
+      </button>
+    )}
+    </>
   );
 }
 

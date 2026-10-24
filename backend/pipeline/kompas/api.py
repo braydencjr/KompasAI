@@ -226,7 +226,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     def _open(conn, sid: str, cid: str) -> dict | None:
         """An ESCO skill's status, measured from the raw data (kompas/open_signal.py), in /concepts' shape."""
         reference(conn)
-        if cid not in cur.concepts or cur.concepts[cid].origin != "esco":
+        if cid not in cur.concepts or cur.concepts[cid].origin not in ("esco", "name"):
             return None
         st = journey.Statuses(conn, sid)
         journey.measure_open(conn, [st], [cid])
@@ -469,7 +469,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         requirements.ensure_async(cur, isco)
         have = {s for s in skills.split(",") if s}
         tagger = Tagger(cur)
-        esco_names = open_skills.names(conn, sorted(h for h in have if h.startswith("esco-")))
+        esco_names = open_skills.names(conn, sorted(h for h in have if open_skills.is_open(h)))
         out = []
         for j in found["jobs"]:
             mentioned = {cid for cid, *_ in tagger.find_all(f"{j['title']}\n{j['description']}")}

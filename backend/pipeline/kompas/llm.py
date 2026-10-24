@@ -16,17 +16,28 @@ log = logging.getLogger("kompas.llm")
 MODEL = "gemini-2.5-flash"   # disclosed in the UI and README (PRD FR-10.1)
 NONE = "none"
 
-INSTRUCTIONS = """Read the CV. Extract the person's skills and group related ones into one category (2 to 4 plain words).
-Return each category with the skills under it. A skill has a `name` (its usual standard name) and a `quote` copied
-exactly from the CV, character for character (3 to 25 words).
+INSTRUCTIONS = """Read the CV. Extract the person's skills and group related ones into one category (2 to 4 plain words),
+at most 6 categories in all.
+Return each category with the skills under it. A skill has a `name` (its usual standard name), a `quote` copied
+exactly from the CV, character for character (3 to 25 words), and a `skill_id`.
+- List every skill the CV names, including each item of a skills section ("filing and archiving", "form
+  processing"). Don't merge different skills into one; merge only the same skill named twice ("Excel" and
+  "Microsoft Excel (basic formulas)"). At most {max_skills} skills: past that, keep the ones that best show the work.
+- `skill_id`: the id from the Kompas skills below when the skill IS that skill, matched by meaning ("matched
+  supplier invoices to purchase orders" is accounts-payable); otherwise "none". Never the nearest one.
 
 Also return each job (title, employer, period, a `quote`) with the ISCO-08 code from the list below it belongs to
 or "none" (`occupation_fit`: "exact" if the job plainly is that occupation, "loose" if only the nearest group), and
 a `summary` of at most 60 words addressed to the person ("You ..."). Never include the person's name or contact
 details.
 
+Kompas skills:
+{skills}
+
 Occupation codes:
 {occupations}"""
+
+MAX_SKILLS = 30
 
 
 def available() -> bool:
@@ -51,8 +62,9 @@ def _schema(cur: Curated) -> dict:
             "categories": {"type": "array", "items": {
                 "type": "object",
                 "properties": {"category": {"type": "string"}, "skills": {"type": "array", "items": {
-                    "type": "object", "properties": {"name": {"type": "string"}, "quote": quote},
-                    "required": ["name", "quote"]}}},
+                    "type": "object", "properties": {"name": {"type": "string"}, "quote": quote,
+                                                     "skill_id": {"type": "string"}},
+                    "required": ["name", "quote", "skill_id"]}}},
                 "required": ["category", "skills"],
             }},
         },
@@ -62,7 +74,9 @@ def _schema(cur: Curated) -> dict:
 
 def _system(cur: Curated, occupations: dict[str, str] | None = None) -> str:
     listing = "\n".join(f"- {code}: {title}" for code, title in sorted((occupations or cur.role_titles).items()))
-    return INSTRUCTIONS.format(occupations=listing)
+    # as text, not an enum in the schema: an enum this long is refused by Gemini ("too many states")
+    skills = "\n".join(f"- {cid}: {cur.concepts[cid].label}" for cid in cur.curated_ids(("skill",)))
+    return INSTRUCTIONS.format(occupations=listing, skills=skills, max_skills=MAX_SKILLS)
 
 
 def _generate(system: str, contents: str, schema: dict, client: genai.Client | None,
@@ -121,8 +135,11 @@ def extract_cv(text: str, cur: Curated, occupations: dict[str, str] | None = Non
     if error == "Gemini declined to process this input":
         error = "Gemini declined to process this CV"
     if result:      # one flat list for the matching below; each skill keeps its category as its `group`
-        result["skills"] = [{"name": s["name"], "skill_id": NONE, "group": c["category"].strip(), "quote": s["quote"]}
-                            for c in result.get("categories") or [] for s in c.get("skills") or []]
+        # a skill_id the model wrote must be one of Kompas's skills; anything else is checked by name afterwards
+        known = set(cur.curated_ids(("skill",)))
+        result["skills"] = [{"name": s["name"], "skill_id": s.get("skill_id") if s.get("skill_id") in known else NONE,
+                             "group": c["category"].strip(), "quote": s["quote"]}
+                            for c in result.get("categories") or [] for s in c.get("skills") or []][:MAX_SKILLS]
     return result, error
 
 

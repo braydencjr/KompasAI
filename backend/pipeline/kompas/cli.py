@@ -214,6 +214,15 @@ def cmd_ilo_links(args, conn, cur):
         print(f"{isco}: {n} of {len(idx.tasks.get(isco, []))} tasks linked to a capability")
 
 
+def cmd_esco_catalogue(args, conn, cur):
+    """Loads the whole ESCO skills catalogue into esco_skill, from ESCO's download or a skills_en.csv on disk."""
+    from .connectors import esco_catalogue
+
+    text = open(args.file, encoding="utf-8").read() if args.file else esco_catalogue.download(args.version)
+    n = esco_catalogue.load(conn, text, args.version)
+    print(f"loaded {n} ESCO {args.version} skills into esco_skill")
+
+
 def cmd_esco_aliases(args, conn, cur):
     """Refreshes curated/occupation_alias.csv: the names people use for each catalogue job, from the ESCO API."""
     from .connectors import esco
@@ -378,6 +387,10 @@ def main(argv=None):
     il.set_defaults(fn=cmd_ilo_links)
     sub.add_parser("esco-skills", help="fetch each role's ESCO skills (evidence for role skill links)").set_defaults(fn=cmd_esco_skills)
     sub.add_parser("esco-aliases", help="fetch the names people use for each catalogue job (job search)").set_defaults(fn=cmd_esco_aliases)
+    ec = sub.add_parser("esco-catalogue", help="load the whole ESCO skills catalogue, for matching skills offline")
+    ec.add_argument("--version", default="v1.2.1", help="ESCO release to download (default v1.2.1)")
+    ec.add_argument("--file", help="a skills_en.csv already downloaded, instead of downloading")
+    ec.set_defaults(fn=cmd_esco_catalogue)
     sub.add_parser("links-draft", help="draft role skill links from ESCO with Gemini, for review").set_defaults(fn=cmd_links_draft)
     sub.add_parser("links-apply", help="merge the reviewed draft into concept_occupation.csv").set_defaults(fn=cmd_links_apply)
     sub.add_parser("validate", help="check the curated tables").set_defaults(fn=cmd_validate)
