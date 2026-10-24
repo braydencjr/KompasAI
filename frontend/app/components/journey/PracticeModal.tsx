@@ -184,32 +184,26 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
               {task.tool === "prompt" && <PromptTool task={task} field={step.label} onDone={done} />}
               {task.tool === "review" && <ReviewTool task={task} onDone={done} />}
 
-              <CoachChat key={`${task.id}-${attempt}`} task={task} evidence={result?.evidence} />
-
               {result && (
                 <div className={`practice-result${passed ? " pass" : ""}`}>
                   <div className="practice-score">
                     <strong>{Math.round(result.score * 100)}%</strong>
                     <span>{passed ? "Passed · stop completed" : `Not yet · ${Math.round(PASS * 100)}% to pass`}</span>
                   </div>
-                  <div className="sim-bubble">
-                    <span className="sim-avatar" aria-hidden>{initials(task.from)}</span>
-                    <div>
-                      <div className="sim-from">{task.from} <span className="muted">· replied</span></div>
-                      <p>{reviewFor(task, result.score)}</p>
-                    </div>
-                  </div>
-                  <ul className="sim-evidence">
-                    {[...result.evidence, `Took ${clock(result.seconds)}`].map((e) => <li key={e}>{e}</li>)}
-                  </ul>
-                  <div className="sim-intro-actions">
-                    {passed ? (
-                      <button className="btn btn-primary" onClick={onClose}>Back to my route →</button>
-                    ) : (
-                      <button className="btn btn-primary" onClick={retry}>Try again</button>
-                    )}
-                    <button className="sim-link" onClick={() => void load(true)}>✦ Give me a different project</button>
-                  </div>
+                </div>
+              )}
+
+              <CoachChat key={`${task.id}-${attempt}`} task={task}
+                feedback={result ? { text: reviewFor(task, result.score), evidence: [...result.evidence, `Took ${clock(result.seconds)}`] } : undefined} />
+
+              {result && (
+                <div className="sim-intro-actions">
+                  {passed ? (
+                    <button className="btn btn-primary" onClick={onClose}>Back to my route →</button>
+                  ) : (
+                    <button className="btn btn-primary" onClick={retry}>Try again</button>
+                  )}
+                  <button className="sim-link" onClick={() => void load(true)}>✦ Give me a different project</button>
                 </div>
               )}
             </div>

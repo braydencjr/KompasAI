@@ -6090,6 +6090,10 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
   overflow-y: auto;
 }
 
+.coach-feedback .sim-evidence {
+  margin-left: 0;
+}
+
 .coach-turn {
   display: flex;
   flex-direction: column;

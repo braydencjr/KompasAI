@@ -272,26 +272,11 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
               {task.tool === "prompt" && <PromptTool task={task} field={sim.title} onDone={taskDone} />}
               {task.tool === "review" && <ReviewTool task={task} onDone={taskDone} />}
 
-              <CoachChat key={`${task.id}-${attempt}`} task={task} evidence={pending?.evidence} />
+              <CoachChat key={`${task.id}-${attempt}`} task={task}
+                feedback={pending ? { text: reviewFor(task, pending.score), evidence: pending.evidence } : undefined} />
 
               {pending && (
                 <div className="sim-after">
-                  <div className="sim-bubble">
-                    <span className="sim-avatar" aria-hidden>
-                      {initials(task.from)}
-                    </span>
-                    <div>
-                      <div className="sim-from">
-                        {task.from} <span className="muted">· replied</span>
-                      </div>
-                      <p>{reviewFor(task, pending.score)}</p>
-                    </div>
-                  </div>
-                  <ul className="sim-evidence">
-                    {pending.evidence.map((e) => (
-                      <li key={e}>{e}</li>
-                    ))}
-                  </ul>
                   <button className="btn btn-primary tool-submit" onClick={next}>
                     {step === n - 1 ? "See my report →" : "Next task →"}
                   </button>

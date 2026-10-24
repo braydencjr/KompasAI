@@ -6,10 +6,13 @@ import type { SimTask } from "../../data/simulations";
 import { initials, materialOf } from "./shared";
 
 type Turn = { prompt: string; reply: string };
-type Props = { task: SimTask; evidence?: string[] };
+/** the sender's reply to a submitted attempt: shown as the first message of the chat */
+export type Feedback = { text: string; evidence: string[] };
+type Props = { task: SimTask; feedback?: Feedback };
 
 /** Ask the sender how to do the task. They explain the method and never hand over the answer. */
-export default function CoachChat({ task, evidence = [] }: Props) {
+export default function CoachChat({ task, feedback }: Props) {
+  const evidence = feedback?.evidence ?? [];
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
@@ -17,10 +20,11 @@ export default function CoachChat({ task, evidence = [] }: Props) {
   const [error, setError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const first = task.from.split(" ")[0];
+  const shown = open || !!feedback;
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [turns.length, busy]);
+  }, [turns.length, busy, !!feedback]);
 
   async function ask(question: string) {
     const q = question.trim();
@@ -43,7 +47,7 @@ export default function CoachChat({ task, evidence = [] }: Props) {
     }
   }
 
-  if (!open) {
+  if (!shown) {
     return (
       <button className="coach-open" onClick={() => setOpen(true)}>
         <span className="ai-spark" aria-hidden>✦</span> Stuck? Ask {first} how to do it
@@ -61,11 +65,19 @@ export default function CoachChat({ task, evidence = [] }: Props) {
           <strong>Ask {first}</strong>
           <span className="muted small"> · explains how, so you can do it yourself</span>
         </div>
-        <button className="sim-link" onClick={() => setOpen(false)}>Hide</button>
+        {!feedback && <button className="sim-link" onClick={() => setOpen(false)}>Hide</button>}
       </header>
 
       <div className="coach-log" ref={logRef} aria-live="polite">
-        {!turns.length && <p className="muted small">Ask anything about this task. I&apos;ll point you in the right direction without giving the answer away.</p>}
+        {feedback && (
+          <div className="coach-turn coach-feedback">
+            <p className="coach-them">{feedback.text}</p>
+            <ul className="sim-evidence">
+              {feedback.evidence.map((e) => <li key={e}>{e}</li>)}
+            </ul>
+          </div>
+        )}
+        {!turns.length && !feedback && <p className="muted small">Ask anything about this task. I&apos;ll point you in the right direction without giving the answer away.</p>}
         {turns.map((t, i) => (
           <div key={i} className="coach-turn">
             <p className="coach-you">{t.prompt}</p>
