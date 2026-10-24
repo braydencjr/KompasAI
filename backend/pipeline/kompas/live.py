@@ -5,6 +5,8 @@ import asyncio
 import json
 import logging
 
+from datetime import date
+
 from . import db
 from .config import Params
 from .curated import Curated
@@ -100,3 +102,39 @@ async def replay_loop(bus: Bus, interval: float):
             bus.publish({"seq": f"r{r['seq']}", "type": r["type"], "at": utcnow(), "replay": True,
                          "item": json.loads(r["payload"])})
             await asyncio.sleep(interval)
+
+
+def ensure_daily_snapshot(cur: Curated, p: Params) -> dict | None:
+    """Checks the latest snapshot in the database. If it is older than today, builds today's snapshot."""
+    today = date.today().isoformat()
+    conn = db.connect()
+    try:
+        row = conn.execute("SELECT as_of FROM snapshot ORDER BY as_of DESC LIMIT 1").fetchone()
+        latest = row["as_of"] if row else None
+        if not latest:
+            log.info("daily snapshot: no snapshot in database yet; skipping auto snapshot")
+            return None
+        if latest >= today:
+            log.info("daily snapshot: already up to date (%s)", latest)
+            return None
+        log.info("daily snapshot: latest is %s, building snapshot for %s", latest, today)
+        from . import snapshot as snapshot_mod
+        result = snapshot_mod.build(conn, cur, today, p, export=False)
+        log.info("daily snapshot: built %s (%d concepts)", today, result.get("concepts", 0))
+        return result
+    except Exception:
+        log.exception("daily snapshot build failed")
+        raise
+    finally:
+        conn.close()
+
+
+async def daily_snapshot_loop(interval: float, cur: Curated, p: Params):
+    """Daily check for a new snapshot. Runs on startup, then periodically checks."""
+    while True:
+        try:
+            await asyncio.to_thread(ensure_daily_snapshot, cur, p)
+        except Exception:
+            log.exception("daily snapshot loop failed; will retry next interval")
+        await asyncio.sleep(interval)
+

@@ -1,9 +1,17 @@
 # Kompas — Product Requirements Document
 
-> **Working name:** Kompas (final name TBD — shortlist: KompasKerja, KompasAI)
+> **Working name:** KompasAI
 > **Event:** SDC XMUM Hackathon — Domain 1: The Aiversecity Future-Ready Workforce
-> **Status:** Draft v1.2 · Preliminary round
+> **Status:** Draft v1.3 · Preliminary round
 > **Tagline:** *AI watches the market. You grow.*
+
+### Changes in v1.3 (AI Live Trend, Work Simulator, Supabase Postgres & Auth)
+1. **AI Live Trend (`/radar`) as primary signal destination:** Replaced the static Ping screen with **AI Live Trend**, featuring a live market radar, top emerging skills, category breakdown, market momentum, and a live SSE push feed (streaming trending GitHub repositories and Hacker News top stories). The Ping engine continues to serve personalized change briefs when snapshots update.
+2. **Interactive Work Task Simulator:** Replaced the static Taste Test with a 4-task interactive workplace simulation powered by Claude (spreadsheet modeling with client-side formula evaluation, calendar arrangement puzzle solver, "Direct the AI" prompt briefing, and rubric-based output review).
+3. **Database moved to Supabase Postgres:** Production data, historical snapshots, and live feed events are hosted in Supabase Postgres, with full local SQLite compatibility retained via an abstraction layer.
+4. **Automated daily snapshot trigger:** Snapshots automatically evaluate daily via an async lifespan background loop (`KOMPAS_AUTO_SNAPSHOT`), accompanied by on-demand API refresh endpoints (`POST /api/signals/snapshots/build`).
+5. **Authentication & Multi-device Progress Sync:** Integrated Supabase Auth (Email sign up/in and Google OAuth) with automatic state persistence, syncing task overrides, completed route steps, and choices across sessions.
+6. **Malaysian demand data actively loaded:** Ingested official DOSM Job Market Insights (JMI) workbooks (`dosm_jmi`) and TalentCorp MyCOL 2024/2025 critical occupations list into the live database.
 
 ### Changes in v1.2 (backend data pipeline)
 1. **Data anchors the answer; the LLM fills the gaps.** The data pipeline is still the source of truth. Where it has nothing to say (a skill no source mentions, a job outside the official lists), the LLM now gives a judgement instead of the app showing "No data yet". Each such judgement is based on related records we hold, can only point to records we actually fetched, and is cached so it is made once.
@@ -27,11 +35,11 @@
 
 ## 1. Summary
 
-Kompas is an always-on career signal engine for working adults and students. A user uploads a resume (and optionally work samples or a GitHub link). Kompas builds an evidence-based skills profile, shows which parts of their work AI is reaching and which remain human-led, projects their resume into the future under different AI-disruption scenarios, and offers three distinct career "bets" — each with an explainable match score, a clear skills gap, an SDG link, and a learning route built from free or low-cost resources.
+KompasAI is an always-on career signal engine and interactive work simulator for working adults and students. A user uploads a resume (and optionally work samples or a GitHub link). KompasAI builds an evidence-based skills profile, shows which parts of their work AI is reaching and which remain human-led, projects their resume into the future under different AI-disruption scenarios, and offers three distinct career "bets" — each with an explainable match score, a clear skills gap, an SDG link, and a learning route built from free or low-cost resources.
 
-Behind the product, an ingestion engine continuously pulls signals from AI research, open-source activity and job-market data, and tracks each skill as it climbs a **Signal Ladder** from research buzz to real Malaysian job demand. This separates hype from real opportunity. When the data moves, Kompas tells the user what changed and re-plans their route.
+Behind the product, an ingestion engine continuously pulls signals from AI research, open-source activity and Malaysian job-market data (DOSM, MyCOL), tracking skills on a **Signal Ladder**. Users can explore real-time market movements via **AI Live Trend** (`/radar`), test their abilities in realistic workplace scenarios with the **Interactive Work Task Simulator**, and receive personalized update briefs when data moves.
 
-**One-line pitch:** *Kompas shows you which parts of your work AI is reaching, what your resume looks like in 2028, and three bets you could make — then pings you when the world moves.*
+**One-line pitch:** *KompasAI shows you which parts of your work AI is reaching, lets you simulate tomorrow's tasks today, and tracks live signals so you stay ahead as the market moves.*
 
 ---
 
@@ -127,12 +135,16 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 
 *Must-haves covered: #3 Future-role matching, #5 SDG mapping.*
 
-### 5.5 Taste Test — "Try it before you bet on it"
-1. For any bet, Kompas offers a short starter task (≈1 hour) drawn from a real, trending open-source repository related to the bet's key skill — e.g., a beginner-labelled issue or the project's own quickstart.
-2. After trying it, the user rates it: **Loved it / Meh / Not for me**.
-3. The rating adjusts an interest weight for that skill cluster; the bets reshuffle accordingly.
+### 5.5 Work Task Simulator — "Direct the AI & simulate tomorrow's work"
+1. For any chosen bet, KompasAI generates a structured 4-task interactive workplace simulation powered by Claude:
+   - **Task 1 (Core Domain Problem):** Hands-on problem solving (e.g. financial modeling, variance analysis, reconciliation) featuring a client-side formula engine where formulas are dynamically verified against truth models.
+   - **Task 2 (Analytical / Constraint Problem):** Algorithmic or puzzle constraint challenges (e.g. multi-stakeholder calendar scheduling verified by an automated puzzle solver).
+   - **Task 3 (Direct the AI):** The user writes a structured brief for an AI tool. Claude acts as the AI tool responding in character, testing the user's ability to specify constraints, context, and requirements effectively.
+   - **Task 4 (AI Review & Quality Control):** The user audits AI-generated output against an expert rubric, flagging hallucinations, discrepancies, and ethical considerations.
+2. The user receives real-time score feedback, detailed rubric evaluation, and an assessment of their AI-orchestration readiness.
+3. Ratings and performance adjust the user's interest and confidence weights; bets and learning routes dynamically calibrate.
 
-*Extends #3 matching with interest; integrates trending-project data. Good-to-have: learner motivation.*
+*Extends #3 matching with hands-on experiential simulation. Covers learner motivation, AI collaboration readiness, and realistic role previews.*
 
 ### 5.6 The Route — "Fill your Ghost CV"
 1. User chooses a bet. Kompas generates an ordered learning route that fills the Ghost CV's blank slots.
@@ -142,11 +154,12 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 
 *Must-haves covered: #4 Personalised reskilling pathway, #5 SDG mapping. Good-to-have: progress tracking.*
 
-### 5.7 The Ping — "The world moved. Here's what changed for you."
-1. When a new data snapshot changes a user's statuses, bets or route, Kompas generates a change brief: what moved, why, evidence, and the re-ordered route.
-2. In the demo, the presenter switches from a real earlier snapshot (built by the history backfill, 8.3) to the current one, live.
+### 5.7 AI Live Trend & The Ping — "Market radar and what changed for you"
+1. **AI Live Trend (`/radar`):** An always-on market radar showing live movements across 388+ concepts. Streams real-time GitHub trending repositories and Hacker News top stories via Server-Sent Events (SSE). Users can filter by ladder status, domain category (tech, finance, operations), and inspect the evidence trail behind each signal.
+2. **The Ping (Personalized Change Brief):** When a new daily snapshot updates statuses, bets or learning routes, Kompas generates a concise change brief: what moved, why, the exact evidence records, and how their Ghost CV or route adapts.
+3. In the demo, the presenter can switch between dated historical snapshots to show real-time adaptation of bets and learning paths.
 
-*Brief's success criterion: output visibly changes when trend data changes. Good-to-have: automatic re-planning.*
+*Brief's success criterion: output visibly changes when trend data changes. Delivers continuous market awareness and automatic re-planning.*
 
 ---
 
@@ -155,7 +168,7 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 | Brief must-have | Kompas feature | Section |
 |---|---|---|
 | 1. Skills profile intake | The Mirror (resume + work samples + contest) | 5.1, 7.1 |
-| 2. AI-trend signal layer | Ingestion engine + Signal Ladder | 5.3, 8 |
+| 2. AI-trend signal layer | Ingestion engine + Signal Ladder + AI Live Trend | 5.3, 5.7, 8 |
 | 3. Future-role matching | Three Bets + full ranked list | 5.4, 7.4 |
 | 4. Personalised reskilling pathway | The Route | 5.6, 7.6 |
 | 5. SDG mapping | SDG tags + SDG lens + route SDG summary | 5.4, 5.6, 7.7 |
@@ -164,9 +177,11 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 | Good-to-have | Coverage |
 |---|---|
 | Employer/HR view | Future scope (aggregated view) — mockup in prelim |
-| Automatic re-planning | The Ping |
+| Automatic re-planning | The Ping & automated snapshot evaluation (5.7, 7.8) |
+| Interactive role simulation | Work Task Simulator (4-stage Claude workplace scenarios) (5.5, 7.5) |
+| Multi-device persistence | Supabase Auth + real-time progress synchronization (7.11) |
 | Inclusive design | ESCO multilingual labels enable EN/BM/ZH skill names; mobile-first UI |
-| Learner motivation | Route progress, Ghost CV filling in |
+| Learner motivation | Route progress, Ghost CV filling in, Simulator feedback |
 | Fairness checks | No demographic inputs; counterfactual test (7.9) |
 | SDG contribution view | Route SDG summary (person level) |
 
@@ -214,12 +229,12 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 - **FR-4.4** Interest weight from Taste Test ratings multiplies bet scores (Loved 1.15, Meh 0.9, Not for me 0.6) for the affected skill cluster.
 - **FR-4.5** Full ranked list available, sortable by match, trend and SDG alignment.
 
-### 7.5 Taste Test
-- **FR-5.1** For each bet's top missing skill, show 1–3 starter tasks from real public repositories surfaced by the ingestion engine (e.g., issues labelled for beginners, or the project's quickstart).
-- **FR-5.2** Each task shows repo name, link, last activity date, and estimated effort.
-- **FR-5.3** Capture a 3-option rating and optional comment; apply FR-4.4.
-- **FR-5.4** Kompas does not host, run or grade code.
-- **FR-5.5** For non-technical skills (e.g., ESG reporting), starter tasks may come from curated public exercises or datasets instead of code repositories; each must still cite a real source.
+### 7.5 Work Task Simulator
+- **FR-5.1** Dynamically generate four structured simulation tasks for any target role: (1) Core domain problem, (2) Analytical constraint challenge, (3) AI prompt briefing ("Direct the AI"), and (4) AI output review against an objective rubric.
+- **FR-5.2** Formula and math verification: Spreadsheet scenarios specify exact expected formulas; the frontend calculates expected values with its own formula engine to eliminate model calculation errors.
+- **FR-5.3** Constraint verification: Calendar and scheduling challenges run an algorithmic solver to guarantee valid arrangements exist before presentation to the user.
+- **FR-5.4** "Direct the AI" interaction: Claude acts as the AI tool, replying to user briefs and grading them against an objective multi-criteria rubric (clarity, completeness, constraint definition, domain accuracy).
+- **FR-5.5** Results are cached per role and user session to minimize latency and API cost.
 
 ### 7.6 The Route
 - **FR-6.1** Resource catalogue contains only stored, verified entries: title, provider, URL, cost (free / low-cost / paid), estimated hours, language, HRD Corp-claimable flag (set only when verified), date checked.
@@ -235,10 +250,12 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 - **FR-7.4** Route summary shows which SDGs the chosen path contributes to and through which steps.
 - **Note:** the lens itself is simple to build; the effort is in curating the mapping table with rationales. Budget time for the table, prioritising roles and skills reachable from the demo personas.
 
-### 7.8 The Ping (re-planning)
-- **FR-8.1** On each new snapshot, compare every active user's skill statuses, bets and route against the previous snapshot.
-- **FR-8.2** If anything material changed, generate a change brief: what changed, evidence, new route order.
-- **FR-8.3** Demo mode: presenter can switch the active snapshot from a control panel.
+### 7.8 AI Live Trend & The Ping (re-planning)
+- **FR-8.1** AI Live Trend (`/radar`): Stream live signal events (Hacker News top stories, GitHub trending repos) via Server-Sent Events (`/api/signals/feed/stream`).
+- **FR-8.2** In-process automated snapshot loop: On startup and daily rollover (`KOMPAS_AUTO_SNAPSHOT=1`), evaluate whether a snapshot for the current date exists in Supabase; build and commit if missing.
+- **FR-8.3** On each new snapshot, compare every active user's skill statuses, bets and route against the previous snapshot.
+- **FR-8.4** If anything material changed, generate a change brief: what changed, evidence, new route order.
+- **FR-8.5** Demo mode & API control: Presenter can switch snapshots or trigger an immediate snapshot build via `POST /api/signals/snapshots/build`.
 
 ### 7.9 Fairness
 - **FR-9.1** No demographic attributes are used as inputs to any score.
@@ -246,11 +263,16 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 - **FR-9.3** Publish the test result in the repo README.
 
 ### 7.10 AI disclosure and guardrails
-- **FR-10.1** Disclose the language model(s) used, in the UI footer and README.
-- **FR-10.2** LLM use is limited to: (a) extraction from the user's own uploaded files, (b) writing plain-language explanations of already-computed results, and (c) filling gaps where our data is silent (estimating a job's task exposure, a skill's trend, or which related records bear on a skill). Gap-filling is always based on stored records, never replaces measured data, and its output is cached. **The LLM is not used in bulk ingestion in the preliminary build** (see 8.4).
+- **FR-10.1** Disclose the language model(s) used, in the UI footer and README. Models used: **Anthropic Claude 3.5 Sonnet** (interactive simulations) and **Google Gemini 2.5 Flash** (CV extraction, taxonomy mapping, plain-language briefs).
+- **FR-10.2** LLM use is limited to: (a) extraction from the user's own uploaded files, (b) writing plain-language explanations of already-computed results, (c) workplace task simulation and grading, and (d) filling gaps where our data is silent (estimating a job's task exposure, a skill's trend, or which related records bear on a skill). Gap-filling is always based on stored records, never replaces measured data, and its output is cached. **The LLM is not used in bulk ingestion in the preliminary build** (see 8.4).
 - **FR-10.3** Any LLM-extracted item must appear in its source text; otherwise it is discarded.
 - **FR-10.4** Any LLM-written explanation may only reference entity IDs present in the computed result; a post-check rejects outputs that mention unknown roles, courses or numbers. For job reasons, every sentence must cite its evidence, and a reason that fails the check keeps its fixed template.
 - **FR-10.5** Every displayed skill, role, resource and statistic carries a source and date.
+
+### 7.11 Authentication & Multi-Device Progress Sync
+- **FR-11.1** Support user signup and login via Supabase Auth with email/password and Google OAuth.
+- **FR-11.2** Automatically sync user progress (task overrides, selected bets, completed route steps, scenario choices) to the cloud database on change.
+- **FR-11.3** Guest / Demo mode: Allow full exploration using the synthetic demo persona (Aisyah) without requiring an account. Display contextual login prompts when saving personal progress.
 
 ---
 
@@ -354,9 +376,13 @@ For skill *s*, source *r*, period *t*:
 - Where history is too short to measure lead time, scenario parameters are documented defaults, labelled as such in the UI.
 
 ### 8.8 Scheduling and operations
-- GitHub Actions scheduled jobs: rung-1 daily, open-source weekly, Hacker News monthly, quarterly sources by manual trigger per release.
-- Failed fetch → keep last good snapshot active; log and show "data as of <date>" in the UI.
-- All snapshots stored with metadata so the demo can run offline.
+- **Dual-mode scheduling:**
+  - **In-process auto daemon (`KOMPAS_AUTO_SNAPSHOT=1`):** An asynchronous loop in the FastAPI server's lifespan (`live.daily_snapshot_loop`) verifies on startup and periodic rollover (every 3600s) whether a snapshot for today exists in Supabase. If missing, it computes and uploads the dated snapshot automatically.
+  - **On-demand API trigger:** `POST /api/signals/snapshots/build` allows immediate manual snapshot computation via API or webhook without CLI access.
+  - **GitHub Actions & CLI jobs:** Rung-1 daily fetch, open-source polling, Hacker News backfills, and quarterly DOSM/MyCOL imports via CLI (`kompas fetch ...`).
+- **Cloud Database (Supabase Postgres):** Stored directly in Supabase Postgres, with automatic session pooler connection handling and local SQLite fallback for offline demo resiliency.
+- **Failed fetch resilience:** Failed fetch keeps the last good snapshot active; log and show "data as of <date>" in the UI.
+
 
 ### 8.9 Reference data and LLM-filled gaps
 The stored records stay the evidence. Around them, the backend does these things on request, and stores the result so each is done once:
@@ -431,17 +457,18 @@ route_step(route_id, order, skill_id, resource_id, est_hours, completed)
                                                Web frontend
 ```
 
-### 10.1 Proposed stack
+### 10.1 System stack
 | Layer | Choice | Reason |
 |---|---|---|
-| Ingestion & scoring | Python | Data tooling, NLP libraries |
-| Storage | DuckDB or SQLite (single file) | Simple, portable, demo can run offline |
-| Embeddings | sentence-transformers (open model) | Free, runs locally or on Runpod |
-| LLM | **TBD — must be disclosed.** Choose a current, fast, instruction-following model; open-weights hosted on Runpod (event sponsor) is a good option | Resume extraction + explanations only |
-| API | FastAPI | Lightweight, typed |
-| Frontend | React / Next.js, mobile-first | Card-based UI, scenario and SDG toggles |
-| Scheduling | GitHub Actions | Free, visible in repo |
-| Hosting | Replit (app) / Runpod (model inference) | Event sponsors |
+| Ingestion & scoring | Python (FastAPI + pipeline) | High-performance data pipelines, statistical scoring, asynchronous job execution |
+| Storage | Supabase Postgres (PostgreSQL 15+) | Cloud persistence, session pooler, RLS, with local SQLite fallback for offline demo resilience |
+| Authentication | Supabase Auth (Email + Google OAuth) | Secure JWT-based auth, session management, native Postgres integration |
+| LLMs | **Anthropic Claude 3.5 Sonnet** (Work Simulator) & **Google Gemini 2.5 Flash** (CV intake, ESCO skill matching, brief generation) | Multi-model architecture: Claude excels at rigorous rubric evaluations and simulation scenarios; Gemini provides ultra-fast CV extraction and taxonomy matching |
+| Frontend | Next.js 15 (Turbopack, React 19) | Mobile-first, card-based interface, responsive scenario and SDG toggles |
+| Real-time | Server-Sent Events (SSE) | Lightweight unidirectional streaming for live market feed and radar pulses |
+| Scheduling | Automated lifespan background loop (`KOMPAS_AUTO_SNAPSHOT`) + GitHub Actions | Zero-maintenance 24/7 daily snapshot creation in deployment |
+| Deployment | Containerized Cloud Deployment / Vercel | Scalable web and API hosting |
+
 
 ---
 
@@ -534,15 +561,18 @@ Taste Test, HR/career-centre aggregate view, progress tracking on the Route.
 
 ---
 
-## 16. Open questions (team input needed)
-1. **Final product name** — shortlist: KompasKerja (clearest, local), KompasAI (tech feel without narrowing audience).
-2. **LLM choice and hosting** — pick a current model (check what is available now); must be disclosed.
-3. **Data access checks (M1):**
-   - Is DOSM vacancy-by-occupation data available in CSV/Excel or via the OpenDOSM catalogue?
-   - Can Singapore occupation codes and MASCO codes be reliably translated to ISCO-08?
-4. **Capability bridge contents** — confirm the 15–25 capabilities, ensuring finance/operations coverage.
-5. **Team size, roles and submission deadline** — to fix milestone dates and confirm demo scope.
-6. **Submission format and length limits** — to size the proposal.
+## 16. Resolved and Open Questions
+
+### 16.1 Resolved in v1.3
+1. **Product Name:** Standardized to **KompasAI** (`KompasAI` on GitHub, branding, and UI).
+2. **LLM Selection:** Disclosed and implemented multi-model architecture: **Anthropic Claude 3.5 Sonnet** for interactive workplace simulations and **Google Gemini 2.5 Flash** for profile extraction, taxonomy mapping, and plain-language briefs.
+3. **Database Architecture:** Production storage migrated to **Supabase Postgres**, retaining a unified interface for local SQLite fallback.
+4. **Malaysian Demand Data:** Successfully integrated official DOSM Job Market Insights (JMI) workbooks (`dosm_jmi`) and TalentCorp MyCOL 2024/2025 critical occupations list.
+5. **Update Cadence:** Automated in-process snapshot daemon (`KOMPAS_AUTO_SNAPSHOT`) evaluating daily snapshots on date rollover.
+
+### 16.2 Open Questions
+1. **Final Judging Presentation:** Finalize the 3-minute live presentation flow incorporating the AI Live Trend radar and the Interactive Work Task Simulator.
+2. **Submission Proposal Limits:** Format and word count optimization for the final written proposal.
 
 *Resolved in v1.1:* lead persona = Aisyah (working adult at risk).
 

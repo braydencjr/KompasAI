@@ -51,10 +51,38 @@ function verdict(m: Mirror) {
   return { level: "low", title: "Your job looks fairly safe", body: "No need to switch. Adding a rising skill keeps you ahead." };
 }
 
+const animatedOnce = new Set<string>();
+
+function isAlreadyHighlighted(key: string): boolean {
+  if (animatedOnce.has(key)) return true;
+  if (typeof window !== "undefined") {
+    try {
+      if (sessionStorage.getItem(`kompas_cv_highlighted_${key}`)) {
+        animatedOnce.add(key);
+        return true;
+      }
+    } catch {}
+  }
+  return false;
+}
+
+function markHighlighted(key: string) {
+  animatedOnce.add(key);
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem(`kompas_cv_highlighted_${key}`, "1");
+    } catch {}
+  }
+}
+
 /** Text typed onto the page, a character at a time, after `delay`. */
-function Typed({ text, delay }: { text: string; delay: number }) {
-  const [n, setN] = useState(0);
+function Typed({ text, delay, instant }: { text: string; delay: number; instant?: boolean }) {
+  const [n, setN] = useState(instant ? text.length : 0);
   useEffect(() => {
+    if (instant) {
+      setN(text.length);
+      return;
+    }
     setN(0);
     let timer: ReturnType<typeof setInterval> | undefined;
     const start = setTimeout(() => {
@@ -67,11 +95,11 @@ function Typed({ text, delay }: { text: string; delay: number }) {
       clearTimeout(start);
       if (timer) clearInterval(timer);
     };
-  }, [text, delay]);
+  }, [text, delay, instant]);
   return (
     <span className="cvp-typed">
-      {text.slice(0, n)}
-      <span className={`cvp-caret${n >= text.length ? " done" : ""}`} aria-hidden />
+      {instant ? text : text.slice(0, n)}
+      {!instant && <span className={`cvp-caret${n >= text.length ? " done" : ""}`} aria-hidden />}
       <span className="sr-only">{text}</span>
     </span>
   );
@@ -85,15 +113,31 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
   const cv = profile.source === "cv" ? profile.cv : null;
   const headline = cv?.jobs[0]?.title ?? (profile.source === "cv" ? "Your CV" : "Aisyah");
 
+  const [alreadyDone, setAlreadyDone] = useState(() => isAlreadyHighlighted(scenario));
+
   const of = (t: GhostLine["trend"]) => g.lines.filter((l) => (l.trend ?? "hold") === t);
   const [up, ai, hold, fade] = [of("up"), of("ai"), of("hold"), of("fade")];
   const changes = [...up, ...ai, ...fade];
-  const at = (i: number) => PAUSE + i * STEP;
+  const at = (i: number) => (alreadyDone ? 0 : PAUSE + i * STEP);
   const slots = g.slots.slice(0, MAX_SLOTS);
+
+  useEffect(() => {
+    if (!alreadyDone) {
+      const totalTime = PAUSE + (changes.length + slots.length) * STEP + 500;
+      const timer = setTimeout(() => {
+        markHighlighted(scenario);
+        setAlreadyDone(true);
+      }, totalTime);
+      return () => {
+        clearTimeout(timer);
+        markHighlighted(scenario);
+      };
+    }
+  }, [alreadyDone, scenario, changes.length, slots.length]);
 
   return (
     // keyed on the scenario: switching the pace redraws the changes
-    <article key={scenario} className={`cvp ${scenario}`} aria-label={`Your CV as employers may read it in ${g.horizon}`}>
+    <article key={scenario} className={`cvp ${scenario}${alreadyDone ? " seen" : ""}`} aria-label={`Your CV as employers may read it in ${g.horizon}`}>
       <div className="j-paper-watermark" aria-hidden>{g.horizon}</div>
 
       <header className="cvp-head">
@@ -163,7 +207,7 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
             {slots.map((s, i) => (
               <li key={s.id} className={`cvp-slot ${s.state}`} style={{ "--d": `${at(changes.length + i)}ms` } as React.CSSProperties}>
                 <button onClick={() => openLadder(s.id)} title="See the evidence">
-                  {s.state === "filled" ? <span className="cvp-skill-text">{s.label}</span> : <Typed text={s.label} delay={at(changes.length + i)} />}
+                  {s.state === "filled" ? <span className="cvp-skill-text">{s.label}</span> : <Typed text={s.label} delay={at(changes.length + i)} instant={alreadyDone} />}
                 </button>
                 <span className="cvp-tag new">{s.state === "filled" ? "✓ learned on your route" : `${s.why} · ${SKILL_PLAIN[s.status] ?? s.status}`}</span>
               </li>
@@ -177,14 +221,16 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
   );
 }
 
-function TaskCardView({ card, index, focused, onUndo }: {
+function TaskCardView({ card, index, focused, onMove, onUndo }: {
   card: TaskCard;
   index: number;
   focused: boolean;
+  onMove: (pile: "exposed" | "human", reason: string) => void;
   onUndo: () => void;
 }) {
   const openLadder = useLadder();
   const cap = [...card.capabilities].sort((a, b) => b.score - a.score)[0];
+  const isHuman = groupOf(card) === "never";
 
   return (
     <li className={`mr-card${focused ? " focused" : ""}${card.override ? " overridden" : ""}`}
@@ -199,17 +245,21 @@ function TaskCardView({ card, index, focused, onUndo }: {
           </button>
         </>
       )}
-      {card.override && (
+      {card.override ? (
         <p className="mr-why">
-          You moved this: &ldquo;{card.override.reason}&rdquo; <button className="link" onClick={onUndo}>Undo</button>
+          You moved this to &ldquo;{card.override.pile === "human" ? "Still needs you" : "AI can do this"}&rdquo;: &ldquo;{card.override.reason}&rdquo; <button className="link" onClick={onUndo}>Undo</button>
         </p>
+      ) : (
+        <button className="mr-move" onClick={() => onMove(isHuman ? "exposed" : "human", isHuman ? "AI can automate this" : "Requires human judgment and sign-off")}>
+          {isHuman ? "Move to: AI can do this →" : "Move to: Still needs you →"}
+        </button>
       )}
     </li>
   );
 }
 
 export default function StepFuture() {
-  const { data, occupation, catalog, set, undoMove } = useJourney();
+  const { data, occupation, catalog, set, move, undoMove } = useJourney();
   const profile = useProfile();
   const [focus, setFocus] = useState<string[] | null>(null);
   const tasksRef = useRef<HTMLElement>(null);
@@ -259,7 +309,7 @@ export default function StepFuture() {
               <span className="mr-h-label">{h.label}</span>
               <span className="mr-h-num">{m.shares[h.id]}%</span>
               <span className="mr-h-bar"><i style={{ width: `${m.shares[h.id]}%` }} /></span>
-              <span className="mr-h-sub">of your tasks AI could do</span>
+              <span className="mr-h-sub">average task exposure</span>
             </div>
           ))}
         </div>
@@ -293,7 +343,7 @@ export default function StepFuture() {
         </header>
         {GROUPS.map((grp) => {
           const cards = m.cards.filter((c) => groupOf(c) === grp.id);
-          if (cards.length === 0) return null;
+          if (cards.length === 0 && grp.id !== "never") return null;
           const hasFocus = cards.some(isFocused);
           if (focus && !hasFocus) return null;
           return (
@@ -302,12 +352,19 @@ export default function StepFuture() {
                 <h3>{grp.title} <span className="mr-count">{cards.length}</span></h3>
                 <p className="muted">{grp.sub}</p>
               </header>
-              <ul className="mr-cards">
-                {cards.filter((c) => !focus || isFocused(c)).map((c, i) => (
-                  <TaskCardView key={c.id} card={c} index={i} focused={isFocused(c)}
-                    onUndo={() => undoMove(c.id)} />
-                ))}
-              </ul>
+              {cards.length === 0 ? (
+                <div className="mr-empty-group">
+                  <p>No tasks placed here by default. Disagree with the automated rating? Click <em>&ldquo;Move to: Still needs you →&rdquo;</em> on any task above that requires human judgment and sign-off.</p>
+                </div>
+              ) : (
+                <ul className="mr-cards">
+                  {cards.filter((c) => !focus || isFocused(c)).map((c, i) => (
+                    <TaskCardView key={c.id} card={c} index={i} focused={isFocused(c)}
+                      onMove={(pile, reason) => move(c.id, pile, reason)}
+                      onUndo={() => undoMove(c.id)} />
+                  ))}
+                </ul>
+              )}
             </section>
           );
         })}
