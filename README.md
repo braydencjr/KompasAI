@@ -2,7 +2,7 @@
 
 *AI watches the market. You grow.*
 
-**Live demo:** [kompas-ai.replit.app](https://kompas-ai.replit.app)
+**Live demo:** [kompas-ai.replit.app](https://kompas-ai.replit.app) · **Demo video:** [YouTube](https://youtu.be/TH13qwtQn90)
 
 KompasAI is a career signal engine for working adults and students. Upload a resume, or start with the sample persona Aisyah. KompasAI reads your skills and current job, shows how much of that job AI can do now and by 2028, and lays out your options: stay and strengthen, or switch to a job you already fit. Then it builds a learning route to the job you choose. Behind it, an ingestion engine tracks AI research, open-source activity and Malaysian job-market data, so every judgement points to real evidence.
 
