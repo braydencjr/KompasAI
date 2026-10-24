@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import CalendarTool from "../sim/CalendarTool";
 import CodeTool from "../sim/CodeTool";
+import CoachChat from "../sim/CoachChat";
 import DocTool from "../sim/DocTool";
 import PromptTool from "../sim/PromptTool";
 import ReviewTool from "../sim/ReviewTool";
@@ -121,6 +122,7 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
     <div className="modal-backdrop sim-backdrop" onClick={onClose}>
       <div ref={dialogRef} tabIndex={-1} className="modal sim glass" role="dialog" aria-modal="true"
         aria-labelledby="practice-title" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-scroll">
         <button className="modal-close" onClick={onClose} aria-label="Close mini project">×</button>
 
         <header className="sim-head">
@@ -182,6 +184,8 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
               {task.tool === "prompt" && <PromptTool task={task} field={step.label} onDone={done} />}
               {task.tool === "review" && <ReviewTool task={task} onDone={done} />}
 
+              <CoachChat key={`${task.id}-${attempt}`} task={task} evidence={result?.evidence} />
+
               {result && (
                 <div className={`practice-result${passed ? " pass" : ""}`}>
                   <div className="practice-score">
@@ -211,6 +215,7 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>,
     document.body,

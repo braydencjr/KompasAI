@@ -203,3 +203,8 @@ def test_ai_cache_round_trip():
     ai_cache.put("practice", ["Accountant", "Excel"], {"title": "A task"})
     assert ai_cache.get("practice", ["Accountant", "Excel"]) == {"title": "A task"}
     assert ai_cache.get("simulation", ["Accountant", "Excel"]) is None     # kinds are kept apart
+
+
+def test_ai_only_simulation_needs_prompt_review_prompt_review():
+    # the usual mix (core, core, prompt, review) is not an AI-only day
+    assert any("prompt, review, prompt, review" in p for p in problems(valid_sim(), ai_only=True))

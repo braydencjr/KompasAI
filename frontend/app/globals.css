@@ -246,9 +246,11 @@ html.lg-refract .glass {
   overscroll-behavior: contain;
 }
 
+/* fills the space beside the sidebar up to a comfortable reading width, then centres on very wide screens */
 .main > :not(.bubble, .modal-backdrop) {
   width: 100%;
-  max-width: 1080px;
+  max-width: min(100%, 1440px);
+  margin-inline: auto;
 }
 
 .main > .hero {
@@ -1569,9 +1571,23 @@ h3 {
   z-index: 60;
 }
 
+/* the glass rim and sheen are drawn on the modal itself, so it must not scroll: an inner wrapper does */
 .modal.sim {
   width: min(1160px, 100%);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.modal-scroll {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
+  flex: 1;
+  min-height: 0;
+  padding: 30px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .sim-head h2 {
@@ -5803,6 +5819,10 @@ button.cvp-tag.ai:hover { background: #fde68a; }
 /* The Route: the skill match and the route as two cards, one above the other */
 .plan-split { display: flex; flex-direction: column; gap: 18px; }
 .plan-split > .plan + .plan .plan-tags { margin-bottom: 0; }
+/* the page header's job boards button sits at the right edge */
+.j-head.has-action { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 32px; }
+.j-head-action { flex: none; position: relative; z-index: 1; }
+.j-head-action .jobs-cta { padding: 12px 18px; }
 
 /* the skill match card: the score on the left, the skills you have and the gaps stacked on the right */
 .plan-match { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: 32px; align-items: start; }
@@ -5854,7 +5874,7 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
   font-size: 12.5px;
   font-weight: 600;
 }
-.lp-summary { font-size: 15px; line-height: 1.6; max-width: 75ch; }
+.lp-summary { font-size: 15px; line-height: 1.6; max-width: none; }
 
 /* the path: a line down the left joining one node per stop */
 .lp-path { position: relative; list-style: none; display: flex; flex-direction: column; gap: 18px; padding-left: 0; }
@@ -5862,7 +5882,7 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
   content: "";
   position: absolute;
   left: 21px;
-  top: 10px;
+  top: 22px;
   bottom: 24px;
   width: 3px;
   border-radius: 3px;
@@ -6020,3 +6040,113 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 
 /* the AI's comments on a written task */
 .doc-feedback { padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); font-size: 13.5px; line-height: 1.55; }
+
+/* ask the sender how to do the task */
+.coach-open {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ai);
+  background: var(--ai-soft);
+}
+
+.coach-open:hover {
+  background: rgba(124, 108, 240, 0.16);
+}
+
+.coach {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(124, 108, 240, 0.25), 0 10px 30px -18px rgba(20, 40, 80, 0.4);
+}
+
+.coach-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.coach-head .sim-link {
+  margin-left: auto;
+}
+
+.coach-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.coach-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.coach-you,
+.coach-them {
+  max-width: 86%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.coach-you {
+  align-self: flex-end;
+  color: #fff;
+  background: var(--ai);
+}
+
+.coach-them {
+  align-self: flex-start;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.coach-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coach-ideas .chip {
+  cursor: pointer;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+}
+
+.coach-form {
+  display: flex;
+  gap: 8px;
+}
+
+.coach-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14.5px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.coach-form input:focus {
+  outline: 2px solid var(--ai);
+}

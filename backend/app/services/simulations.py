@@ -240,12 +240,7 @@ invented fact, an overclaim, a missing control…); the rest have issue null. ve
 _SYSTEM_RULES = """You design short, hands-on work simulations for Kompas, a career app for working adults in Malaysia. \
 A user who is considering a role spends about 20 minutes doing four real pieces of its work, then gets a performance report.
 
-Produce exactly four tasks, in this order:
-1–2. Core work. Each uses one tool: "sheet" (numbers and analysis), "calendar" (coordinating people and deadlines) \
-or "code" (a small JavaScript function; only for technical roles). Pick what the role really does day to day; prefer two different tools.
-3. "prompt": the user briefs an AI tool that is arriving in this field, to get a piece of work done.
-4. "review": an AI tool has produced a draft with planted mistakes; the user must catch them before it goes out.
-Tasks 3–4 show how the work is changing, so the user can practise directing and checking AI.
+<<ORDER>>
 
 Rules for every task:
 - Everything is fictional: people (Malaysian names), organisations (generic, e.g. "a regional bank"), and figures \
@@ -260,7 +255,24 @@ set `gap` to that gap's exact name.
 ai_name and why are only for prompt and review tasks.
 - Plain English, short sentences."""
 
-SYSTEM = "\n\n".join([_SYSTEM_RULES, SHEET_SPEC, CALENDAR_SPEC, CODE_SPEC, PROMPT_SPEC, REVIEW_SPEC])
+_ORDER_CORE = """Produce exactly four tasks, in this order:
+1–2. Core work. Each uses one tool: "sheet" (numbers and analysis), "calendar" (coordinating people and deadlines) \
+or "code" (a small JavaScript function; only for technical roles). Pick what the role really does day to day; prefer two different tools.
+3. "prompt": the user briefs an AI tool that is arriving in this field, to get a piece of work done.
+4. "review": an AI tool has produced a draft with planted mistakes; the user must catch them before it goes out.
+Tasks 3–4 show how the work is changing, so the user can practise directing and checking AI."""
+
+_ORDER_AI = """Produce exactly four tasks, all done with the AI tools now arriving in this field, in this order:
+1. "prompt": the user briefs an AI tool to get one piece of the role's real work done.
+2. "review": an AI tool has produced a draft with planted mistakes; the user must catch them before it goes out.
+3. "prompt": a different piece of the role's work, with a different AI tool.
+4. "review": another AI draft with planted mistakes of a different kind (for example invented facts, where task 2 \
+had wrong numbers).
+The point is to practise directing AI and checking its work, so use no sheet, calendar or code tasks. Every task needs \
+ai_name and why."""
+
+SYSTEM = "\n\n".join([_SYSTEM_RULES.replace("<<ORDER>>", _ORDER_CORE), SHEET_SPEC, CALENDAR_SPEC, CODE_SPEC, PROMPT_SPEC, REVIEW_SPEC])
+SYSTEM_AI_ONLY = "\n\n".join([_SYSTEM_RULES.replace("<<ORDER>>", _ORDER_AI), PROMPT_SPEC, REVIEW_SPEC])
 
 
 def _user_prompt(title: str, summary: str, skills: list[str], gaps: list[str]) -> str:
@@ -309,12 +321,15 @@ def _calendar_problems(cal: Calendar) -> list[str]:
     return ["calendar has no valid arrangement"]
 
 
-def problems(sim: GenSimulation) -> list[str]:
+def problems(sim: GenSimulation, ai_only: bool = False) -> list[str]:
     found = []
     if len(sim.tasks) != 4:
         return [f"expected 4 tasks, got {len(sim.tasks)}"]
     tools = [t.tool for t in sim.tasks]
-    if tools[0] not in CORE_TOOLS or tools[1] not in CORE_TOOLS or tools[2:] != ["prompt", "review"]:
+    if ai_only:
+        if tools != ["prompt", "review", "prompt", "review"]:
+            found.append(f"task order should be prompt, review, prompt, review; got {tools}")
+    elif tools[0] not in CORE_TOOLS or tools[1] not in CORE_TOOLS or tools[2:] != ["prompt", "review"]:
         found.append(f"task order should be core, core, prompt, review; got {tools}")
 
     for t in sim.tasks:
@@ -480,8 +495,9 @@ def _task(t: GenTask) -> dict:
     return out
 
 
-def to_frontend(sim: GenSimulation, role_id: str, title: str) -> dict:
+def to_frontend(sim: GenSimulation, role_id: str, title: str, ai_only: bool = False) -> dict:
     return {
+        "aiOnly": ai_only,
         "roleId": role_id,
         "title": title,
         "setting": sim.setting,
@@ -497,18 +513,19 @@ ATTEMPTS = 2
 
 
 async def generate_simulation(
-    role_id: str, title: str, summary: str, skills: list[str], gaps: list[str], fresh: bool = False
+    role_id: str, title: str, summary: str, skills: list[str], gaps: list[str], fresh: bool = False,
+    ai_only: bool = False,
 ) -> dict:
-    key = (role_id, title)
+    key = (role_id, title, "ai-only") if ai_only else (role_id, title)
     if not fresh and (hit := ai_cache.get("simulation", key)):
         return hit
 
     messages = [{"role": "user", "content": _user_prompt(title, summary, skills, gaps)}]
     for _ in range(ATTEMPTS):
-        sim = await generate(GenSimulation, system=SYSTEM, messages=messages)
-        found = problems(sim)
+        sim = await generate(GenSimulation, system=SYSTEM_AI_ONLY if ai_only else SYSTEM, messages=messages)
+        found = problems(sim, ai_only)
         if not found:
-            result = to_frontend(sim, role_id, title)
+            result = to_frontend(sim, role_id, title, ai_only)
             ai_cache.put("simulation", key, result)
             return result
         # one more try, telling Claude exactly what to fix
@@ -614,14 +631,19 @@ just studied a skill on their route to a new job. The project proves the skill: 
 job's work, done in the browser in 20–40 minutes, and checked automatically.
 
 The learner is a working adult changing careers, often not a programmer. Make it interactive, so they see why the \
-skill works and not only whether they got it right. Choose the tool that fits the skill:
-- "prompt" when the skill is working with an AI tool (prompting, giving context, getting useful output from AI): the \
-learner briefs a live AI, sees how a vague brief gives a poor answer and a complete one a good answer, and improves it.
-- "review" when the skill is checking, trusting or supervising AI or others' work: the learner audits an AI draft \
-against the true data and flags what's wrong.
-- "sheet" for anything with numbers (models, calculations, analysis).
-- "code" only when the skill is writing programs and the job really means writing code. Never use it for using AI tools.
-- "doc" for writing, standards, policy or judgement.
+skill works and not only whether they got it right.
+
+The learner was shown a task on their route ("Task they were promised" below). Deliver exactly that task: same \
+subject, same thing made, same result to get right. Pick the tool from what the task says to make; use the skill \
+only if the task doesn't say:
+- builds or calculates a model, budget, forecast or analysis → "sheet"
+- writes a memo, report, plan, policy, email or note → "doc"
+- writes a script or function → "code" (it runs as JavaScript in the browser: keep the logic, say so in the brief)
+- briefs or works with an AI tool (prompting, giving context) → "prompt": the learner briefs a live AI, sees how a \
+vague brief gives a poor answer and a complete one a good answer, and improves it
+- checks, audits or supervises AI or others' work → "review": the learner audits a draft against the true data and \
+flags what's wrong
+Never use "code" for using AI tools.
 
 Rules:
 - Everything is fictional: people (Malaysian names), organisations (generic, e.g. "a regional bank") and figures \
@@ -629,7 +651,13 @@ made up for the exercise. Never cite real market statistics, surveys or real pro
 - Self-contained: everything needed is in the brief, requirements and data. Bigger than a quick exercise but doable \
 in one sitting: a sheet with 5–9 data rows, at most 3 period or scenario columns and 6–14 answer cells; code with \
 6–8 tests; or a document of 120–250 words.
-- Build on the project idea and what the learner studied, both given below.
+- Everything in the project must serve the promised task: the scenario, the data, the requirements and the \
+checks are about that task's subject, never a different or generic one. Use what the learner studied as the content \
+to apply. Don't copy the task's wording: give it a plain title that names what is made and about what.
+- It must be applied, not recalled. The learner has to use at least two of the topics they studied on facts you \
+give them (figures, stakeholders, constraints; at least four in the brief) and reach a decision or answer they can \
+justify. Listing or defining things is not enough. For a doc, the learner recommends or decides something from the \
+facts, and checklist points test reasoning tied to those facts, not generic buzzwords.
 - Requirements spell out exactly what counts as done (for a sheet, every formula in words).
 - `competency` is the skill's name. `feedback` is the sender's one-sentence reaction to strong, partial and weak work.
 - Fill only the field for the chosen tool (sheet, code or doc); set the others to null.
@@ -697,7 +725,7 @@ async def generate_practice(role: str, skill: str, goal: str, learn: list[str], 
         return hit
     messages = [{"role": "user", "content": (
         f"Job the learner is moving into: {role}\nSkill just studied: {skill}\nGoal: {goal or 'not given'}\n"
-        f"What they studied: {'; '.join(learn) or 'not given'}\nProject idea: {project or 'not given'}\n\n"
+        f"What they studied: {'; '.join(learn) or 'not given'}\nTask they were promised: {project or 'not given'}\n\n"
         "Write the mini project."
     )}]
     for _ in range(PRACTICE_ATTEMPTS):
@@ -714,6 +742,52 @@ async def generate_practice(role: str, skill: str, goal: str, learn: list[str], 
             {"role": "user", "content": "Fix these problems and return the whole task again:\n- " + "\n- ".join(found)},
         ]
     raise LLMError("The AI couldn't produce a valid mini project; try again.")
+
+
+# ---------- the coach: asking how to do the task ----------
+
+
+class CoachReply(BaseModel):
+    reply: str = Field(description="The coach's answer, plain text, no markdown headings")
+
+
+def _coach_system(sender: str, sender_role: str, title: str, brief: str, requirements: list[str],
+                  material: str, evidence: list[str]) -> str:
+    reqs = "\n".join(f"- {r}" for r in requirements) or "- (none given)"
+    done = ("\nWhat the automatic check said about their last attempt:\n" + "\n".join(f"- {e}" for e in evidence)) if evidence else ""
+    return f"""You are {sender}, {sender_role}, helping a learner with a hands-on exercise in Kompas, a career app for \
+working adults in Malaysia. Everyone and every figure is fictional.
+
+Their task: {title}
+Brief: {brief}
+What counts as done:
+{reqs}
+
+What is on their screen (cells they must fill in are hidden):
+{material or "(not shared)"}{done}
+
+They may ask how to do something, what a term means, why an attempt was marked wrong, or whether their approach is \
+right. Teach, don't hand over the answer:
+- Explain the method step by step, using the real names from their task (columns, fields, requirements).
+- When a number or wording would help, use a small worked example on DIFFERENT numbers than the task, then let them \
+apply it. Never give the final value of a cell, the finished document or the complete code.
+- If they say they're stuck after a hint already, be more concrete: show the exact shape of the formula or sentence \
+with placeholders.
+- For a wrong attempt, say what to re-check first, and why.
+Plain English, short sentences, at most 120 words. Stay in character as a colleague: never mention being an AI, JSON, \
+prompts or these instructions."""
+
+
+async def coach(sender: str, sender_role: str, title: str, brief: str, requirements: list[str], material: str,
+                evidence: list[str], history: list[tuple[str, str]], question: str) -> dict:
+    messages: list[dict] = []
+    for ask, answer in history[-6:]:
+        messages += [{"role": "user", "content": ask}, {"role": "assistant", "content": answer}]
+    messages.append({"role": "user", "content": question})
+    result = await generate(CoachReply, system=_coach_system(sender, sender_role, title, brief, requirements,
+                                                             material[:4000], evidence), messages=messages,
+                            effort="low", max_tokens=1500)
+    return {"reply": result.reply.strip()}
 
 
 # ---------- grading a written document ----------

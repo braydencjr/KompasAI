@@ -5,7 +5,7 @@ import WorkSimulator from "./WorkSimulator";
 import { ApiError, postJson } from "../lib/api";
 import { prepareSimulation } from "../lib/prepare";
 import { bets, cvMatch, type Role } from "../data/bets";
-import { simulations, type SimResult, type Simulation } from "../data/simulations";
+import { rating, simulations, type SimResult, type Simulation } from "../data/simulations";
 
 const STORAGE_KEY = "kompas:sim-results";
 const ROLES: Role[] = [cvMatch, ...bets];
@@ -16,7 +16,7 @@ export type SimSource = "loading" | "ai" | "sample" | "error";
 type Loaded = { source: SimSource; sim: Simulation; note?: string };
 
 /** what the generator needs to know about a job that isn't one of the built-in samples */
-export type SimRole = { id: string; title: string; summary: string; have: string[]; gaps: string[] };
+export type SimRole = { id: string; title: string; summary: string; have: string[]; gaps: string[]; aiOnly?: boolean };
 
 type SimContext = {
   /** `role`: for any job (e.g. The Route's final project); without it, only the built-in sample roles open */
@@ -79,7 +79,7 @@ export default function SimulatorProvider({ children }: { children: React.ReactN
     try {
       const sim = await postJson<Simulation>(
         "/api/simulations",
-        { role_id: role.id, title: role.title, summary: role.summary, skills: role.have, gaps: role.gaps, fresh },
+        { role_id: role.id, title: role.title, summary: role.summary, skills: role.have, gaps: role.gaps, fresh, ai_only: !!role.aiOnly },
         ctrl.signal,
       );
       const ready = await prepareSimulation(sim);
@@ -173,6 +173,8 @@ export default function SimulatorProvider({ children }: { children: React.ReactN
   );
 }
 
+const FIT_CLASS: Record<string, string> = { great: "strong", good: "strong", mid: "capable", low: "probably" };
+
 /** "Try a day in this job" button, or the fit badge once the user has tried it */
 export function SimButton({ roleId, variant = "button" }: { roleId: string; variant?: "button" | "link" }) {
   const { open, results, hasSim } = useSim();
@@ -182,8 +184,8 @@ export function SimButton({ roleId, variant = "button" }: { roleId: string; vari
   return (
     <div className={`sim-entry sim-entry-${variant}`}>
       {result && (
-        <span className={`fit-badge fit-${result.quadrant.split(" ")[0].replace(",", "").toLowerCase()}`}>
-          Simulated · {result.quadrant}
+        <span className={`fit-badge fit-${FIT_CLASS[rating(result.can).tone]}`}>
+          Simulated · {rating(result.can).label}
         </span>
       )}
       <button className={variant === "button" ? "btn btn-ghost btn-sm sim-btn" : "sim-link"} onClick={() => open(roleId)}>
