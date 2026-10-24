@@ -3,6 +3,7 @@
 import type { SkillRow } from "../lib/journey";
 import Ring from "./Ring";
 import Roadmap, { SkillColumns, useStepProgress } from "./Roadmap";
+import { SdgChip, SdgTags } from "./Sdg";
 import { SimButton } from "./SimulatorProvider";
 import type { Role } from "../data/bets";
 
@@ -62,6 +63,13 @@ export function Breakdown({ rows }: { rows: SkillRow[] }) {
   );
 }
 
+/** The job's SDG tags: its own when it's a real job, else the single goal a built-in sample job names. */
+function RoleSdgs({ role }: { role: Role }) {
+  if (role.isco) return <SdgTags kind="role" id={role.isco} tags={role.sdgs} subject={role.title} />;
+  const n = Number(role.sdg?.goal.replace(/\D/g, ""));
+  return n ? <SdgChip kind="role" subject={role.title} tag={{ sdg: n, name: "", rationale: role.sdg?.reason, origin: "curated" }} /> : null;
+}
+
 export default function CvMatch({ role, intro, origin, details, footer, skillQuotes, onRemoveSkill, haveLabel, animate, label, emptyNote, progress, split }: Props) {
   const local = useStepProgress(role);
   const { done, toggle, gapClosed } = progress ?? local;
@@ -74,7 +82,7 @@ export default function CvMatch({ role, intro, origin, details, footer, skillQuo
           <div className="plan-tags">
             <span className="label">{label ?? "Best fit from your CV"}</span>
             {origin}
-            {role.sdg && <span className="chip chip-blue">{role.sdg.goal}</span>}
+            <RoleSdgs role={role} />
           </div>
           <h2>{role.title}</h2>
           <p className="muted">{role.summary}</p>
@@ -106,6 +114,7 @@ export default function CvMatch({ role, intro, origin, details, footer, skillQuo
             <div className="profile-stat-title">Skill match</div>
             <div className="muted small">{role.signal ? `${role.signal} demand` : "No demand signal yet"} · estimate</div>
           </div>
+          <RoleSdgs role={role} />
           <SimButton roleId={role.id} />
           {split?.extra}
         </div>

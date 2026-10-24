@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Ghost, GhostLine, Horizon, Mirror, TaskCard } from "../../lib/journey";
 import { useProfile } from "../Profile";
 import { useJourney } from "./JourneyProvider";
-import { ScenarioToggle, useLadder } from "./shared";
+import { useLadder } from "./shared";
 
 /* AI Exposure: is your job safe (the verdict), what your CV is worth (the paper), and the tasks behind both.
    One step for what used to be The Mirror and the Ghost CV: they read the same AI signals, as tasks and as skills. */
@@ -111,7 +111,8 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
   const profile = useProfile();
   const openLadder = useLadder();
   const cv = profile.source === "cv" ? profile.cv : null;
-  const headline = cv?.jobs[0]?.title ?? (profile.source === "cv" ? "Your CV" : "Aisyah");
+  // the job this page is about (the one you chose, or read from your CV), not the first role listed on the CV
+  const headline = job || cv?.jobs[0]?.title || "Your CV";
 
   const [alreadyDone, setAlreadyDone] = useState(() => isAlreadyHighlighted(scenario));
 
@@ -142,7 +143,7 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
 
       <header className="cvp-head">
         <h2 className="cvp-name">{headline}</h2>
-        <p className="cvp-role">{job} · as employers may read it in {g.horizon}</p>
+        <p className="cvp-role">Your CV as employers may read it in {g.horizon}</p>
       </header>
 
       {/* profile and experience only make it read like a CV: kept short, the skills are the point */}
@@ -327,7 +328,6 @@ export default function StepFuture() {
             <h3>Your skills outlook for {g.horizon}</h3>
             <p className="muted">Which skills gain value, which AI can take over, and what to add.</p>
           </div>
-          <ScenarioToggle />
         </header>
         <Paper g={g} job={m.title ?? ""} onTasks={showTasks} />
       </section>

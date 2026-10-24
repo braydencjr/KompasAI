@@ -1,11 +1,9 @@
 "use client";
 
-import { cvMatch } from "../data/bets";
-import CvFlow from "./CvFlow";
-import CvMatch from "./CvMatch";
+import CvFlow, { EmptyFlow } from "./CvFlow";
 import { useProfile } from "./Profile";
 
-/** Section 01: the reading flow for an uploaded CV (live, or finished when restored), else the sample profile. */
+/** Section 01: the reading flow for an uploaded CV (live, or finished when restored), else the same stages, empty. */
 export default function ProfilePanel() {
   const { source, cv, scan, lines } = useProfile();
 
@@ -13,5 +11,5 @@ export default function ProfilePanel() {
 
   if (source === "cv" && cv) return <CvFlow fileName={cv.file ?? "Your CV"} lines={lines ?? null} read={null} cv={cv} animate={false} />;
 
-  return <CvMatch role={cvMatch} origin={<span className="chip chip-origin">Sample profile · Aisyah</span>} />;
+  return <EmptyFlow />;
 }

@@ -19,21 +19,6 @@ export function Status({ status, from }: { status: LiveStatus; from?: LiveStatus
   return <span className={signalClass(status)}>{status}</span>;
 }
 
-export function ScenarioToggle() {
-  const { scenario, set, loading } = useJourney();
-  return (
-    <div className={`j-toggle${loading ? " busy" : ""}`} role="radiogroup" aria-label="AI adoption scenario">
-      <span className="j-toggle-pill" style={{ transform: `translateX(${scenario === "fast" ? 100 : 0}%)` }} aria-hidden />
-      {(["moderate", "fast"] as const).map((s) => (
-        <button key={s} role="radio" aria-checked={scenario === s} className={scenario === s ? "on" : ""}
-          onClick={() => set({ scenario: s })}>
-          {s === "moderate" ? "AI at its current pace" : "AI moves fast"}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export function Estimate({ children }: { children?: React.ReactNode }) {
   return (
     <div className="j-estimate">

@@ -6245,7 +6245,6 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 .auth-nudge {
   position: fixed;
   z-index: 70;
-  transform: translateY(-50%);
   width: min(300px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
@@ -6258,7 +6257,7 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 .auth-nudge::after {          /* the arrow, pointing left at the button */
   content: "";
   position: absolute;
-  top: 50%;
+  top: var(--arrow, 50%);
   left: -7px;
   width: 14px;
   height: 14px;
@@ -6313,3 +6312,31 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 /* "Continue with Google" and "Continue without an account": two plain links, side by side */
 .auth-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 16px; }
 .auth-google-link { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+
+/* the CV box before anything is uploaded: a sentence, not placeholder bars */
+.flow-doc-empty { min-height: 96px; display: flex; align-items: center; }
+
+/* ---------- SDG tags: one colour per goal; click for how it contributes ---------- */
+.sdg-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; vertical-align: middle; }
+.sdg-tag { padding: 2px 9px; border: 0; border-radius: 999px; font: inherit; font-size: 11px; font-weight: 600; line-height: 1.5; letter-spacing: 0.01em; cursor: pointer; transition: transform 0.12s, box-shadow 0.12s; }
+.sdg-tag:hover { transform: translateY(-1px); box-shadow: 0 4px 10px -4px rgba(20, 40, 80, 0.5); }
+.sdg-tag:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sdg-loading { width: 46px; height: 18px; padding: 0; cursor: default; background: rgba(15, 30, 60, 0.08); animation: sdg-pulse 1.2s ease-in-out infinite; }
+.sdg-loading:hover { transform: none; box-shadow: none; }
+@keyframes sdg-pulse { 50% { opacity: 0.45; } }
+.chip .sdg-tags { margin-left: 6px; }
+.sdg-pop { width: min(480px, 100%); padding: 0; gap: 0; overflow: hidden; }
+.sdg-pop .modal-close { margin: 12px 12px -44px 0; }
+.sdg-pop-head { display: flex; align-items: center; gap: 18px; padding: 26px 56px 26px 24px; }
+.sdg-pop-num { font-size: 52px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
+.sdg-pop-kicker { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.9; }
+.sdg-pop-head h2 { font-size: 20px; line-height: 1.2; margin-top: 4px; text-wrap: balance; }
+.sdg-pop-body { display: flex; flex-direction: column; gap: 14px; padding: 22px 24px 26px; }
+.sdg-pop-body p { line-height: 1.6; }
+.sdg-pop-body a { color: var(--accent-ink); }
+
+.sdg-reasons { display: flex; flex-direction: column; gap: 10px; padding-left: 18px; line-height: 1.55; }
+.sticker .sdg-tags, .mcard-head + .sdg-tags { margin-top: 6px; }
+.mcard > .sdg-tags { margin: -4px 0 4px; }
+
+.sticker-item { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 6px; }

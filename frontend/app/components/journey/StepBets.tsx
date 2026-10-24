@@ -10,7 +10,9 @@ import Ring from "../Ring";
 import { SimButton } from "../SimulatorProvider";
 import Sparkline from "../Sparkline";
 import { useJourney } from "./JourneyProvider";
-import { Estimate, ScenarioToggle } from "./shared";
+import { Estimate } from "./shared";
+import { SdgTags } from "../Sdg";
+import type { Sdg } from "../../lib/journey";
 
 /** Your Kompas: an upskilling suggestion for the current job, then the two best switches (the fastest-growing job you
  * fit and the safest move). The headline follows Your 2028's verdict; every option says why, with its evidence (PRD 5.4). */
@@ -68,6 +70,8 @@ type Option = {
   aiShare: number | null;
   /** one line about this job, from its own numbers */
   blurb: string;
+  /** the job's SDG tags */
+  sdgs?: Sdg[];
   learn: string[];
   reasons: Reason[];
   /** the dashboard card shape: trend, growth and the full roadmap */
@@ -91,14 +95,14 @@ function blurbFor(kind: BetKind, r: RoleScore, stretch: boolean) {
 
 function fromRole(kind: BetKind, r: RoleScore, stretch = false): Option {
   return {
-    kind, isco: r.isco, title: r.title, match: r.match, aiShare: r.ai_exposure, blurb: blurbFor(kind, r, stretch),
+    kind, isco: r.isco, title: r.title, match: r.match, aiShare: r.ai_exposure, blurb: blurbFor(kind, r, stretch), sdgs: r.sdgs,
     learn: r.gaps.map((g) => g.label), reasons: r.reasons ?? [], bet: r.trend ? toBet(kind, r) : null, stretch,
   };
 }
 
 function fromStay(s: StayOption, r: RoleScore | undefined): Option {
   return {
-    kind: "stay", isco: s.isco, title: s.title, match: s.match, aiShare: s.shares.moderate, blurb: KIND.stay.note,
+    kind: "stay", isco: s.isco, title: s.title, match: s.match, aiShare: s.shares.moderate, blurb: KIND.stay.note, sdgs: r?.sdgs,
     learn: s.learn, reasons: s.reasons,
     bet: r?.trend ? { ...toBet("safe", r), kind: "Stay and strengthen", gaps: s.learn } : null, stretch: false,
   };
@@ -124,6 +128,7 @@ function OptionCard({ o, chosen, onChoose, wide = false, rank }: CardProps) {
         <div>
           <h3>{o.title}</h3>
           <p className="muted">{o.blurb}</p>
+          <SdgTags kind="role" id={o.isco} tags={o.sdgs} subject={o.title} />
         </div>
         {o.match !== null && <Ring value={o.match} size={64} stroke={5} />}
       </div>
@@ -248,10 +253,6 @@ export default function StepBets() {
           {data.stay && <span className="label">Your job: {data.stay.title}</span>}
           <h2>{HEAD[lead].title}</h2>
           <p>{HEAD[lead].body}</p>
-        </div>
-        <div className="gh-pace">
-          <span className="label">How fast does AI move?</span>
-          <ScenarioToggle />
         </div>
       </section>
 

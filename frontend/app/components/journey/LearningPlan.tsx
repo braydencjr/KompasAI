@@ -1,6 +1,7 @@
 "use client";
 
 import { rating } from "../../data/simulations";
+import { SdgTags } from "../Sdg";
 import { useState } from "react";
 import { signalClass } from "../Signals";
 import { useSim, type SimRole } from "../SimulatorProvider";
@@ -69,6 +70,7 @@ export default function LearningPlan({ plan, completed, onToggle, capstone }: Pr
                   <div>
                     <span className="label">Stop {s.order} · about {s.weeks} week{s.weeks === 1 ? "" : "s"}</span>
                     <h4>{s.label}</h4>
+                    <SdgTags kind="skill" id={s.id} subject={s.label} />
                   </div>
                   <span className={signalClass(s.status)}>{s.status}</span>
                 </header>

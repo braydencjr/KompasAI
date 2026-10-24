@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 CACHE_DAYS = 7
 MAX_COURSES = 3
 CANDIDATES = 8
-FREE_CANDIDATES = 4
+FREE_CANDIDATES = 6
 
 PLAN_INSTRUCTIONS = """You plan learning for Kompas, a career guidance app for working adults in Malaysia. The person
 wants to move into the role below. The steps are fixed: the skills they still need, already in the right order.
@@ -45,8 +45,8 @@ never state statistics; courses are chosen separately from a real catalogue."""
 
 PICK_INSTRUCTIONS = """For each learning step, choose the best 1 to 3 courses from that step's candidates: the ones that
 teach the step's skill most directly at a beginner-to-intermediate level. Use only candidate ids listed for that
-step. If no candidate really teaches the skill, choose none. Candidates marked free cost nothing: prefer them, and
-include at least one free candidate per step when one really teaches the skill. `note`: one short sentence on why
+step. If no candidate really teaches the skill, choose none. Candidates marked free cost nothing: choose free ones
+first, and add a candidate that isn't free only to fill the remaining places. `note`: one short sentence on why
 these fit (no statistics, no claims about the provider, and nothing about price except that a course is free when
 it is marked free)."""
 
@@ -90,7 +90,7 @@ def _cache(conn):
 
 
 def _key(role: dict, steps: list[dict], have: list[str]) -> str:
-    raw = json.dumps({"v": 3, "free": tavily.enabled(), "role": role["isco"], "steps": [s["id"] for s in steps],
+    raw = json.dumps({"v": 4, "free": tavily.enabled(), "role": role["isco"], "steps": [s["id"] for s in steps],
                       "have": sorted(have)})
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 

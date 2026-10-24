@@ -94,3 +94,23 @@ def test_snapshots_build_endpoint(conn, cur):
     assert r.json()["snapshot"]["id"] == "2026-10-24"
     assert client.get("/snapshots/latest").json()["id"] == "2026-10-24"
 
+
+def test_the_learning_plan_endpoint_runs_with_the_chosen_job(conn, cur, monkeypatch):
+    """The route page asks for the plan with a chosen job; it once crashed on a helper called without its arguments."""
+    from kompas import plan
+
+    seed(conn, cur)
+    snapshot.build(conn, cur, "2026-09-01")
+    seen = {}
+
+    def fake_build(conn_, route, role, have, client=None):
+        seen.update(role=role["isco"], have=have)
+        return {"role": role, "summary": "s", "steps": [], "weeks": 0, "by": "test", "cached": False}
+
+    monkeypatch.setattr(plan, "build", fake_build)
+    client = TestClient(create_app(live_mode=False, replay=False))
+    role = next(iter(cur.role_titles))
+    r = client.post("/journey/plan", json={"skills": [{"id": "reconciliation", "evidence": "claimed"}], "role": role})
+    assert r.status_code in (200, 422), r.text      # 422 "Choose a job first" is fine; a 500 is the bug
+    if r.status_code == 200:
+        assert seen["role"]          # the plan was built for a route

@@ -1,12 +1,14 @@
 import { JourneyProvider } from "./journey/JourneyProvider";
 import { LadderProvider } from "./journey/shared";
 import { ProfileProvider } from "./Profile";
+import { SdgProvider } from "./Sdg";
 import Sidebar from "./Sidebar";
 import { SignalsProvider } from "./Signals";
 
 export default function Shell({ children, bubbles = false }: { children: React.ReactNode; bubbles?: boolean }) {
   return (
     <ProfileProvider>
+      <SdgProvider>
       <SignalsProvider>
         <JourneyProvider>
         <LadderProvider>
@@ -41,20 +43,13 @@ export default function Shell({ children, bubbles = false }: { children: React.R
                 <div className="bubble bubble-sm" aria-hidden />
               </>
             )}
-            <header className="topbar">
-              <label className="search glass">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                  <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-                </svg>
-                <input placeholder="Search skills, roles or signals…" />
-              </label>
-            </header>
             {children}
           </main>
         </div>
         </LadderProvider>
         </JourneyProvider>
       </SignalsProvider>
+      </SdgProvider>
     </ProfileProvider>
   );
 }

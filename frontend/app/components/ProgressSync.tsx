@@ -36,7 +36,7 @@ export default function ProgressSync() {
   const { results, restore } = useSim();
 
   const journey: Choices = {
-    overrides: j.overrides, scenario: j.scenario, sdgs: j.sdgs, role: j.role, completed: j.completed, pace: j.pace,
+    overrides: j.overrides, sdgs: j.sdgs, role: j.role, completed: j.completed, pace: j.pace,
     snapshot: j.snapshot,
   };
   const latest = useRef<Saved>({});
@@ -57,7 +57,7 @@ export default function ProgressSync() {
       try {
         const server = (await authApi.getProgress(token)).data as Saved | null;
         const merged = merge(latest.current, server);
-        if (merged.journey) j.set(merged.journey);
+        if (merged.journey) j.set({ ...merged.journey, scenario: "moderate" });   // the pace switch is gone
         if (merged.sim) restore(merged.sim);
         await authApi.putProgress(token, merged as Record<string, unknown>);
         if (syncedFor.current === user.id) setReady(true);

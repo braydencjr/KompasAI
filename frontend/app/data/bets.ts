@@ -1,3 +1,4 @@
+import type { SdgTagData } from "../lib/sdg";
 export type Signal = "Act now" | "Emerging" | "Stable" | "Watch" | "Declining" | "Stalled";
 
 export type Step = {
@@ -19,6 +20,11 @@ export type Role = {
   /** the role's demand on the Signal Ladder; null when no snapshot has measured it */
   signal: Signal | null;
   sdg?: { goal: string; reason: string };
+  /** the job's code and its SDG tags, when it is a real job (not a built-in sample) */
+  isco?: string;
+  sdgs?: SdgTagData[];
+  /** skill name -> its id and the SDG tags Kompas has for it, so each skill chip can carry its tags */
+  skillMeta?: Record<string, { id: string; sdgs?: SdgTagData[] }>;
   have: string[];
   gaps: string[];
   steps: Step[];

@@ -42,7 +42,7 @@ export default function CvUpload() {
       </div>
       <div className="upload-actions">
         {source === "cv" ? (
-          <button className="btn btn-ghost" onClick={reset} disabled={!!busy}>Back to sample</button>
+          <button className="btn btn-ghost" onClick={reset} disabled={!!busy}>Clear CV</button>
         ) : (
           <button className="btn btn-ghost" onClick={trySample} disabled={!!busy}>Try a sample</button>
         )}
