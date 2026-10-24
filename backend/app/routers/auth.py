@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from app.services import accounts
+from app.services import accounts, google_auth
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,6 +30,12 @@ class Credentials(BaseModel):
 
 class SignUp(Credentials):
     name: str = Field("", max_length=40)
+
+
+class GoogleToken(BaseModel):
+    """What Google handed the browser: an ID token (its own button) or an access token (the popup)."""
+    credential: str | None = Field(None, min_length=10, max_length=4096)
+    access_token: str | None = Field(None, min_length=10, max_length=4096)
 
 
 class Progress(BaseModel):
@@ -66,6 +72,25 @@ def sign_up(body: SignUp, request: Request) -> dict:
 def log_in(body: Credentials, request: Request) -> dict:
     _throttle(request, "login")
     token, user = _run(accounts.sign_in, body.email, body.password)
+    return {"token": token, "user": user}
+
+
+@router.get("/config")
+def config() -> dict:
+    """What the sign-in page can offer."""
+    return {"google_client_id": google_auth.client_id() or None}
+
+
+@router.post("/google")
+def google(body: GoogleToken, request: Request) -> dict:
+    _throttle(request, "google")
+    if not body.credential and not body.access_token:
+        raise HTTPException(400, "Google didn't send a sign-in.")
+    try:
+        who = google_auth.verify(body.credential) if body.credential else google_auth.verify_access_token(body.access_token)
+    except google_auth.GoogleAuthError as e:
+        raise HTTPException(400, str(e))
+    token, user = _run(accounts.sign_in_with_google, who["sub"], who["email"], who["name"])
     return {"token": token, "user": user}
 
 

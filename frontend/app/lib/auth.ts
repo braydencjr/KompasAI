@@ -46,6 +46,8 @@ export type Session = { token: string; user: AuthUser };
 export type Saved = { data: Record<string, unknown> | null; updated_at: string | null };
 
 export const authApi = {
+  config: () => call<{ google_client_id: string | null }>("/config"),
+  google: (accessToken: string) => call<Session>("/google", { body: { access_token: accessToken } }),
   signUp: (email: string, password: string, name: string) => call<Session>("/signup", { body: { email, password, name } }),
   signIn: (email: string, password: string) => call<Session>("/login", { body: { email, password } }),
   signOut: (token: string) => call<void>("/logout", { method: "POST", token }),

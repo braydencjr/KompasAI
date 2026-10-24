@@ -50,6 +50,9 @@ def _conn() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS progress (user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, "
         "data TEXT NOT NULL, updated_at TEXT NOT NULL);"
     )
+    if "google_sub" not in {r["name"] for r in conn.execute("PRAGMA table_info(users)")}:
+        conn.execute("ALTER TABLE users ADD COLUMN google_sub TEXT")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users (google_sub)")
     return conn
 
 
@@ -141,6 +144,30 @@ def sign_in(email: str, password: str) -> tuple[str, dict]:
         row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
         if not verify_password(password, row["password_hash"] if row else _DUMMY) or not row:
             raise wrong
+        return _start_session(conn, row["id"]), _user(row)
+
+
+NO_PASSWORD = "!"       # not a scrypt hash, so verify_password() is always False
+
+
+def sign_in_with_google(sub: str, email: str, name: str) -> tuple[str, dict]:
+    """Signs in (or creates) the account for a verified Google identity.
+
+    An existing password account with the same email is taken over by Google: its password is switched off and its
+    other sign-ins ended. Email addresses aren't verified when signing up with a password, so otherwise someone could
+    sign up with another person's address first and keep access after the real owner arrives with Google."""
+    email = clean_email(email)
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE google_sub = ?", (sub,)).fetchone()
+        if not row:
+            row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+            if row:
+                conn.execute("UPDATE users SET google_sub = ?, password_hash = ? WHERE id = ?", (sub, NO_PASSWORD, row["id"]))
+                conn.execute("DELETE FROM sessions WHERE user_id = ?", (row["id"],))
+            else:
+                cur = conn.execute("INSERT INTO users (email, name, password_hash, created_at, google_sub) VALUES (?, ?, ?, ?, ?)",
+                                   (email, (name.strip() or email.split("@")[0])[:40], NO_PASSWORD, _iso(_now()), sub))
+                row = conn.execute("SELECT * FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
         return _start_session(conn, row["id"]), _user(row)
 
 

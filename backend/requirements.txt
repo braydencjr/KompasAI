@@ -1,6 +1,8 @@
 anthropic==2.1.0
 fastapi[standard]==0.154.0
 pypdf==6.21.1
+google-auth==2.62.0
+requests==2.34.2
 python-dotenv==1.2.4
 # the signal engine (backend/pipeline), installed as a package; run pip from backend/
 -e ./pipeline

@@ -11,6 +11,7 @@ type AuthState = {
   token: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
+  signInWithGoogle: (credential: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -58,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     token,
     signIn: async (email, password) => start(await authApi.signIn(email, password)),
     signUp: async (email, password, name) => start(await authApi.signUp(email, password, name)),
+    signInWithGoogle: async (credential) => start(await authApi.google(credential)),
     signOut: async () => {
       const t = token;
       setToken(null);
