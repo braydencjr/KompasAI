@@ -230,7 +230,7 @@ function TaskCardView({ card, index, focused, arrived, onMove, onUndo }: {
 }
 
 export default function StepFuture() {
-  const { data, occupation, catalog, set, move, undoMove, next, go } = useJourney();
+  const { data, occupation, catalog, set, move, undoMove } = useJourney();
   const profile = useProfile();
   const [arrived, setArrived] = useState<string | null>(null);
   const [focus, setFocus] = useState<string[] | null>(null);
@@ -343,17 +343,6 @@ export default function StepFuture() {
           );
         })}
       </section>
-
-      <div className="flow-next-cta">
-        <p>
-          <strong>Next: where your Kompas points</strong>
-          <span className="muted"> Stay and strengthen your job, or switch: options built on everything so far.</span>
-        </p>
-        <div className="gh-actions">
-          {g.slots.some((s) => s.state === "blank") && <button className="btn btn-ghost" onClick={() => go("route")}>Plan how to add these skills</button>}
-          <button className="btn btn-primary" onClick={next}>Open your Kompas →</button>
-        </div>
-      </div>
     </div>
   );
 }

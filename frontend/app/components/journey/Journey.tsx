@@ -15,7 +15,7 @@ const COPY: Record<(typeof STEPS)[number]["id"], { title: React.ReactNode; sub: 
     sub: "Upload your resume, or start with Aisyah's. Kompas reads your skills and the job you do today.",
   },
   future: { title: "AI & Skills Outlook", sub: "AI Impact on Your Career" },
-  bets: { title: "Where your Kompas points", sub: "Upskill where you are, or switch: the fastest-growing job you fit, or the safest move." },
+  bets: { title: "Career Impact", sub: "Upskill where you are, or switch: the fastest-growing job you fit, or the safest move." },
   route: { title: "Your learning route", sub: "An ordered plan to your chosen role, with verified courses and the evidence for every step." },
   ping: { title: "The world moved. Here's what changed for you.", sub: "Each new snapshot re-scores the market. Kompas shows what moved, why, and re-plans." },
 };
