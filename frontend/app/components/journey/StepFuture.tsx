@@ -6,7 +6,7 @@ import { useProfile } from "../Profile";
 import { useJourney } from "./JourneyProvider";
 import { ScenarioToggle, useLadder } from "./shared";
 
-/* Your 2028: is your job safe (the verdict), what your CV is worth (the paper), and the tasks behind both.
+/* AI Exposure: is your job safe (the verdict), what your CV is worth (the paper), and the tasks behind both.
    One step for what used to be The Mirror and the Ghost CV: they read the same AI signals, as tasks and as skills. */
 
 type Group = Horizon | "never";
@@ -305,7 +305,7 @@ export default function StepFuture() {
       <section className="fx-cv">
         <header className="fx-head">
           <div>
-            <h3>Your CV in {g.horizon}</h3>
+            <h3>Your skills outlook for {g.horizon}</h3>
             <p className="muted">Which skills gain value, which AI can take over, and what to add.</p>
           </div>
           <ScenarioToggle />

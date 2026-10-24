@@ -13,7 +13,7 @@ import {
 
 export const STEPS = [
   { id: "you", label: "You", title: "Your profile" },
-  { id: "future", label: "Your 2028", title: "Your work in 2028" },
+  { id: "future", label: "AI Exposure", title: "AI & Skills Outlook" },
   { id: "bets", label: "Your Kompas", title: "Where your Kompas points" },
   { id: "route", label: "The Route", title: "Your learning route" },
   { id: "ping", label: "The Ping", title: "The world moved" },

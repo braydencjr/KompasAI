@@ -104,7 +104,7 @@ export default function StepPing() {
             </section>
 
             <section className="j-changes glass">
-              <span className="label">Your CV in 2028</span>
+              <span className="label">Your skills outlook for 2028</span>
               {ping.ghost.new_slots.length + ping.ghost.gone_slots.length === 0 ? <p className="muted small">No change.</p> : (
                 <ul>
                   {ping.ghost.new_slots.map((s) => <li key={s.id}>New blank: <strong>{s.label}</strong></li>)}
