@@ -8,7 +8,7 @@ from kompas.periods import utcnow
 from .test_pipeline import seed
 
 
-def test_api_end_to_end(conn, cur):
+def test_api_end_to_end(conn, cur, monkeypatch):
     seed(conn, cur)
     snapshot.build(conn, cur, "2026-07-01")
     snapshot.build(conn, cur, "2026-09-01")
@@ -30,6 +30,14 @@ def test_api_end_to_end(conn, cur):
     assert client.get("/health").json()["latest_snapshot"]["id"] == "2026-09-01"
     assert client.get("/concepts/reconciliation").json()["status"] == "Act now"
     assert client.get("/concepts/reconciliation/evidence").json()["evidence"]
+
+    # for one clicked task: only records that bear on it (words, since no model is reachable in tests)
+    from kompas import evidence_pick
+    monkeypatch.setattr(evidence_pick.llm, "_generate", lambda *args: (None, "no Gemini API key configured"))
+    picked = client.get("/concepts/reconciliation/evidence",
+                        params={"task": "Match bank statements", "why": "Statement matching is automated"}).json()
+    assert picked["task"] == "Match bank statements" and picked["method"] == "keywords"
+    assert picked["specific"] == bool(picked["evidence"]) and all(e["why"] for e in picked["evidence"])
 
     feed = client.get("/feed").json()
     assert feed["items"][0]["concepts"][0]["id"] == "agentic-coding"

@@ -217,7 +217,11 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
   return data as T;
 }
 
-export type PlanCourse = { id: string; title: string; provider: string; platform: string; url: string; workload: string | null };
+export type PlanCourse = {
+  id: string; title: string; provider: string; platform: string; url: string; workload: string | null;
+  /** from a free learning site (costs nothing) */
+  free?: boolean;
+};
 
 /** The Route as an AI learning plan (POST /journey/plan): Gemini's advice per step, courses from Coursera's catalogue */
 export type LearningPlan = {
@@ -279,12 +283,21 @@ export type EvidenceItem = {
   value: number | null;
   value_label: string | null;
   coverage_note: string | null;
+  /** with a task: one sentence on how this record bears on it */
+  why?: string | null;
 };
 
 /** The Signal Ladder view for one skill (PRD 5.3): status, rungs and the evidence behind them. */
-export async function ladder(id: string, snapshot: string | null): Promise<{ concept: ConceptDetail; evidence: EvidenceItem[] }> {
+export type LadderTask = { label: string; task: string; why: string };
+
+export async function ladder(
+  id: string, snapshot: string | null, task?: LadderTask,
+): Promise<{ concept: ConceptDetail; evidence: EvidenceItem[]; specific?: boolean; overall?: EvidenceItem[] }> {
   const q = snapshot ? `?snapshot=${encodeURIComponent(snapshot)}` : "";
-  const [c, e] = await Promise.all([fetch(`${API_URL}/concepts/${id}${q}`), fetch(`${API_URL}/concepts/${id}/evidence${q}`)]);
+  // with a task, the backend returns only the records that bear on it
+  const forTask = task ? `${q ? "&" : "?"}task=${encodeURIComponent(task.task)}&why=${encodeURIComponent(task.why)}` : "";
+  const [c, e] = await Promise.all([fetch(`${API_URL}/concepts/${id}${q}`), fetch(`${API_URL}/concepts/${id}/evidence${q}${forTask}`)]);
   if (!c.ok) throw new Error(`No ladder data for this skill (${c.status})`);
-  return { concept: await c.json(), evidence: e.ok ? (await e.json()).evidence : [] };
+  const body = e.ok ? await e.json() : { evidence: [] };
+  return { concept: await c.json(), evidence: body.evidence, specific: task ? body.specific : undefined, overall: task ? body.overall : undefined };
 }

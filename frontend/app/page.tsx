@@ -1,4 +1,5 @@
 import Journey from "./components/journey/Journey";
+import ProgressSync from "./components/ProgressSync";
 import Shell from "./components/Shell";
 import SimulatorProvider from "./components/SimulatorProvider";
 
@@ -6,6 +7,7 @@ export default function Home() {
   return (
     <Shell bubbles>
       <SimulatorProvider>
+        <ProgressSync />
         <Journey />
         <footer className="foot muted">
           Projections are estimates based on current signals, not predictions. Tasks from ESCO (European Commission,

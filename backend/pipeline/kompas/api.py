@@ -249,7 +249,10 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         return {"snapshot": sid, **_concept(r, cur)}
 
     @app.get("/concepts/{cid}/evidence")
-    def concept_evidence(cid: str, snapshot: str | None = None, conn=Depends(get_conn)):
+    def concept_evidence(cid: str, snapshot: str | None = None, task: str | None = Query(None, max_length=300),
+                         why: str = Query("", max_length=400), conn=Depends(get_conn)):
+        """The records behind a concept's status. With `task` (the job task that was clicked), only the ones that
+        bear on that task, each with a sentence on how; `specific` is False when none do."""
         sid = _snapshot_id(conn, snapshot)
         r = conn.execute("SELECT evidence_ids FROM concept_status WHERE snapshot_id = ? AND concept_id = ?",
                          (sid, cid)).fetchone()
@@ -266,10 +269,15 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
             (sid, *ids),
         ).fetchall()
         notes = {s.id: s.coverage_note for s in cur.sources.values()}
-        return {"snapshot": sid, "concept_id": cid, "evidence": [
-            {**dict(e), "concept_ids": json.loads(e["concept_ids"]), "coverage_note": notes.get(e["source"])}
-            for e in rows
-        ]}
+        items = [{**dict(e), "concept_ids": json.loads(e["concept_ids"]), "coverage_note": notes.get(e["source"])}
+                 for e in rows]
+        if task and task.strip():
+            from . import evidence_pick
+            from .periods import cutoff
+            as_of = conn.execute("SELECT as_of FROM snapshot WHERE id = ?", (sid,)).fetchone()["as_of"]
+            return {"snapshot": sid, "concept_id": cid, "task": task,
+                    **evidence_pick.pick(conn, sid, cid, task.strip(), why, items, cutoff(as_of), notes)}
+        return {"snapshot": sid, "concept_id": cid, "evidence": items}
 
     def _feed(conn, snapshot: str | None, concept: str | None, limit: int) -> tuple[str, list[dict]]:
         sid = _snapshot_id(conn, snapshot)

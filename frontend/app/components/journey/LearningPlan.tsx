@@ -92,7 +92,8 @@ export default function LearningPlan({ plan, completed, onToggle, capstone }: Pr
                           <li key={c.id}>
                             <a href={c.url} target="_blank" rel="noopener noreferrer">{c.title} ↗</a>
                             <span>
-                              {c.provider === c.platform ? c.platform : `${c.provider} · ${c.platform}`}
+                              {c.free && <b className="lp-free">Free</b>}
+                              {c.free || c.provider === c.platform ? c.provider : `${c.provider} · ${c.platform}`}
                               {c.workload ? ` · ${c.workload}` : ""}
                             </span>
                           </li>

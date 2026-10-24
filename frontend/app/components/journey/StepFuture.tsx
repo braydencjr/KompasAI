@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Ghost, GhostLine, Horizon, Mirror, Pile, TaskCard } from "../../lib/journey";
+import type { Ghost, GhostLine, Horizon, Mirror, TaskCard } from "../../lib/journey";
 import { useProfile } from "../Profile";
 import { useJourney } from "./JourneyProvider";
 import { ScenarioToggle, useLadder } from "./shared";
@@ -24,10 +24,7 @@ const HORIZONS: { id: Horizon; label: string }[] = [
   { id: "fast", label: "If AI moves fast" },
 ];
 
-// a status, in words: for AI capabilities (how far along they are) and for skills (demand)
-const CAP_PLAIN: Record<string, string> = {
-  "Act now": "in wide use", Emerging: "spreading", Watch: "early days", Stable: "basic level", Declining: "fading", Stalled: "stalled",
-};
+// a skill status, in words (demand)
 const SKILL_PLAIN: Record<string, string> = {
   "Act now": "in demand", Emerging: "growing", Watch: "early buzz", Stable: "steady", Declining: "falling", Stalled: "stalled",
 };
@@ -180,30 +177,25 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
   );
 }
 
-function TaskCardView({ card, index, focused, arrived, onMove, onUndo }: {
+function TaskCardView({ card, index, focused, onUndo }: {
   card: TaskCard;
   index: number;
   focused: boolean;
-  arrived: boolean;
-  onMove: (reason: string) => void;
   onUndo: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [reason, setReason] = useState("");
   const openLadder = useLadder();
-  const target: Pile = card.pile === "exposed" ? "human" : "exposed";
   const cap = [...card.capabilities].sort((a, b) => b.score - a.score)[0];
 
   return (
-    <li className={`mr-card${arrived ? " arrived" : ""}${focused ? " focused" : ""}${card.override ? " overridden" : ""}`}
+    <li className={`mr-card${focused ? " focused" : ""}${card.override ? " overridden" : ""}`}
       style={{ "--d": `${index * 60}ms` } as React.CSSProperties}>
       <h4>{sentence(card.task).slice(0, -1)}</h4>
       {!card.override && <p className="mr-why">{card.reason}</p>}
       {cap && !card.override && (
         <>
-          <button className="mr-cap" onClick={() => openLadder(cap.id)} title="See the evidence for this AI">
-            <span>AI: {cap.label}</span>
-            <em>{CAP_PLAIN[cap.status_now] ?? cap.status_now}</em>
+          <p className="mr-why">{sentence(cap.rationale)}</p>
+          <button className="mr-cap" onClick={() => openLadder(cap.id, { label: sentence(card.task).slice(0, -1), task: card.task, why: cap.rationale.replace(/\.$/, "") })} title={`The evidence for this task: ${cap.label}`}>
+            <span className="mr-cap-cta">Click to view evidence →</span>
           </button>
         </>
       )}
@@ -212,42 +204,15 @@ function TaskCardView({ card, index, focused, arrived, onMove, onUndo }: {
           You moved this: &ldquo;{card.override.reason}&rdquo; <button className="link" onClick={onUndo}>Undo</button>
         </p>
       )}
-      {editing ? (
-        <form className="j-move-form" onSubmit={(e) => {
-          e.preventDefault();
-          if (reason.trim().length < 3) return;
-          onMove(reason.trim());
-          setEditing(false);
-          setReason("");
-        }}>
-          <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} maxLength={160}
-            placeholder={target === "human" ? "Why does this still need you?" : "Why could AI do this?"} />
-          <button className="btn btn-primary btn-sm" disabled={reason.trim().length < 3}>Move</button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>
-        </form>
-      ) : (
-        !card.override && (
-          <button className="mr-move" onClick={() => setEditing(true)}>
-            {target === "human" ? "Disagree? This still needs me" : "Disagree? AI could do this"}
-          </button>
-        )
-      )}
     </li>
   );
 }
 
 export default function StepFuture() {
-  const { data, occupation, catalog, set, move, undoMove } = useJourney();
+  const { data, occupation, catalog, set, undoMove } = useJourney();
   const profile = useProfile();
-  const [arrived, setArrived] = useState<string | null>(null);
   const [focus, setFocus] = useState<string[] | null>(null);
   const tasksRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (!arrived) return;
-    const t = setTimeout(() => setArrived(null), 900);
-    return () => clearTimeout(t);
-  }, [arrived]);
 
   const m = data?.mirror;
   const g = data?.ghost;
@@ -270,10 +235,6 @@ export default function StepFuture() {
     .filter((e) => m.exposed_capabilities.includes(e.id))
     .flatMap((e) => e.because.map((b) => b.skill)))];
   const isFocused = (c: TaskCard) => !!focus && c.capabilities.some((cap) => focus.includes(cap.id));
-  const doMove = (card: TaskCard, reason: string) => {
-    move(card.id, card.pile === "exposed" ? "human" : "exposed", reason);
-    setArrived(card.id);
-  };
   const showTasks = (capabilities: string[]) => {
     setFocus(capabilities);
     setTimeout(() => tasksRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -343,8 +304,8 @@ export default function StepFuture() {
               </header>
               <ul className="mr-cards">
                 {cards.filter((c) => !focus || isFocused(c)).map((c, i) => (
-                  <TaskCardView key={c.id} card={c} index={i} focused={isFocused(c)} arrived={arrived === c.id}
-                    onMove={(r) => doMove(c, r)} onUndo={() => undoMove(c.id)} />
+                  <TaskCardView key={c.id} card={c} index={i} focused={isFocused(c)}
+                    onUndo={() => undoMove(c.id)} />
                 ))}
               </ul>
             </section>

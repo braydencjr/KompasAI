@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useProfile } from "./Profile";
+import { useAuth } from "./Auth";
+import AuthNudge, { rememberPage } from "./AuthNudge";
 import { SidebarSnapshot } from "./Signals";
 import { STEPS, useOptionalJourney } from "./journey/JourneyProvider";
 
@@ -24,7 +26,6 @@ function Icon({ d }: { d: string }) {
   );
 }
 
-// Kompas never reads names from a CV (privacy), so the name is whatever the person types, kept in this browser
 const NAME_KEY = "kompas:username";
 
 function useUserName() {
@@ -55,6 +56,7 @@ function useUserName() {
   return { name: name || "User", editing, setEditing, save, inputRef };
 }
 
+
 export default function Sidebar() {
   const { source, cv } = useProfile();
   const journey = useOptionalJourney();
@@ -64,6 +66,8 @@ export default function Sidebar() {
   const current = onRadar ? -1 : STEPS.findIndex((s) => s.id === journey?.step);
   const user = useUserName();
   const displayName = fromCv ? user.name : "Aisyah (sample)";
+  const auth = useAuth();
+  const cta = useRef<HTMLAnchorElement>(null);
 
   return (
     <aside className="sidebar glass">
@@ -98,33 +102,23 @@ export default function Sidebar() {
 
       <SidebarSnapshot />
 
-      <div className="user">
-        <div className="avatar" aria-hidden>{displayName[0].toUpperCase()}</div>
-        <div className="user-text">
-          {fromCv && user.editing ? (
-            <input
-              ref={user.inputRef}
-              className="user-name-input"
-              defaultValue={user.name === "User" ? "" : user.name}
-              placeholder="Your name"
-              aria-label="Your name"
-              maxLength={40}
-              onBlur={(e) => user.save(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") user.save(e.currentTarget.value);
-                if (e.key === "Escape") user.setEditing(false);
-              }}
-            />
-          ) : fromCv ? (
-            <button className="user-name user-name-edit" onClick={() => user.setEditing(true)} title="Click to change your name">
-              {displayName}
-            </button>
-          ) : (
-            <div className="user-name">{displayName}</div>
-          )}
-          <div className="user-role">{fromCv ? cv?.jobs[0]?.title ?? "From your CV" : "Accounts Executive"}</div>
+      {auth.ready && !auth.user && (
+        <Link href="/login" ref={cta} className="btn btn-primary btn-sm auth-cta" onClick={rememberPage}>
+          Sign in / Sign up
+        </Link>
+      )}
+      {journey && <AuthNudge anchor={cta} />}
+
+      {auth.user && (
+        <div className="user">
+          <div className="avatar" aria-hidden>{auth.user.name[0].toUpperCase()}</div>
+          <div className="user-text">
+            <div className="user-name">{auth.user.name}</div>
+            <div className="user-role">{auth.user.email}</div>
+            <button className="user-signout" onClick={() => void auth.signOut()}>Sign out</button>
+          </div>
         </div>
-      </div>
+      )}
     </aside>
   );
 }

@@ -22,6 +22,8 @@ type SimContext = {
   /** `role`: for any job (e.g. The Route's final project); without it, only the built-in sample roles open */
   open: (roleId: string, role?: SimRole) => void;
   results: Record<string, SimResult>;
+  /** replaces the saved results (used when a signed-in person's progress is loaded) */
+  restore: (results: Record<string, SimResult>) => void;
   hasSim: (roleId: string) => boolean;
 };
 
@@ -141,6 +143,13 @@ export default function SimulatorProvider({ children }: { children: React.ReactN
     });
   }, []);
 
+  const restore = useCallback((next: Record<string, SimResult>) => {
+    setResults(next);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {}
+  }, []);
+
   const pending = (id: string): Loaded | null => {
     const sim = sampleFor(id) ?? (customRoles.current[id] ? placeholder(customRoles.current[id]) : null);
     return sim ? { source: "loading", sim } : null;
@@ -152,6 +161,7 @@ export default function SimulatorProvider({ children }: { children: React.ReactN
       value={{
         open,
         results,
+        restore,
         hasSim: (id) => simulations.some((s) => s.roleId === id),
       }}
     >
