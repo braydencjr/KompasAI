@@ -1,7 +1,7 @@
 "use client";
 
-// The recommended role and why, each reason with its evidence (CV quotes, market signals, MyCOL, SDG), plus the
-// roles filling up as their skills are checked. Built for the CV flow; moved here for the Three Bets step, which
+// The recommended role and why, each reason with its evidence (resume quotes, market signals, MyCOL, SDG), plus the
+// roles filling up as their skills are checked. Built for the resume flow; moved here for the Three Bets step, which
 // comes after The Mirror has shown whether the current job is at risk.
 
 import { useState } from "react";
@@ -34,7 +34,7 @@ export function RoleRace({ cv }: { cv: CvProfile }) {
 }
 
 function EvidenceItem({ e }: { e: Evidence }) {
-  if (e.type === "quote") return <li className="rs-ev rs-ev-quote"><q>{e.text}</q><span>{e.label} · from your CV</span></li>;
+  if (e.type === "quote") return <li className="rs-ev rs-ev-quote"><q>{e.text}</q><span>{e.label} · from your resume</span></li>;
   if (e.type === "source") return <li className="rs-ev"><strong>{e.label}</strong> {e.text}</li>;
   return (
     <li className="rs-ev rs-ev-signal">

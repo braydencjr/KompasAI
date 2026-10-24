@@ -1,4 +1,4 @@
-"""CV extraction with Gemini (PRD FR-1.3). The model only *labels* what the CV says: every item carries a
+"""Resume extraction with Gemini (PRD FR-1.3). The model only *labels* what the resume says: every item carries a
 verbatim quote that is checked afterwards, and skills and jobs must map onto Kompas's own closed lists."""
 
 import json
@@ -16,11 +16,11 @@ log = logging.getLogger("kompas.llm")
 MODEL = "gemini-2.5-flash"   # disclosed in the UI and README (PRD FR-10.1)
 NONE = "none"
 
-INSTRUCTIONS = """Read the CV. Extract the person's skills and group related ones into one category (2 to 4 plain words),
+INSTRUCTIONS = """Read the resume. Extract the person's skills and group related ones into one category (2 to 4 plain words),
 at most 6 categories in all.
 Return each category with the skills under it. A skill has a `name` (its usual standard name), a `quote` copied
-exactly from the CV, character for character (3 to 25 words), and a `skill_id`.
-- List every skill the CV names, including each item of a skills section ("filing and archiving", "form
+exactly from the resume, character for character (3 to 25 words), and a `skill_id`.
+- List every skill the resume names, including each item of a skills section ("filing and archiving", "form
   processing"). Don't merge different skills into one; merge only the same skill named twice ("Excel" and
   "Microsoft Excel (basic formulas)"). At most {max_skills} skills: past that, keep the ones that best show the work.
 - `skill_id`: the id from the Kompas skills below when the skill IS that skill, matched by meaning ("matched
@@ -83,7 +83,7 @@ def _generate(system: str, contents: str, schema: dict, client: genai.Client | N
               thinking: int | None = None) -> tuple[dict | None, str | None]:
     """One structured-output call. Returns (parsed JSON, None) or (None, reason) when the model can't be used,
     so callers can fall back or report it. thinking: the model's thinking budget in tokens (None: its default);
-    small for choosing from given options, so the CV upload stays within its time limit."""
+    small for choosing from given options, so the resume upload stays within its time limit."""
     if client is None and not available():
         return None, "no Gemini API key configured"
     try:
@@ -133,7 +133,7 @@ def extract_cv(text: str, cur: Curated, occupations: dict[str, str] | None = Non
     occupations = {**(occupations or {}), **cur.role_titles}
     result, error = _generate(_system(cur, occupations), f"<cv>\n{text}\n</cv>", _schema(cur), client, thinking=0)
     if error == "Gemini declined to process this input":
-        error = "Gemini declined to process this CV"
+        error = "Gemini declined to process this resume"
     if result:      # one flat list for the matching below; each skill keeps its category as its `group`
         # a skill_id the model wrote must be one of Kompas's skills; anything else is checked by name afterwards
         known = set(cur.curated_ids(("skill",)))
@@ -355,7 +355,7 @@ def score_tasks(occupation: str, references: list[dict], client: genai.Client | 
 
 NARRATE_INSTRUCTIONS = """You write the short reasons a career guidance app gives for each job it suggests. You
 get, per job, the computed facts and an evidence pack: real job postings, the ILO's AI exposure scores, hiring
-and research activity, and the person's CV. Each evidence item has an id (E1, E2, ...).
+and research activity, and the person's resume. Each evidence item has an id (E1, E2, ...).
 
 Rules:
 - For each job, write the reasons asked for (`kinds`): fit, demand, trend, ai.
@@ -416,9 +416,9 @@ def link_capabilities(tasks: list[dict], capabilities: list[dict], client: genai
     return (None, error) if error else (result.get("links") or [], None)
 
 
-# ---------- the CV's skill groups, merged into a few broad ones (kompas/cv.py) ----------
+# ---------- the resume's skill groups, merged into a few broad ones (kompas/cv.py) ----------
 
-GROUP_INSTRUCTIONS = """A CV's skills were sorted into too many small groups. Merge them into at most {n} broad categories
+GROUP_INSTRUCTIONS = """A resume's skills were sorted into too many small groups. Merge them into at most {n} broad categories
 a recruiter would use, each 2 to 4 plain words ("Recruitment and HR", "Customer service", "Office software",
 "Design and marketing"). Put related groups together; never name a category "General", "Other" or "Skills".
 Map every group, copying its name exactly."""

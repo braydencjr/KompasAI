@@ -85,7 +85,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const cvOccupation = profile.cv?.jobs.find((j) => j.occupation)?.occupation?.isco ?? null;
   const defaultOccupation = profile.source === "cv" ? cvOccupation : SAMPLE_OCCUPATION;
 
-  // occupation null = the profile's own job (read from the CV, or the sample's); set only when the user changes it
+  // occupation null = the profile's own job (read from the resume, or the sample's); set only when the user changes it
   const [choices, setChoices] = useState<Choices>(FRESH);
   const occupation = choices.occupation ?? defaultOccupation;
   const [step, setStep] = useState<StepId>("you");
@@ -111,7 +111,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // a new CV (or going back to the sample) starts the journey's choices over; keep scenario and goals
+  // a new resume (or going back to the sample) starts the journey's choices over; keep scenario and goals
   useEffect(() => {
     if (profile.generation === 0) return;
     setChoices((c) => ({ ...FRESH, scenario: c.scenario, sdgs: c.sdgs }));

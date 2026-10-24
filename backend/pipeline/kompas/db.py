@@ -331,12 +331,12 @@ def _m4_reference_data(conn):
       PRIMARY KEY (isco, task_no)
     );
 
-    -- Skills found in CVs and job postings that aren't Kompas concepts, resolved to ESCO (kompas/open_skills.py).
+    -- Skills found in resumes and job postings that aren't Kompas concepts, resolved to ESCO (kompas/open_skills.py).
     CREATE TABLE IF NOT EXISTS open_skill (
       id TEXT PRIMARY KEY,
       label TEXT NOT NULL,
       esco_uri TEXT NOT NULL,
-      names TEXT NOT NULL DEFAULT '[]',   -- how CVs and postings named it, for searching the raw data
+      names TEXT NOT NULL DEFAULT '[]',   -- how resumes and postings named it, for searching the raw data
       created_at TEXT NOT NULL
     );
     -- A skill label's embedding, for matching skills by meaning (kompas/similar.py)

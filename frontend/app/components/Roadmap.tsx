@@ -39,7 +39,7 @@ export function useStepProgress(role: Role) {
 type SkillColumnsProps = {
   role: Role;
   gapClosed: (gap: string) => boolean;
-  /** skill -> the CV line it came from, shown on hover */
+  /** skill -> the resume line it came from, shown on hover */
   quotes?: Record<string, string>;
   onRemove?: (skill: string) => void;
   haveLabel?: string;
@@ -53,7 +53,7 @@ export function SkillColumns({ role, gapClosed, quotes, onRemove, haveLabel = "S
         <div className="chips">
           {role.have.map((s, i) => (
             <span key={s} className={`chip chip-have${quotes ? " pop" : ""}`} style={{ "--i": i } as React.CSSProperties}
-              title={quotes?.[s] ? `From your CV: “${quotes[s]}”` : undefined}>
+              title={quotes?.[s] ? `From your resume: “${quotes[s]}”` : undefined}>
               ✓ {s}
               {role.skillMeta?.[s] && <SdgTags kind="skill" id={role.skillMeta[s].id} tags={role.skillMeta[s].sdgs} subject={s} />}
               {onRemove && (

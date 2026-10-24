@@ -1,7 +1,7 @@
 """How exposed a job's tasks are to generative AI: the ILO's published scores where the index lists the job,
 otherwise the LLM's scores for the job's tasks, anchored on the index.
 
-The index (connectors/ilo.py) is reference data, not a closed list. For a job it doesn't have, such as a CV job no
+The index (connectors/ilo.py) is reference data, not a closed list. For a job it doesn't have, such as a resume job no
 ISCO-08 code fits ("prompt engineer"), the LLM writes the job's main tasks and scores each one against the most
 similar ILO-scored tasks, which it must cite, as the ILO itself scored ISCO-08 with a model shown its scored
 examples. A score outside the range of the tasks it cites is dropped. The result is stored in ilo_task (origin

@@ -62,7 +62,7 @@ class Options:
 
 
 def log_event(event: str, **fields):
-    """One structured log line. Callers never pass tokens, headers or CV text."""
+    """One structured log line. Callers never pass tokens, headers or resume text."""
     log.info(json.dumps({"event": event, **fields}, default=str, sort_keys=True))
 
 

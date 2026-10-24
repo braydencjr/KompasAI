@@ -1,4 +1,4 @@
-"""Signal Ladder statuses for skills the snapshots don't score: ESCO skills found in CVs and job postings.
+"""Signal Ladder statuses for skills the snapshots don't score: ESCO skills found in resumes and job postings.
 
 A snapshot only scores the curated concepts (they have aliases and topics). Any other skill is measured here, on
 request, from the same raw records and with the same rules (kompas/score.py): every Hacker News story and "Who is

@@ -114,7 +114,7 @@ export type CvSkill = {
   family: { id: string; label: string } | null;
   quote: string;
   found_by: "llm" | "dictionary";
-  /** the skill as the CV names it, and the broad group the reader put it in (absent on older profiles) */
+  /** the skill as the resume names it, and the broad group the reader put it in (absent on older profiles) */
   name?: string;
   group?: string | null;
 };
@@ -128,7 +128,7 @@ export type CvTrace = {
   roles: { scored: number; catalogue: number; shown: number };
 };
 
-/** Upload step 1: what the CV says, before it is matched against the market (POST /profile/read). */
+/** Upload step 1: what the resume says, before it is matched against the market (POST /profile/read). */
 export type CvRead = Pick<CvProfile, "file" | "method" | "model" | "llm_note" | "summary" | "jobs" | "unrecognised" | "groups" | "discarded_unverified"> & {
   skills: CvReadSkill[];
   ai_tools: CvReadSkill[];
@@ -137,10 +137,10 @@ export type CvRead = Pick<CvProfile, "file" | "method" | "model" | "llm_note" | 
 
 export type CvReadSkill = Pick<CvSkill, "id" | "label" | "family" | "quote" | "found_by" | "name" | "group">;
 
-/** A broad group of the CV's skills, as the reader grouped them (display only: matching uses the skills) */
+/** A broad group of the resume's skills, as the reader grouped them (display only: matching uses the skills) */
 export type SkillGroup = { name: string; skills: string[]; untracked: string[] };
 
-/** What the API read from an uploaded CV, matched against the market. Nothing here is stored on the server. */
+/** What the API read from an uploaded resume, matched against the market. Nothing here is stored on the server. */
 export type CvProfile = {
   file: string | null;
   method: "llm" | "dictionary";
@@ -152,7 +152,7 @@ export type CvProfile = {
   summary: string | null;
   jobs: { title: string; employer: string; period: string; quote: string; occupation: { isco: string; title: string } | null }[];
   skills: CvSkill[];
-  /** AI capabilities the CV names (tools the person used), kept apart from skills */
+  /** AI capabilities the resume names (tools the person used), kept apart from skills */
   ai_tools: CvSkill[];
   unrecognised: { name: string; quote: string; group?: string | null }[];
   /** the skills in broad groups, for the stickers; absent on profiles saved before it existed */
@@ -165,7 +165,7 @@ export type CvProfile = {
   recommended: string | null;
   /** market evidence per concept: your skills, the roles' skills and their job families */
   signals: Record<string, SkillSignal>;
-  /** absent on CV results saved before it existed */
+  /** absent on resume results saved before it existed */
   malaysia_market?: MalaysiaMarket | null;
   /** short computed findings, each traceable to a number on the page */
   insights: { kind: "focus" | "rising" | "falling" | "ai" | "fit"; text: string }[];
@@ -208,7 +208,7 @@ export type MalaysiaMarket = {
   }[];
 };
 
-/** The CV's text lines, fast, for the scanner. null when the API can't read it (the scanner then shows bars). */
+/** The resume's text lines, fast, for the scanner. null when the API can't read it (the scanner then shows bars). */
 export async function readLines(file: File): Promise<string[] | null> {
   const body = new FormData();
   body.append("file", file);
@@ -220,15 +220,15 @@ export async function readLines(file: File): Promise<string[] | null> {
   }
 }
 
-/** Upload step 1: the LLM reads the CV's skills and jobs. Returns them, or a message to show the user. */
+/** Upload step 1: the LLM reads the resume's skills and jobs. Returns them, or a message to show the user. */
 export async function readProfile(file: File): Promise<{ read: CvRead } | { error: string }> {
   const body = new FormData();
   body.append("file", file);
   try {
-    // reading a CV with the LLM takes a while, longer than the default API timeout here
+    // reading a resume with the LLM takes a while, longer than the default API timeout here
     const res = await fetch(`${API_URL}/profile/read`, { method: "POST", body, signal: AbortSignal.timeout(120_000) });
     const data = await res.json();
-    return res.ok ? { read: data as CvRead } : { error: typeof data.detail === "string" ? data.detail : "Couldn't read this CV." };
+    return res.ok ? { read: data as CvRead } : { error: typeof data.detail === "string" ? data.detail : "Couldn't read this resume." };
   } catch {
     return { error: "Can't reach the Kompas API. Is it running?" };
   }
@@ -250,14 +250,14 @@ export async function matchProfile(read: CvRead): Promise<{ profile: CvProfile }
   }
 }
 
-/** A saved profile re-scored against the latest market snapshot (no CV needed). null when the API can't help. */
+/** A saved profile re-scored against the latest market snapshot (no resume needed). null when the API can't help. */
 export async function rescoreProfile(cv: CvProfile): Promise<CvProfile | null> {
   try {
     const res = await fetch(`${API_URL}/profile/rescore`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cv),
-      // the first re-score after new skills are found measures them and asks the LLM (about 20 s for a 26-skill CV)
+      // the first re-score after new skills are found measures them and asks the LLM (about 20 s for a 26-skill resume)
       signal: AbortSignal.timeout(60_000),
     });
     return res.ok ? ((await res.json()) as CvProfile) : null;

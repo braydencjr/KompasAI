@@ -66,7 +66,7 @@ export type GhostSlot = {
   id: string; label: string; status: LiveStatus; status_now: LiveStatus; state: "blank" | "filled";
   /** the role that needs it, when it came from a role's gaps */
   for_role: string | null;
-  /** why it's on your CV: "Needed for Accountant", "Rising in finance and accounting", "Rising across the market" */
+  /** why it's on your resume: "Needed for Accountant", "Rising in finance and accounting", "Rising across the market" */
   why: string;
 };
 export type Ghost = { lines: GhostLine[]; slots: GhostSlot[]; horizon: string; filled: number };
@@ -110,7 +110,7 @@ export type RoleScore = {
   covered: boolean;
   family?: { id: string; label: string } | null;
   family_status: LiveStatus | null;
-  /** on CV roles: why this role, each reason with its evidence */
+  /** on resume roles: why this role, each reason with its evidence */
   reasons?: Reason[];
   /** share of the role's ESCO tasks that are AI-exposed, with your Mirror corrections */
   ai_exposure: number | null;

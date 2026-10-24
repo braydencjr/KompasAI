@@ -3341,7 +3341,7 @@ h3 {
   margin-top: 12px;
 }
 
-/* what Kompas read from the CV, above the best-fit role */
+/* what Kompas read from the resume, above the best-fit role */
 .about {
   display: flex;
   flex-direction: column;
@@ -3583,7 +3583,7 @@ h3 {
   transform: none;
 }
 
-/* ---------- CV scanner ---------- */
+/* ---------- resume scanner ---------- */
 
 .scanner {
   display: grid;
@@ -4554,7 +4554,7 @@ h3 {
 .j-occ-card p { margin: 0; }
 .j-empty-bets { display: flex; flex-direction: column; gap: 8px; }
 
-/* ---------- You: the CV reading flow (read → skills → market → direction) ---------- */
+/* ---------- You: the resume reading flow (read → skills → market → direction) ---------- */
 
 .flow {
   display: flex;
@@ -5371,7 +5371,7 @@ h3 {
   .mr-verdict { grid-template-columns: 1fr; padding: 22px; }
 }
 
-/* ---------- Ghost CV: the CV at the horizon ---------- */
+/* ---------- Ghost CV: the resume at the horizon ---------- */
 
 .gh {
   display: flex;
@@ -5420,7 +5420,7 @@ h3 {
   gap: 10px;
 }
 
-/* the Ghost CV as a sheet of paper: today's CV, edited in place into the horizon's */
+/* the Ghost CV as a sheet of paper: today's resume, edited in place into the horizon's */
 .cvp {
   position: relative;
   display: flex;
@@ -5472,7 +5472,7 @@ h3 {
 .cvp-job-org { color: #2f3440; }
 .cvp-job-period { margin-left: auto; padding-left: 12px; font-size: 14px; color: #6b7080; font-variant-numeric: tabular-nums; }
 
-/* skills: two columns of CV bullets */
+/* skills: two columns of resume bullets */
 .cvp-skills,
 .cvp-slots {
   display: grid;
@@ -5586,7 +5586,7 @@ h3 {
   line-height: 1.45;
 }
 
-/* seen: CV was already highlighted once; keep it solid without repeating the animation */
+/* seen: resume was already highlighted once; keep it solid without repeating the animation */
 .cvp.seen,
 .cvp.seen .cvp-tag,
 .cvp.seen .cvp-skill.up .cvp-skill-text,
@@ -5660,7 +5660,7 @@ h3 {
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* ---------- Your 2028: verdict, the CV paper, the tasks behind it ---------- */
+/* ---------- Your 2028: verdict, the resume paper, the tasks behind it ---------- */
 
 .fx-cv,
 .fx-tasks {
@@ -6313,7 +6313,7 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 .auth-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 16px; }
 .auth-google-link { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
 
-/* the CV box before anything is uploaded: a sentence, not placeholder bars */
+/* the resume box before anything is uploaded: a sentence, not placeholder bars */
 .flow-doc-empty { min-height: 96px; display: flex; align-items: center; }
 
 /* ---------- SDG tags: one colour per goal; click for how it contributes ---------- */

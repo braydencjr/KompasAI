@@ -52,7 +52,7 @@ const HEAD: Record<Journey["direction"]["lead"], { title: string; body: string }
 const ICON: Record<Reason["kind"], string> = { fit: "✓", demand: "↗", trend: "⚡", ai: "◐", sdg: "◎", gap: "+" };
 
 function EvidenceItem({ e }: { e: Evidence }) {
-  if (e.type === "quote") return <li className="rs-ev rs-ev-quote"><q>{e.text}</q><span>{e.label} · from your CV</span></li>;
+  if (e.type === "quote") return <li className="rs-ev rs-ev-quote"><q>{e.text}</q><span>{e.label} · from your resume</span></li>;
   if (e.type === "source") return <li className="rs-ev"><strong>{e.label}</strong> {e.text}</li>;
   return (
     <li className="rs-ev rs-ev-signal">
@@ -113,7 +113,7 @@ type CardProps = { o: Option; chosen: boolean; onChoose: () => void; wide?: bool
 function OptionCard({ o, chosen, onChoose, wide = false, rank }: CardProps) {
   const profile = useProfile();
   const [why, setWhy] = useState(false);
-  // the fit reason's evidence: the CV lines that show each skill the job needs
+  // the fit reason's evidence: the resume lines that show each skill the job needs
   const quotes = Object.fromEntries((profile.cv?.skills ?? []).map((s) => [s.label, s.quote]));
   const shown = o.reasons.filter((r) => r.kind !== "sdg" && r.kind !== "gap");
   const evidence = (r: Reason): Evidence[] => {

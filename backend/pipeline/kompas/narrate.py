@@ -3,12 +3,12 @@
 journey.reasons() writes every reason from fixed templates. Here the LLM rewrites the fit, demand, trend and AI
 reasons from the job's evidence pack: the computed facts plus the records behind them (what its Malaysian postings
 ask for, the ILO's scores for its tasks, the hiring and research items behind its skills' statuses, the person's
-CV quotes). Every sentence must cite the pack's evidence ids, and a check rejects a reason that cites anything
+resume quotes). Every sentence must cite the pack's evidence ids, and a check rejects a reason that cites anything
 else, uses a number that isn't in the pack, or names a role or skill outside it; that reason keeps its template.
 The citations are removed before the text is shown, so the cards look as before. The evidence lists under each
 reason are journey.reasons()' own, unchanged.
 
-Written once per pack (keyed by its hash, in the narration table). mode "sync" waits for the model (the CV flow,
+Written once per pack (keyed by its hash, in the narration table). mode "sync" waits for the model (the resume flow,
 which already waits for it); "background" answers with the templates and writes the reasons for the next request
 (the journey, whose toggles must stay instant).
 """
@@ -43,7 +43,7 @@ _lock = threading.Lock()
 
 
 def pack(cur: Curated, role: dict, quotes: dict[str, str], sig: dict) -> dict:
-    """The facts and evidence one job's reasons may use. quotes: skill id -> the CV line that shows it."""
+    """The facts and evidence one job's reasons may use. quotes: skill id -> the resume line that shows it."""
     evidence: list[dict] = []
 
     def add(**item) -> str:
@@ -58,7 +58,7 @@ def pack(cur: Curated, role: dict, quotes: dict[str, str], sig: dict) -> dict:
             of_the_jobs_skills=[r["label"] for r in role["breakdown"]])
     for h in role["have"]:
         if h["id"] in quotes:
-            add(type="your CV", skill=h["label"], quote=quotes[h["id"]])
+            add(type="your resume", skill=h["label"], quote=quotes[h["id"]])
     meta = cur.posting_meta.get(isco) if isco in cur.posting_roles else None
     if meta:
         add(type="job postings", about=f"a sample of {meta['postings']} live Malaysian job postings for this role "

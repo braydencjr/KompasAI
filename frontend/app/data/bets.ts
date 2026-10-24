@@ -58,7 +58,7 @@ export type Bet = Role & {
 
 // Demo data for the synthetic persona (Aisyah). Resource links checked 20 Oct 2026.
 
-/** Best fit from the user's CV alone. */
+/** Best fit from the user's resume alone. */
 export const cvMatch: Role = {
   id: "fpa-analyst",
   title: "FP&A Analyst",

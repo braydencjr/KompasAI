@@ -73,7 +73,7 @@ def test_without_api_key_falls_back_to_dictionary(conn, cur, monkeypatch):
 def test_safety_block_falls_back(conn, cur):
     profile = cv.analyse(SAMPLE, cur, conn, client=FakeGemini(ANSWER, finish_reason=types.FinishReason.SAFETY))
     assert profile["method"] == "dictionary"
-    assert profile["llm_note"] == "Gemini declined to process this CV"
+    assert profile["llm_note"] == "Gemini declined to process this resume"
 
 
 def test_exposure_and_best_fit_roles(conn, cur):

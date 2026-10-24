@@ -1,9 +1,9 @@
 """Skills outside Kompas's concept list, resolved to ESCO (the EU's skills taxonomy, ~14,000 skills).
 
-A CV or a job posting names a skill Kompas doesn't track ("search engine optimisation", "patient triage"). The
+A resume or a job posting names a skill Kompas doesn't track ("search engine optimisation", "patient triage"). The
 ESCO search API returns the closest ESCO skills; the LLM picks the one that is the same skill, or none, and may
 only pick from what ESCO returned. The result is stored in open_skill and becomes a concept with origin "esco",
-so CVs and postings that name it match each other, and kompas/open_signal.py can measure it in the raw data.
+so resumes and postings that name it match each other, and kompas/open_signal.py can measure it in the raw data.
 """
 
 import json
@@ -30,7 +30,7 @@ def skill_id(uri: str) -> str:
     return "esco-" + uri.rstrip("/").rsplit("/", 1)[-1]
 
 
-# skills found in CVs and postings that aren't Kompas's own: an ESCO skill ("esco-..."), or, when ESCO has no
+# skills found in resumes and postings that aren't Kompas's own: an ESCO skill ("esco-..."), or, when ESCO has no
 # skill that is the same, the name itself ("name-..."), measured by that name in the raw data
 OPEN_PREFIXES = ("esco-", "name-")
 
@@ -138,7 +138,7 @@ def _add(cur: Curated, new: dict[str, Concept]) -> None:
         cur.concepts = {**cur.concepts, **new}
 
 
-def resolve(conn, cur: Curated, names: list[str], context: str = "a CV", client=None,
+def resolve(conn, cur: Curated, names: list[str], context: str = "a resume", client=None,
             http: Http | None = None) -> tuple[dict[str, str | None], str | None]:
     """(name -> ESCO skill id, or None when ESCO has nothing that is that skill; why the model couldn't pick, or
     None). Without the model only an exact ESCO label counts, which leaves most skills unmatched: say so."""
@@ -154,7 +154,7 @@ def resolve(conn, cur: Curated, names: list[str], context: str = "a CV", client=
     if not items:
         return out, ("the ESCO skills catalogue is unreachable, so skills outside Kompas's list will be matched on "
                      "your next visit" if esco_down() else None)
-    # in parallel batches: one call over 40 skills takes long enough to matter during a CV upload
+    # in parallel batches: one call over 40 skills takes long enough to matter during a resume upload
     batches = [items[i:i + PICK_BATCH] for i in range(0, len(items), PICK_BATCH)]
     with ThreadPoolExecutor(max_workers=4) as pool:
         answers = list(pool.map(lambda b: llm.pick_esco(b, context, client=client), batches))

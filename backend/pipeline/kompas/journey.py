@@ -51,7 +51,7 @@ WEIGHTS_DOC = {
              "list when there are too few postings.",
     "weight": "Weight = importance (essential 1.0, optional 0.5) × demand (Act now 1.2, Emerging 1.1, Stable 1.0, "
               "Watch 0.9, Declining or Stalled 0.7), using each skill's status under the chosen scenario.",
-    "coverage": "Coverage = 1.0 demonstrated, 0.7 claimed on a CV, 0 missing.",
+    "coverage": "Coverage = 1.0 demonstrated, 0.7 claimed on a resume, 0 missing.",
     "safe": "Safe Bet: highest match where at least 70% of the essential weight is in skills that don't decline "
             "under either scenario.",
     "rising": "Rising Bet: highest demand × match among roles matching at least 40%. Demand is the role's "
@@ -420,7 +420,7 @@ def judge_trends(conn, cur: Curated, st: Statuses, p: Profile, client=None) -> d
 
 
 def ghost(cur: Curated, st: Statuses, p: Profile, roles: list[dict], judged: dict[str, dict] | None = None) -> dict:
-    """Your CV at the projection horizon: each skill you have is worth more, holds its value, fades, or is work AI takes
+    """Your resume at the projection horizon: each skill you have is worth more, holds its value, fades, or is work AI takes
     over under the scenario (as in The Mirror); blank slots are
     rising skills you don't have yet, from the closest roles you could grow into, then your skills' families, then the
     whole market. Every slot says why it's there."""
@@ -536,7 +536,7 @@ def route(cur: Curated, st: Statuses, p: Profile, role: dict | None, resources: 
             "sdg_contribution": sorted(contribution.values(), key=lambda c: c["sdg"])}
 
 
-# ---------- market evidence and reasons (the CV flow and Your direction) ----------
+# ---------- market evidence and reasons (the resume flow and Your direction) ----------
 
 
 RUNG_NAMES = {"1": "Talk: research, GitHub, Hacker News", "2": "Hiring abroad", "3": "Hiring in Malaysia"}
@@ -793,11 +793,11 @@ def recommend(roles: list[dict]) -> dict | None:
 
 
 def reasons(role: dict, skills: dict[str, dict], sig: dict[str, dict]) -> list[dict]:
-    """Why this role, as fixed templates over computed values. Each reason carries its evidence: CV quotes,
+    """Why this role, as fixed templates over computed values. Each reason carries its evidence: resume quotes,
     Signal Ladder items, MyCOL, the SDG rationale."""
     out = []
     have, gaps = role["have"], role["gaps"]
-    quotes: dict[str, list[str]] = {}       # one CV line can show several skills
+    quotes: dict[str, list[str]] = {}       # one resume line can show several skills
     for h in have:
         if h["id"] in skills:
             quotes.setdefault(skills[h["id"]]["quote"], []).append(h["label"])
@@ -847,7 +847,7 @@ def reasons(role: dict, skills: dict[str, dict], sig: dict[str, dict]) -> list[d
     out.append({"kind": "gap", "title": "What to learn",
                 "text": (f"{len(gaps)} skill{'s' if len(gaps) != 1 else ''} to add: {', '.join(g['label'] for g in gaps)}. "
                          "Your route is on The Route step.") if gaps else
-                        "Nothing missing among the skills Kompas tracks. CV skills count 70% until you show them in practice.",
+                        "Nothing missing among the skills Kompas tracks. Resume skills count 70% until you show them in practice.",
                 "evidence": []})
     return out
 

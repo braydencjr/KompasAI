@@ -1,6 +1,6 @@
 """Which of your skills cover a role's skill, by meaning rather than by id.
 
-A role asks for "Hire staff" and your CV says "Recruit personnel": different ids, same skill. Each skill's label is
+A role asks for "Hire staff" and your resume says "Recruit personnel": different ids, same skill. Each skill's label is
 embedded once (Gemini, 256 dimensions) and stored in skill_embedding, as reference data. A skill you lack counts as
 covered by the most similar skill you have when they are similar enough: from FLOOR the credit grows with the
 similarity, to full credit at FULL. The cutoffs come from checking pairs by hand: related skills score 0.92 and up

@@ -7,8 +7,8 @@ import { useJourney, type StepId } from "./JourneyProvider";
 
 export type Gate = "cv" | "job";
 
-/** What a step is still missing. AI & Skills Outlook and Career Impact need a CV (not the sample profile); the Learning
- * Route needs a CV and then a chosen job. null = ready, or still reading what this browser saved (so the popup doesn't
+/** What a step is still missing. AI & Skills Outlook and Career Impact need a resume (not the sample profile); the Learning
+ * Route needs a resume and then a chosen job. null = ready, or still reading what this browser saved (so the popup doesn't
  * flash on every page load). */
 export function useStepGate(step: StepId): Gate | null {
   const { source, ready } = useProfile();
@@ -21,9 +21,9 @@ export function useStepGate(step: StepId): Gate | null {
 
 const COPY: Record<Gate, { title: string; text: string; action: string; step: "you" | "bets" }> = {
   cv: {
-    title: "Upload your CV first",
-    text: "Kompas builds your AI outlook, career options and learning route from the skills in your CV, so it needs your CV first.",
-    action: "Upload my CV",
+    title: "Upload your resume first",
+    text: "Kompas builds your AI outlook, career options and learning route from the skills in your resume, so it needs your resume first.",
+    action: "Upload my resume",
     step: "you",
   },
   job: {
@@ -34,7 +34,7 @@ const COPY: Record<Gate, { title: string; text: string; action: string; step: "y
   },
 };
 
-/** Stands in for a step until the CV and the job are in place. Its one button goes to what's missing. */
+/** Stands in for a step until the resume and the job are in place. Its one button goes to what's missing. */
 export default function RouteGate({ gate }: { gate: Gate }) {
   const { go } = useJourney();
   const c = COPY[gate];

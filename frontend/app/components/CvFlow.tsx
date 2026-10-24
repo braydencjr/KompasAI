@@ -7,7 +7,7 @@ import { SdgGroupTags, SdgTags } from "./Sdg";
 import { signalClass } from "./Signals";
 import { matchJobs, type JobOption } from "../lib/jobMatch";
 
-const STAGES = ["Read your CV", "Find your skills", "Your skills in the market"] as const;
+const STAGES = ["Read your resume", "Find your skills", "Your skills in the market"] as const;
 
 // stand-in lines while a PDF/DOCX's text is on its way; widths in %
 const PLACEHOLDER = [58, 34, 0, 92, 76, 88, 0, 64, 95, 81, 70, 0, 52, 90, 84, 0, 40, 86];
@@ -29,7 +29,7 @@ const ORDER: Record<string, number> = { "Act now": 0, Emerging: 1, Watch: 2, Sta
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
-/** The first quote a CV line contains (or is part of), or -1. */
+/** The first quote a resume line contains (or is part of), or -1. */
 function quoteIn(line: string, quotes: string[]) {
   const l = norm(line);
   return quotes.findIndex((q) => {
@@ -43,9 +43,9 @@ const fmtDate = (iso: string) =>
 
 type Props = {
   fileName: string;
-  /** the CV's own lines, when this session read it */
+  /** the resume's own lines, when this session read it */
   lines: string[] | null;
-  /** the skills the CV shows; null while the reader is working (and for a restored profile, which has `cv`) */
+  /** the skills the resume shows; null while the reader is working (and for a restored profile, which has `cv`) */
   read: CvRead | null;
   /** the skills matched against the market; null while matching */
   cv: CvProfile | null;
@@ -53,7 +53,7 @@ type Props = {
   animate: boolean;
 };
 
-/** You, step 1: the CV is read, its skills become stickers, and each skill is checked against the market. Which
+/** You, step 1: the resume is read, its skills become stickers, and each skill is checked against the market. Which
  * job to aim for comes later (Your direction), after The Mirror has shown whether the current job is at risk. */
 
 export default function CvFlow({ fileName, lines, read , cv, animate }: Props) {
@@ -64,7 +64,7 @@ export default function CvFlow({ fileName, lines, read , cv, animate }: Props) {
   // the skills to show: from the reader as soon as it answers, before they're matched
   const found = read ?? cv;
 
-  // stage 2 opens when the CV is read; stage 3 once its stickers are in, matching (or matched) by then
+  // stage 2 opens when the resume is read; stage 3 once its stickers are in, matching (or matched) by then
   useEffect(() => {
     if (!found) return setStage(1);
     if (!play) return setStage(3);
@@ -104,11 +104,11 @@ export default function CvFlow({ fileName, lines, read , cv, animate }: Props) {
 
       {/* 1 · read */}
       <div className="flow-stage" ref={(el) => { refs.current[0] = el; }}>
-        <StageHead n={1} title="Read your CV" busy={!found}>
+        <StageHead n={1} title="Read your resume" busy={!found}>
           {!found && <>Reading <strong>{fileName}</strong>…</>}
         </StageHead>
         {(lines || !found) && (
-          <div className="flow-doc" role="region" aria-label="The text read from your CV" tabIndex={0}>
+          <div className="flow-doc" role="region" aria-label="The text read from your resume" tabIndex={0}>
             <div className="flow-doc-lines">
               {lines
                 ? lines.map((line, i) => {
@@ -125,7 +125,7 @@ export default function CvFlow({ fileName, lines, read , cv, animate }: Props) {
           </div>
         )}
         {cv && !lines && (
-          <p className="muted small">The text of a CV read in an earlier visit isn&apos;t kept. Upload it again to see it here.</p>
+          <p className="muted small">The text of a resume read in an earlier visit isn&apos;t kept. Upload it again to see it here.</p>
         )}
       </div>
 
@@ -165,10 +165,10 @@ export default function CvFlow({ fileName, lines, read , cv, animate }: Props) {
   );
 }
 
-/** The same three stages before any CV is uploaded, with nothing in them yet. */
+/** The same three stages before any resume is uploaded, with nothing in them yet. */
 export function EmptyFlow() {
   return (
-    <section className="flow glass static" aria-label="What Kompas shows once your CV is uploaded">
+    <section className="flow glass static" aria-label="What Kompas shows once your resume is uploaded">
       <header className="flow-head">
         <ol className="flow-steps">
           {STAGES.map((s, i) => (
@@ -181,15 +181,15 @@ export function EmptyFlow() {
       </header>
 
       <div className="flow-stage">
-        <StageHead n={1} title="Read your CV" />
+        <StageHead n={1} title="Read your resume" />
         <div className="flow-doc flow-doc-empty">
-          <p className="muted">The text of your CV will appear here once you upload it.</p>
+          <p className="muted">The text of your resume will appear here once you upload it.</p>
         </div>
       </div>
 
       <div className="flow-stage">
         <StageHead n={2} title="Find your skills" />
-        <p className="muted small">The skills Kompas finds in your CV will appear here.</p>
+        <p className="muted small">The skills Kompas finds in your resume will appear here.</p>
       </div>
 
       <div className="flow-stage">
@@ -234,7 +234,7 @@ function Matching({ cv }: { cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognis
 
 type Sticker = { name: string; quote: string; skillIds: string[]; untracked: string[]; tool: boolean; labels?: string[] };
 
-/** One entry per broad group of the CV's skills: its name, the one CV line that best shows it, and the tracked
+/** One entry per broad group of the resume's skills: its name, the one resume line that best shows it, and the tracked
  * skills in it. Profiles saved before the reader grouped skills fall back to their job families. */
 export function stickersOf(cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognised" | "groups">): Sticker[] {
   const quote = new Map(cv.skills.map((s) => [s.id, s.quote]));
@@ -253,7 +253,7 @@ export function stickersOf(cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognise
     return { name: g.name, quote: line, skillIds: g.skills, untracked: g.untracked, tool: false };
   });
   // "capabilities" are tasks in your work that AI can already do (report generation, customer enquiries), found in
-  // the CV's wording: not tools you used, and not skills the market scores
+  // the resume's wording: not tools you used, and not skills the market scores
   if (cv.ai_tools.length) {
     out.push({ name: "Tasks AI can help with", quote: cv.ai_tools[0].quote, skillIds: cv.ai_tools.map((t) => t.id),
                untracked: [], tool: true, labels: cv.ai_tools.map((t) => t.label) });
@@ -283,15 +283,15 @@ function Stickers({ cv }: { cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognis
       </div>
       <p className="sticker-quote">
         {picked?.tool
-          ? <>AI can already do: <strong>{picked.labels?.join(", ")}</strong>. From your CV: <q>{picked.quote}</q></>
-          : picked ? <>From your CV: <q>{picked.quote}</q></>
-          : <span className="muted small">Tap a group to see the line of your CV it came from.</span>}
+          ? <>AI can already do: <strong>{picked.labels?.join(", ")}</strong>. From your resume: <q>{picked.quote}</q></>
+          : picked ? <>From your resume: <q>{picked.quote}</q></>
+          : <span className="muted small">Tap a group to see the line of your resume it came from.</span>}
       </p>
     </div>
   );
 }
 
-/** The job The Mirror looks at: read from the CV, or typed by the user. People between jobs, or changing career,
+/** The job The Mirror looks at: read from the resume, or typed by the user. People between jobs, or changing career,
  * pick the job they're aiming for instead. */
 function CurrentJob({ cv }: { cv: CvProfile }) {
   const { catalog, occupation, set } = useJourney();
@@ -307,7 +307,7 @@ function CurrentJob({ cv }: { cv: CvProfile }) {
       {editing || !(occupation && title) ? (
         <JobSearch
           jobs={catalog?.occupations ?? []}
-          intro={occupation && title ? null : "We couldn't tell your job from your CV."}
+          intro={occupation && title ? null : "We couldn't tell your job from your resume."}
           onPick={(isco) => {
             set({ occupation: isco, overrides: {} });
             setEditing(false);
@@ -318,7 +318,7 @@ function CurrentJob({ cv }: { cv: CvProfile }) {
         <div className="current-job-row">
           <p>
             <strong>{title}</strong>
-            {fromCv && <span className="muted"> · from &ldquo;{job!.title}&rdquo; on your CV</span>}
+            {fromCv && <span className="muted"> · from &ldquo;{job!.title}&rdquo; on your resume</span>}
             {occupation && <> <SdgTags kind="role" id={occupation} subject={title ?? "This job"} /></>}
           </p>
           <button className="current-job-change" onClick={() => setEditing(true)}>Change</button>

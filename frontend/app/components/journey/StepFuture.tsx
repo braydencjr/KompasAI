@@ -6,7 +6,7 @@ import { useProfile } from "../Profile";
 import { useJourney } from "./JourneyProvider";
 import { useLadder } from "./shared";
 
-/* AI Exposure: is your job safe (the verdict), what your CV is worth (the paper), and the tasks behind both.
+/* AI Exposure: is your job safe (the verdict), what your resume is worth (the paper), and the tasks behind both.
    One step for what used to be The Mirror and the Ghost CV: they read the same AI signals, as tasks and as skills. */
 
 type Group = Horizon | "never";
@@ -105,14 +105,14 @@ function Typed({ text, delay, instant }: { text: string; delay: number; instant?
   );
 }
 
-/** Your CV at the horizon, edited in place: highlighted, tagged, struck through, new skills typed in. */
+/** Your resume at the horizon, edited in place: highlighted, tagged, struck through, new skills typed in. */
 function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilities: string[]) => void }) {
   const { scenario } = useJourney();
   const profile = useProfile();
   const openLadder = useLadder();
   const cv = profile.source === "cv" ? profile.cv : null;
-  // the job this page is about (the one you chose, or read from your CV), not the first role listed on the CV
-  const headline = job || cv?.jobs[0]?.title || "Your CV";
+  // the job this page is about (the one you chose, or read from your resume), not the first role listed on the resume
+  const headline = job || cv?.jobs[0]?.title || "Your resume";
 
   const [alreadyDone, setAlreadyDone] = useState(() => isAlreadyHighlighted(scenario));
 
@@ -138,15 +138,15 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
 
   return (
     // keyed on the scenario: switching the pace redraws the changes
-    <article key={scenario} className={`cvp ${scenario}${alreadyDone ? " seen" : ""}`} aria-label={`Your CV as employers may read it in ${g.horizon}`}>
+    <article key={scenario} className={`cvp ${scenario}${alreadyDone ? " seen" : ""}`} aria-label={`Your resume as employers may read it in ${g.horizon}`}>
       <div className="j-paper-watermark" aria-hidden>{g.horizon}</div>
 
       <header className="cvp-head">
         <h2 className="cvp-name">{headline}</h2>
-        <p className="cvp-role">Your CV as employers may read it in {g.horizon}</p>
+        <p className="cvp-role">Your resume as employers may read it in {g.horizon}</p>
       </header>
 
-      {/* profile and experience only make it read like a CV: kept short, the skills are the point */}
+      {/* profile and experience only make it read like a resume: kept short, the skills are the point */}
       {cv?.summary && (
         <section className="cvp-section cvp-minor">
           <h3>Profile</h3>
@@ -191,10 +191,10 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
               </li>
             );
           })}
-          {/* skills on the CV that no catalogue could match yet: still on the CV, just not measured */}
+          {/* skills on the resume that no catalogue could match yet: still on the resume, just not measured */}
           {(cv?.unrecognised ?? []).map((u) => (
             <li key={`u:${u.name}`} className="cvp-skill unmeasured">
-              <span className="cvp-skill-text" title={`${u.name}: from your CV, but not in the skills catalogues Kompas measures, so there's no 2028 outlook for it yet.`}>{u.name}</span>
+              <span className="cvp-skill-text" title={`${u.name}: from your resume, but not in the skills catalogues Kompas measures, so there's no 2028 outlook for it yet.`}>{u.name}</span>
               <span className="cvp-tag unmeasured">not measured yet</span>
             </li>
           ))}
@@ -281,7 +281,7 @@ export default function StepFuture() {
   if (!m || !g) return <div className="j-loading glass"><span className="sk sk-title" /><span className="sk sk-tile" /></div>;
 
   const v = verdict(m);
-  // your skills that the AI behind the exposed tasks overlaps with (from the CV)
+  // your skills that the AI behind the exposed tasks overlaps with (from the resume)
   const touched = [...new Set((profile.cv?.exposed ?? [])
     .filter((e) => m.exposed_capabilities.includes(e.id))
     .flatMap((e) => e.because.map((b) => b.skill)))];
@@ -321,7 +321,7 @@ export default function StepFuture() {
         </p>
       </section>
 
-      {/* 2 · what your CV is worth */}
+      {/* 2 · what your resume is worth */}
       <section className="fx-cv">
         <header className="fx-head">
           <div>

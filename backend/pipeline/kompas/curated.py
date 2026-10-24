@@ -33,7 +33,7 @@ class Concept:
     arxiv_terms: tuple[str, ...]
     github_topics: tuple[str, ...]
     weak_topics: tuple[str, ...] = ()   # written "~topic": counted for trends, too generic for the feed
-    # curated (concepts.csv) | esco: a skill found in a CV or job posting and resolved to ESCO at run time
+    # curated (concepts.csv) | esco: a skill found in a resume or job posting and resolved to ESCO at run time
     # (kompas/open_skills.py). ESCO skills have no aliases or topics, so snapshots don't score them:
     # kompas/open_signal.py measures them from the raw data on request instead.
     origin: str = "curated"

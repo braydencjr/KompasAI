@@ -11,8 +11,8 @@ export default function Home() {
         <Journey />
         <footer className="foot muted">
           Projections are estimates based on current signals, not predictions. Tasks from ESCO (European Commission,
-          CC BY 4.0); Malaysian demand from DOSM and MyCOL. CVs are read by Gemini 2.5 Flash (Google), or by keyword
-          matching when it&apos;s unavailable, and never stored; every skill it reports must quote your CV.
+          CC BY 4.0); Malaysian demand from DOSM and MyCOL. Resumes are read by Gemini 2.5 Flash (Google), or by keyword
+          matching when it&apos;s unavailable, and never stored; every skill it reports must quote your resume.
         </footer>
       </SimulatorProvider>
     </Shell>

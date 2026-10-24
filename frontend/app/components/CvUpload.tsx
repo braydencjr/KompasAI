@@ -26,14 +26,14 @@ export default function CvUpload() {
         </svg>
       </div>
       <div className="upload-text">
-        <h3>{busy ? `Analysing ${busy}…` : source === "cv" ? `Profile from ${cv?.file ?? "your CV"}` : "Upload your resume"}</h3>
+        <h3>{busy ? `Analysing ${busy}…` : source === "cv" ? `Profile from ${cv?.file ?? "your resume"}` : "Upload your resume"}</h3>
         <p>
           {error ? (
             <span className="upload-error">{error}</span>
           ) : busy ? (
             "Finding your skills and the jobs they belong to. This takes a few seconds."
           ) : source === "cv" ? (
-            "Your skills and how they're doing in the market, read from this CV. The file was never stored."
+            "Your skills and how they're doing in the market, read from this resume. The file was never stored."
           ) : (
             "PDF, DOCX or TXT, up to 5 MB. We never use age, gender or photos."
           )}
@@ -42,7 +42,7 @@ export default function CvUpload() {
       </div>
       <div className="upload-actions">
         {source === "cv" ? (
-          <button className="btn btn-ghost" onClick={reset} disabled={!!busy}>Clear CV</button>
+          <button className="btn btn-ghost" onClick={reset} disabled={!!busy}>Clear resume</button>
         ) : (
           <button className="btn btn-ghost" onClick={trySample} disabled={!!busy}>Try a sample</button>
         )}

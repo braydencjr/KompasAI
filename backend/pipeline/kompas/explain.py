@@ -28,7 +28,7 @@ ACTION = {
     ("route", HOT): "Good time to move this step up your route.",
     ("route", QUIET): "Keep it on your route. No need to rush it.",
     ("route", DOWN): "Consider doing your other steps first.",
-    ("have", HOT): "Your skill is gaining value. Make it visible on your CV.",
+    ("have", HOT): "Your skill is gaining value. Make it visible on your resume.",
     ("have", QUIET): "Nothing to change. Here's what's new in it.",
     ("have", DOWN): "Pair it with a rising skill to keep your options open.",
     ("related", HOT): "A neighbour of your skills is in demand. It could be an easy step.",

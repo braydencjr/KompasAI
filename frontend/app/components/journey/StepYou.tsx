@@ -3,8 +3,8 @@
 import CvUpload from "../CvUpload";
 import ProfilePanel from "../ProfilePanel";
 
-/** Step 1: upload a CV and watch Kompas read it, match it with the market and suggest a direction. The current job
- * The Mirror needs is read from the CV (and can be changed inside the reading flow). */
+/** Step 1: upload a resume and watch Kompas read it, match it with the market and suggest a direction. The current job
+ * The Mirror needs is read from the resume (and can be changed inside the reading flow). */
 export default function StepYou() {
   return (
     <>

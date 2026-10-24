@@ -13,18 +13,18 @@ type Props = {
   intro?: React.ReactNode;
   /** the role's per-skill score rows (no longer shown here) */
   breakdown?: SkillRow[];
-  /** where this profile came from (sample, or which CV and how it was read) */
+  /** where this profile came from (sample, or which resume and how it was read) */
   origin?: React.ReactNode;
   /** experience and AI exposure, between the header and the skills */
   details?: React.ReactNode;
   /** other close fits, after the roadmap */
   footer?: React.ReactNode;
-  /** skill label -> the CV line it was found in */
+  /** skill label -> the resume line it was found in */
   skillQuotes?: Record<string, string>;
   onRemoveSkill?: (label: string) => void;
   haveLabel?: string;
   animate?: boolean;
-  /** section label (default: best fit from the CV) */
+  /** section label (default: best fit from the resume) */
   label?: string;
   /** shown instead of the roadmap when the role has no steps (null: nothing) */
   emptyNote?: React.ReactNode;
@@ -37,9 +37,9 @@ type Props = {
 
 const FORMULA =
   "Match = Σ weight × coverage ÷ Σ weight. Weight = importance (essential 1.0, optional 0.5) × demand. " +
-  "Coverage: demonstrated 1.0, claimed on a CV 0.7, missing 0.";
+  "Coverage: demonstrated 1.0, claimed on a resume 0.7, missing 0.";
 
-const EVIDENCE: Record<string, string> = { demonstrated: "shown", claimed: "on your CV" };
+const EVIDENCE: Record<string, string> = { demonstrated: "shown", claimed: "on your resume" };
 
 /** Each skill's share of the match: weight x coverage over the total weight, so the rows add up to the score. */
 export function Breakdown({ rows }: { rows: SkillRow[] }) {
@@ -80,7 +80,7 @@ export default function CvMatch({ role, intro, origin, details, footer, skillQuo
       <header className="plan-head">
         <div className="plan-title">
           <div className="plan-tags">
-            <span className="label">{label ?? "Best fit from your CV"}</span>
+            <span className="label">{label ?? "Best fit from your resume"}</span>
             {origin}
             <RoleSdgs role={role} />
           </div>

@@ -13,15 +13,15 @@ type Stored = {
   skills: string[];
   /** ISCO code of the role the user is looking at */
   roleIsco: string | null;
-  /** the CV's text, kept in this browser (like the profile) so it can be read back under "Read your CV" */
+  /** the resume's text, kept in this browser (like the profile) so it can be read back under "Read your resume" */
   lines?: string[] | null;
 };
 
 const SAMPLE: Stored = { source: "sample", cv: null, skills: sampleProfile.skills.map((s) => s.id), roleIsco: null };
 
-/** The CV read in this session: drives the reading flow (scan, extract, match, direction). Kept until the next
+/** The resume read in this session: drives the reading flow (scan, extract, match, direction). Kept until the next
  * upload so the flow can play through; a profile restored from storage has no scan and shows the flow finished.
- * `read` arrives first (the skills the CV shows), `result` once they're matched against the market. */
+ * `read` arrives first (the skills the resume shows), `result` once they're matched against the market. */
 export type Scan = { name: string; lines: string[] | null; read: CvRead | null; result: CvProfile | null };
 
 type ProfileState = Stored & {
@@ -34,7 +34,7 @@ type ProfileState = Stored & {
   selectRole: (isco: string) => void;
   removeSkill: (id: string) => void;
   addSkill: (id: string) => void;
-  /** goes up when a new CV is read or the user returns to the sample (not when a saved profile is restored) */
+  /** goes up when a new resume is read or the user returns to the sample (not when a saved profile is restored) */
   generation: number;
   /** the saved profile has been read back from this browser (before this, `source` is the sample by default) */
   ready: boolean;
@@ -45,7 +45,7 @@ const ProfileContext = createContext<ProfileState | null>(null);
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** The CV's text lines, shown under "Read your CV". Only plain-text files can be read in the browser. */
+/** The resume's text lines, shown under "Read your resume". Only plain-text files can be read in the browser. */
 function textLines(text: string) {
   return text
     .split("\n")
@@ -68,7 +68,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
       // profiles saved before the API added `trace` have the old role shape, ones saved before `malaysia_market`
       // have Malaysian job-market figures as skill evidence, and ones whose whole-group Malaysian rung has no
-      // `share_pct` describe it with other figures than the market panel: drop them, so the CV is read again
+      // `share_pct` describe it with other figures than the market panel: drop them, so the resume is read again
       const current = (cv: CvProfile) => "malaysia_market" in cv
         && (cv.malaysia_market?.groups ?? []).every((g) => "movement" in g)
         && Object.values(cv.signals).every((s) => s.rungs.every((r) => !r.groups?.length || "share_pct" in r));
@@ -85,13 +85,13 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       if (next.source === "sample") localStorage.removeItem(STORAGE_KEY);
       else localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch (e) {
-      // usually a full storage quota (other apps on this address count too). Never leave an older CV behind to
+      // usually a full storage quota (other apps on this address count too). Never leave an older resume behind to
       // come back on reload, and say so instead of failing silently.
       try {
         localStorage.removeItem(STORAGE_KEY);
       } catch {}
       console.warn("Kompas couldn't save your profile in this browser", e);
-      setError("This browser's storage for this site is full, so your CV won't be remembered after a reload. "
+      setError("This browser's storage for this site is full, so your resume won't be remembered after a reload. "
         + "Clear the site data for this address (DevTools → Application → Storage → Clear site data) and upload again.");
     }
   }, []);
@@ -108,7 +108,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     const restored = saved;
     setState(restored);
 
-    // the saved copy shows instantly; then re-score it on today's market data, since the CV itself isn't kept
+    // the saved copy shows instantly; then re-score it on today's market data, since the resume itself isn't kept
     const at = epoch.current;
     rescoreProfile(restored.cv!).then((cv) => {
       if (!cv || epoch.current !== at) return;
@@ -133,7 +133,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         lines = got;
         setScan((s) => (s && s.name === file.name && !s.read ? { ...s, lines: got } : s));
       });
-      // 1 · read: the skills the CV shows (a floor on the scan so it reads even when the API answers instantly)
+      // 1 · read: the skills the resume shows (a floor on the scan so it reads even when the API answers instantly)
       const [got] = await Promise.all([readProfile(file), wait(2200)]);
       if (epoch.current !== at) return;
       if ("error" in got) {
@@ -162,7 +162,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       save({ source: "cv", cv, skills: cv.skills.map((s) => s.id), roleIsco: cv.recommended ?? cv.roles[0]?.isco ?? null, lines });
       setGeneration((g) => g + 1);
     } catch {
-      setError("Something went wrong reading this CV. Please try again.");
+      setError("Something went wrong reading this resume. Please try again.");
       setScan(null);
     }
   }

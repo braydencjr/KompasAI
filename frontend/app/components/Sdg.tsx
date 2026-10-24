@@ -111,7 +111,7 @@ export function SdgTags({ kind, id, subject, tags }: { kind: "skill" | "role"; i
   );
 }
 
-/** The SDG tags of a group of skills (a CV group like "Web Development"): the goals its skills contribute to, most
+/** The SDG tags of a group of skills (a resume group like "Web Development"): the goals its skills contribute to, most
  * skills first. Clicking one lists how each skill contributes to that goal. */
 export function SdgGroupTags({ skills, subject }: { skills: { id: string; label: string }[]; subject: string }) {
   const [, refresh] = useState(0);

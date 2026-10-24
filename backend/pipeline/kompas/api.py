@@ -513,14 +513,14 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None,
         return {"role": title, "jobs": out, "source": found["source"], "fetched_at": found["fetched_at"],
                 "cached": found.get("cached", False), "note": found.get("note")}
 
-    MAX_TEXT_LINES = 600     # the whole of a normal CV; the reader shows it scrollable
+    MAX_TEXT_LINES = 600     # the whole of a normal resume; the reader shows it scrollable
 
     @app.post("/profile/text")
     def profile_text(file: UploadFile = File(...)):
-        """The CV's text lines, fast, so the scanner can show the real document while the reader works."""
+        """The resume's text lines, fast, so the scanner can show the real document while the reader works."""
         data = file.file.read(cv.MAX_BYTES + 1)
         if len(data) > cv.MAX_BYTES:
-            raise HTTPException(413, "CV must be 5 MB or smaller")
+            raise HTTPException(413, "Resume must be 5 MB or smaller")
         try:
             text = cv.extract_text(file.filename or "", data)
         except cv.UnsupportedFile as e:
@@ -534,7 +534,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None,
         if file is not None:
             data = file.file.read(cv.MAX_BYTES + 1)
             if len(data) > cv.MAX_BYTES:
-                raise HTTPException(413, "CV must be 5 MB or smaller")
+                raise HTTPException(413, "Resume must be 5 MB or smaller")
             try:
                 text = cv.extract_text(file.filename or "", data)
             except cv.UnsupportedFile as e:
@@ -544,12 +544,12 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None,
         if not text or len(text.strip()) < 40:
             raise HTTPException(422, "No readable text found. A scanned PDF needs to be exported with text.")
         if len(text) > cv.MAX_CHARS:
-            raise HTTPException(413, "That's much longer than a CV. Upload just the CV itself.")
+            raise HTTPException(413, "That's much longer than a resume. Upload just the resume itself.")
         return text
 
     @app.post("/profile/read")
     def read_profile(file: UploadFile | None = File(None), text: str | None = Form(None), conn=Depends(get_conn)):
-        """Upload step 1: what the CV says (skills, AI tools, jobs, summary, each with its quote), not yet matched
+        """Upload step 1: what the resume says (skills, AI tools, jobs, summary, each with its quote), not yet matched
         against the market; send it to /profile/match next. The file is read in memory and never stored."""
         text = _cv_text(file, text)
         reference(conn)
@@ -566,7 +566,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None,
 
     @app.post("/profile/extract")
     def extract_profile(file: UploadFile | None = File(None), text: str | None = Form(None), conn=Depends(get_conn)):
-        """CV -> skills profile, both steps at once (/profile/read then /profile/match). The file is read in memory
+        """Resume -> skills profile, both steps at once (/profile/read then /profile/match). The file is read in memory
         and never stored; nothing about the user is saved."""
         text = _cv_text(file, text)
         reference(conn)
@@ -574,7 +574,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None,
 
     @app.post("/profile/rescore")
     def rescore_profile(profile: dict, conn=Depends(get_conn)):
-        """A profile saved in the browser, re-scored against the latest snapshot. No CV needed: the skills it found
+        """A profile saved in the browser, re-scored against the latest snapshot. No resume needed: the skills it found
         (with their quotes) are kept, and statuses, roles, evidence and insights are recomputed."""
         if not isinstance(profile.get("skills"), list):
             raise HTTPException(422, "Expected a profile from /profile/extract")

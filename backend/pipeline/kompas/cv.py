@@ -1,8 +1,8 @@
-"""CV upload -> skills profile (PRD 5.1 / FR-1). The file is read in memory and never stored (NFR-3).
+"""Resume upload -> skills profile (PRD 5.1 / FR-1). The file is read in memory and never stored (NFR-3).
 
-The LLM reads the CV against reference data, not a closed list: skills Kompas tracks keep their ids, any other
+The LLM reads the resume against reference data, not a closed list: skills Kompas tracks keep their ids, any other
 skill is resolved to ESCO (kompas/open_skills.py), and jobs map to any ISCO-08 occupation in the ILO's index, or
-are scored against it when none fits (kompas/exposure.py). Every item must quote the CV verbatim or it is dropped
+are scored against it when none fits (kompas/exposure.py). Every item must quote the resume verbatim or it is dropped
 (FR-10.3). The dictionary tagger always runs too, as a safety net and as the fallback without an API key.
 """
 
@@ -18,7 +18,7 @@ from .curated import Curated
 from .tag import Tagger
 
 MAX_BYTES = 5 * 1024 * 1024
-MAX_CHARS = 60_000      # ~15 pages of text; longer isn't a CV
+MAX_CHARS = 60_000      # ~15 pages of text; longer isn't a resume
 TEXT_TYPES = (".txt", ".md")
 
 
@@ -54,7 +54,7 @@ def verbatim(quote: str, cv_norm: str) -> bool:
 
 
 def _line_around(text: str, start: int) -> str:
-    """The CV line containing a dictionary match, used as its quote."""
+    """The resume line containing a dictionary match, used as its quote."""
     a = text.rfind("\n", 0, start) + 1
     b = text.find("\n", start)
     line = text[a: b if b != -1 else len(text)].strip(" \t-•*")
@@ -71,7 +71,7 @@ def _words(s: str) -> set[str]:
 
 
 def checked_summary(summary: str | None, text: str, known: set[str]) -> str | None:
-    """The model's summary, or None if it repeats a word from the CV's first line (almost always the name) that
+    """The model's summary, or None if it repeats a word from the resume's first line (almost always the name) that
     isn't a skill or job word. The prompt forbids names; this checks instead of trusting it (FR-10.3)."""
     if not summary:
         return None
@@ -121,8 +121,8 @@ def insights(skills: list[dict], roles: list[dict], exposed: list[dict]) -> list
 
 
 def score(found: dict[str, dict], cur: Curated, conn, st: "journey.Statuses") -> dict:
-    """Everything about a CV that depends on the market data rather than the CV itself: each skill's status, the
-    AI capabilities that reach it, the best-fit roles and the evidence. `found` maps concept id -> how the CV shows
+    """Everything about a resume that depends on the market data rather than the resume itself: each skill's status, the
+    AI capabilities that reach it, the best-fit roles and the evidence. `found` maps concept id -> how the resume shows
     it ({"quote", "found_by"}). Run at upload, and again by rescore() when the data moves on."""
     have_ids = {cid for cid in found if cur.concepts[cid].kind == "skill"}
     profile = journey.Profile(skills={cid: "claimed" for cid in have_ids})
@@ -135,7 +135,7 @@ def score(found: dict[str, dict], cur: Curated, conn, st: "journey.Statuses") ->
                 "family": _family(cur, cid), **info}
 
     skills = [item(cid, info) for cid, info in found.items() if cur.concepts[cid].kind == "skill"]
-    # AI capabilities the CV names (document AI, anomaly detection): tools the person has used, not skills a role asks for
+    # AI capabilities the resume names (document AI, anomaly detection): tools the person has used, not skills a role asks for
     ai_tools = [item(cid, info) for cid, info in found.items() if cur.concepts[cid].kind == "capability"]
     have = {s["id"] for s in skills}
 
@@ -158,7 +158,7 @@ def score(found: dict[str, dict], cur: Curated, conn, st: "journey.Statuses") ->
     by_id = {s["id"]: s for s in skills}
     for r in roles:
         r["reasons"] = journey.reasons(r, by_id, sig)
-    # the reasons rewritten from their evidence (postings, ILO scores, signals, your CV), checked; else templates
+    # the reasons rewritten from their evidence (postings, ILO scores, signals, your resume), checked; else templates
     narrate.apply(cur, conn, roles, {cid: s["quote"] for cid, s in by_id.items() if s.get("quote")}, sig, mode="sync")
     pick = journey.recommend(roles)
     return {
@@ -175,9 +175,9 @@ def score(found: dict[str, dict], cur: Curated, conn, st: "journey.Statuses") ->
 
 
 def rescore(profile: dict, cur: Curated, conn) -> dict:
-    """What the CV said, matched against the market: each skill's status, the AI that reaches it, the best-fit roles
+    """What the resume said, matched against the market: each skill's status, the AI that reaches it, the best-fit roles
     with their reasons, the evidence and the Malaysian job market. Step 2 of an upload (after read()), and how a
-    profile saved in the browser stays current: the CV itself is never stored, so what it said (skills with their
+    profile saved in the browser stays current: the resume itself is never stored, so what it said (skills with their
     quotes, jobs, summary) is kept and everything else is recomputed against the latest snapshot."""
     open_skills.load_into(cur, conn)
     found = {s["id"]: {k: s[k] for k in ("quote", "found_by", "name", "group") if k in s}
@@ -186,7 +186,7 @@ def rescore(profile: dict, cur: Curated, conn) -> dict:
     # skills ESCO couldn't match at upload (it was down, say) get another try; a match joins the scored skills
     unrecognised = [u for u in profile.get("unrecognised") or [] if isinstance(u, dict) and u.get("name")]
     if unrecognised:
-        esco, _why = open_skills.resolve(conn, cur, [u["name"] for u in unrecognised], "a CV")
+        esco, _why = open_skills.resolve(conn, cur, [u["name"] for u in unrecognised], "a resume")
         by_name = open_skills.register_names(conn, cur, sorted(
             open_skills.unmatched_for_good(conn, [u["name"] for u in unrecognised if not esco.get(u["name"])])))
         for u in unrecognised:
@@ -214,13 +214,13 @@ MAX_GROUPS = 6
 
 def kompas_skill(tagger: Tagger, cur: Curated, name: str) -> str | None:
     """The Kompas skill a name the reader wrote stands for ("Bank Reconciliation" -> Reconciliation), by the same
-    aliases the raw data is tagged with; the longest match wins. Only skills: capabilities come from the CV text."""
+    aliases the raw data is tagged with; the longest match wins. Only skills: capabilities come from the resume text."""
     hits = [(len(span), cid) for cid, _m, span, _ in tagger.find_all(name) if cur.concepts[cid].kind == "skill"]
     return max(hits)[1] if hits else None
 
 
 def group_skills(skills: list[dict], unrecognised: list[dict]) -> list[dict]:
-    """The CV's skills in the broad groups the reader put them in (a dictionary match without one goes under its
+    """The resume's skills in the broad groups the reader put them in (a dictionary match without one goes under its
     job family), largest first: [{name, skills: [ids], untracked: [names]}]. For display only; matching uses the
     skills themselves."""
     groups: dict[str, dict] = {}
@@ -239,7 +239,7 @@ def group_skills(skills: list[dict], unrecognised: list[dict]) -> list[dict]:
 
 
 def read(text: str, cur: Curated, conn, client=None) -> dict:
-    """Step 1 of an upload: what the CV says. Its skills (Kompas's, or ESCO's for the rest), the AI tools it names,
+    """Step 1 of an upload: what the resume says. Its skills (Kompas's, or ESCO's for the rest), the AI tools it names,
     its jobs mapped to occupations, and a summary, each with a verbatim quote. Nothing about the market yet, so
     the skills can be shown while rescore() matches them."""
     cv_norm = _norm(text)
@@ -251,7 +251,7 @@ def read(text: str, cur: Curated, conn, client=None) -> dict:
     extraction, llm_error = llm.extract_cv(text, cur, {i: o.title for i, o in idx.occupations.items()
                                                        if o.origin == "ilo"}, client=client)
     tagger = Tagger(cur)
-    read_skills = []      # the reader's skills that quote the CV, for giving dictionary matches their category
+    read_skills = []      # the reader's skills that quote the resume, for giving dictionary matches their category
     if extraction:
         others = []
         for s in extraction["skills"]:
@@ -267,7 +267,7 @@ def read(text: str, cur: Curated, conn, client=None) -> dict:
             else:
                 others.append(s)
         # skills Kompas doesn't track: the ESCO skill that is the same skill, when there is one
-        esco, why = open_skills.resolve(conn, cur, [s["name"] for s in others], "a CV", client=client) if others else ({}, None)
+        esco, why = open_skills.resolve(conn, cur, [s["name"] for s in others], "a resume", client=client) if others else ({}, None)
         llm_error = llm_error or why
         # no ESCO skill is the same ("data entry"): kept under its own name and measured by it
         by_name = open_skills.register_names(conn, cur, sorted(
