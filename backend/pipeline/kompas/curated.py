@@ -33,6 +33,10 @@ class Concept:
     arxiv_terms: tuple[str, ...]
     github_topics: tuple[str, ...]
     weak_topics: tuple[str, ...] = ()   # written "~topic": counted for trends, too generic for the feed
+    # curated (concepts.csv) | esco: a skill found in a CV or job posting and resolved to ESCO at run time
+    # (kompas/open_skills.py). ESCO skills have no aliases or topics, so snapshots don't score them:
+    # kompas/open_signal.py measures them from the raw data on request instead.
+    origin: str = "curated"
 
 
 @dataclass(frozen=True)
@@ -96,6 +100,9 @@ class Curated:
     sdg_tags: dict[tuple[str, str], list[SdgTag]] = field(default_factory=dict)  # (role|skill, id) -> tags
     resources: dict[str, list[Resource]] = field(default_factory=dict)           # skill -> learning resources
     prereqs: dict[str, list[str]] = field(default_factory=dict)                  # skill -> skills it requires
+    # role skills measured from live Malaysian job postings (kompas/requirements.py): ISCO -> [(skill, importance)]
+    posting_roles: dict[str, list[tuple[str, float]]] = field(default_factory=dict)
+    posting_meta: dict[str, dict] = field(default_factory=dict)                  # ISCO -> {title, postings, fetched_at}
 
     def __post_init__(self):
         for c in self.concepts.values():
@@ -111,6 +118,10 @@ class Curated:
 
     def all_topics(self) -> list[str]:
         return sorted(self.topic_index)
+
+    def curated_ids(self, *kinds: str) -> list[str]:
+        """Concept ids from concepts.csv (not ESCO skills added at run time), optionally of the given kinds."""
+        return sorted(cid for cid, c in self.concepts.items() if c.origin == "curated" and (not kinds or c.kind in kinds))
 
 
 def _rows(path: Path) -> list[dict]:

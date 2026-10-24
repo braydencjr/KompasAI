@@ -13,6 +13,7 @@ from kompas.periods import available_at, months
 def no_live_courses(monkeypatch):
     """The Route's ImpactMojo courses are fetched live: tests never reach the network for them."""
     monkeypatch.setenv("KOMPAS_IMPACTMOJO", "0")
+    monkeypatch.setenv("KOMPAS_RADAR", "0")   # nor for Radar's hourly GitHub Trending scrape
 
 
 @pytest.fixture

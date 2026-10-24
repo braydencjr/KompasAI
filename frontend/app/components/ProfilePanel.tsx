@@ -9,9 +9,9 @@ import { useProfile } from "./Profile";
 export default function ProfilePanel() {
   const { source, cv, scan, lines } = useProfile();
 
-  if (scan) return <CvFlow key={scan.name} fileName={scan.name} lines={scan.lines} cv={scan.result} animate />;
+  if (scan) return <CvFlow key={scan.name} fileName={scan.name} lines={scan.lines} read={scan.read} cv={scan.result} animate />;
 
-  if (source === "cv" && cv) return <CvFlow fileName={cv.file ?? "Your CV"} lines={lines ?? null} cv={cv} animate={false} />;
+  if (source === "cv" && cv) return <CvFlow fileName={cv.file ?? "Your CV"} lines={lines ?? null} read={null} cv={cv} animate={false} />;
 
   return <CvMatch role={cvMatch} origin={<span className="chip chip-origin">Sample profile · Aisyah</span>} />;
 }

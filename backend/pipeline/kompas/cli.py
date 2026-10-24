@@ -180,6 +180,49 @@ def cmd_esco_sync(args, conn, cur):
     print(f"wrote curated/occupation_task.csv ({sum(counts.values())} tasks)")
 
 
+def cmd_ilo_sync(args, conn, cur):
+    """Loads the ILO's AI exposure scores per ISCO-08 task into the database (The Mirror's reference data)."""
+    from .connectors import ilo
+
+    counts = ilo.sync(conn)
+    print(f"stored {counts['tasks']} ILO-scored tasks for {counts['occupations']} occupations")
+
+
+def cmd_requirements(args, conn, cur):
+    """Measures what Malaysian job postings ask for, per role (JSearch + Gemini; one JSearch request a role a day)."""
+    from . import requirements
+
+    requirements.load_into(cur, conn, force=True)
+    for isco in args.isco or sorted(cur.role_titles):
+        row, why = requirements.build(conn, cur, isco)
+        if why:
+            print(f"{isco}: not updated ({why})")
+        else:
+            skills = ", ".join(f"{s['label']} {s['count']}/{row['postings']}" for s in row["skills"]["skills"])
+            print(f"{isco} {row['title']}: {skills}")
+
+
+def cmd_ilo_links(args, conn, cur):
+    """Links each catalogue job's ILO tasks to the AI capabilities Kompas tracks (Gemini, stored once per job)."""
+    from . import exposure
+    from .connectors import ilo
+
+    idx = ilo.INDEX.load(conn)
+    for isco in args.isco or sorted(cur.role_titles):
+        links = exposure.capability_links(conn, cur, idx.tasks.get(isco, []))
+        n = sum(bool(v) for v in links.values())
+        print(f"{isco}: {n} of {len(idx.tasks.get(isco, []))} tasks linked to a capability")
+
+
+def cmd_esco_catalogue(args, conn, cur):
+    """Loads the whole ESCO skills catalogue into esco_skill, from ESCO's download or a skills_en.csv on disk."""
+    from .connectors import esco_catalogue
+
+    text = open(args.file, encoding="utf-8").read() if args.file else esco_catalogue.download(args.version)
+    n = esco_catalogue.load(conn, text, args.version)
+    print(f"loaded {n} ESCO {args.version} skills into esco_skill")
+
+
 def cmd_esco_aliases(args, conn, cur):
     """Refreshes curated/occupation_alias.csv: the names people use for each catalogue job, from the ESCO API."""
     from .connectors import esco
@@ -335,8 +378,19 @@ def main(argv=None):
     rj.set_defaults(fn=cmd_reject)
 
     sub.add_parser("esco-sync", help="refresh The Mirror's task lists from the ESCO API").set_defaults(fn=cmd_esco_sync)
+    sub.add_parser("ilo-sync", help="refresh the ILO's AI exposure scores per occupation task").set_defaults(fn=cmd_ilo_sync)
+    rq = sub.add_parser("requirements", help="measure each role's skills from live Malaysian job postings")
+    rq.add_argument("--isco", nargs="*", help="ISCO-08 codes (default: the catalogue)")
+    rq.set_defaults(fn=cmd_requirements)
+    il = sub.add_parser("ilo-links", help="link each job's ILO tasks to the tracked AI capabilities")
+    il.add_argument("--isco", nargs="*", help="ISCO-08 codes (default: the catalogue)")
+    il.set_defaults(fn=cmd_ilo_links)
     sub.add_parser("esco-skills", help="fetch each role's ESCO skills (evidence for role skill links)").set_defaults(fn=cmd_esco_skills)
     sub.add_parser("esco-aliases", help="fetch the names people use for each catalogue job (job search)").set_defaults(fn=cmd_esco_aliases)
+    ec = sub.add_parser("esco-catalogue", help="load the whole ESCO skills catalogue, for matching skills offline")
+    ec.add_argument("--version", default="v1.2.1", help="ESCO release to download (default v1.2.1)")
+    ec.add_argument("--file", help="a skills_en.csv already downloaded, instead of downloading")
+    ec.set_defaults(fn=cmd_esco_catalogue)
     sub.add_parser("links-draft", help="draft role skill links from ESCO with Gemini, for review").set_defaults(fn=cmd_links_draft)
     sub.add_parser("links-apply", help="merge the reviewed draft into concept_occupation.csv").set_defaults(fn=cmd_links_apply)
     sub.add_parser("validate", help="check the curated tables").set_defaults(fn=cmd_validate)

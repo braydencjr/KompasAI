@@ -1,0 +1,17 @@
+/* Tailwind utilities only, with no preflight, so the hand-written globals.css keeps control of base styles.
+   Not wrapped in a cascade layer: unlayered rules in globals.css (`* { margin: 0; padding: 0 }`) would beat layered utilities.
+   The shadcn colour tokens are mapped onto Kompas's own variables. */
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-card: #ffffff;
+  --color-card-foreground: var(--ink);
+  --color-muted: rgba(15, 30, 60, 0.06);
+  --color-muted-foreground: var(--muted);
+  --color-border: var(--hair);
+  --color-primary: var(--accent);
+  --color-ring: var(--accent);
+}

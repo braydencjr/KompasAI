@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { profile as sampleProfile } from "../data/bets";
-import { extractProfile, readLines, rescoreProfile, type CvProfile, type CvRole, type Profile } from "../lib/kompas";
+import { matchProfile, readLines, readProfile, rescoreProfile, type CvProfile, type CvRead, type CvRole, type Profile } from "../lib/kompas";
 
 // No login: the profile lives in this browser only (PRD NFR-3).
 const STORAGE_KEY = "kompas:profile";
@@ -20,8 +20,9 @@ type Stored = {
 const SAMPLE: Stored = { source: "sample", cv: null, skills: sampleProfile.skills.map((s) => s.id), roleIsco: null };
 
 /** The CV read in this session: drives the reading flow (scan, extract, match, direction). Kept until the next
- * upload so the flow can play through; a profile restored from storage has no scan and shows the flow finished. */
-export type Scan = { name: string; lines: string[] | null; result: CvProfile | null };
+ * upload so the flow can play through; a profile restored from storage has no scan and shows the flow finished.
+ * `read` arrives first (the skills the CV shows), `result` once they're matched against the market. */
+export type Scan = { name: string; lines: string[] | null; read: CvRead | null; result: CvProfile | null };
 
 type ProfileState = Stored & {
   role: CvRole | null;
@@ -118,17 +119,29 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     epoch.current += 1;
     setError(null);
     const local = /\.(txt|md)$/i.test(file.name) ? textLines(await file.text()) : null;
+    const at = epoch.current;
     let lines = local;
-    setScan({ name: file.name, lines: local, result: null });
+    setScan({ name: file.name, lines: local, read: null, result: null });
     try {
       // the real lines of a PDF/DOCX arrive quickly from the API, while the reader is still working
       const reading = local ? null : readLines(file).then((got) => {
         if (!got) return;
         lines = got;
-        setScan((s) => (s && s.name === file.name ? { ...s, lines: got } : s));
+        setScan((s) => (s && s.name === file.name && !s.read ? { ...s, lines: got } : s));
       });
-      // a floor on the scan so it reads even when the API answers instantly
-      const [res] = await Promise.all([extractProfile(file), wait(2200)]);
+      // 1 · read: the skills the CV shows (a floor on the scan so it reads even when the API answers instantly)
+      const [got] = await Promise.all([readProfile(file), wait(2200)]);
+      if (epoch.current !== at) return;
+      if ("error" in got) {
+        setError(got.error);
+        setScan(null);
+        return;
+      }
+      const read = got.read;
+      setScan((s) => ({ name: file.name, lines: lines ?? s?.lines ?? local, read, result: null }));
+      // 2 · match: those skills against the market, while the stickers show (a floor so the matching reads too)
+      const [res] = await Promise.all([matchProfile(read), wait(1500)]);
+      if (epoch.current !== at) return;
       if (reading) await Promise.race([reading, wait(3000)]);
       if ("error" in res) {
         setError(res.error);
@@ -141,7 +154,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const cv = res.profile;
-      setScan((s) => ({ name: file.name, lines: lines ?? s?.lines ?? null, result: cv }));
+      setScan((s) => ({ name: file.name, lines: lines ?? s?.lines ?? null, read, result: cv }));
       save({ source: "cv", cv, skills: cv.skills.map((s) => s.id), roleIsco: cv.recommended ?? cv.roles[0]?.isco ?? null, lines });
       setGeneration((g) => g + 1);
     } catch {

@@ -2,8 +2,18 @@
 
 > **Working name:** Kompas (final name TBD — shortlist: KompasKerja, KompasAI)
 > **Event:** SDC XMUM Hackathon — Domain 1: The Aiversecity Future-Ready Workforce
-> **Status:** Draft v1.1 · Preliminary round
+> **Status:** Draft v1.2 · Preliminary round
 > **Tagline:** *AI watches the market. You grow.*
+
+### Changes in v1.2 (backend data pipeline)
+1. **Data anchors the answer; the LLM fills the gaps.** The data pipeline is still the source of truth. Where it has nothing to say (a skill no source mentions, a job outside the official lists), the LLM now gives a judgement instead of the app showing "No data yet". Each such judgement is based on related records we hold, can only point to records we actually fetched, and is cached so it is made once.
+2. **CV reading is one simple step.** One LLM call reads the CV and returns skills already grouped into categories (each skill with a quote from the CV). The extra "merge categories" step and the long list of tracked skills in the prompt are gone, which makes it faster.
+3. **Any skill can be tracked, not only our list.** Skills outside our dictionary are matched to the ESCO skills list on demand and measured in the same stored records, so they get a status too.
+4. **Official AI-exposure scores added.** The ILO's published task-level scores are now the base for The Mirror. Jobs the ILO does not list get LLM-estimated task scores anchored on the most similar official ones.
+5. **Role requirements come from real Malaysian job ads** (where enough are found), not only from our hand-made list.
+6. **Skills are matched by meaning** as well as by name when scoring how well you fit a role.
+7. **Reasons shown for each suggested job are written by the LLM from the evidence and then checked.** A reason that cites anything outside its evidence falls back to a fixed template.
+8. **Speed rules:** the LLM calls that only choose or sort run without extended thinking, results are cached, and the browser waits up to 2 minutes for the CV steps.
 
 ### Changes in v1.1
 1. **Demo scope fixed:** SDG lens and a static Route view are now built live (previously contradicted the demo script).
@@ -167,8 +177,8 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 ### 7.1 Profile intake
 - **FR-1.1** Accept PDF and DOCX resumes up to 5 MB.
 - **FR-1.2** Accept an optional GitHub profile/repo URL and optional work-sample files (PDF, DOCX, MD).
-- **FR-1.3** Extract with the LLM: job titles, employers (optional), durations, education, listed skills, projects. Output must be structured and every extracted item must appear in the uploaded text.
-- **FR-1.4** Map each extracted skill to a taxonomy skill (ESCO) using dictionary/alias match first, then meaning-based (embedding) match above a similarity threshold. Unmatched phrases are kept as free text and flagged.
+- **FR-1.3** Extract with one LLM call: the CV's skills grouped into broad categories (the model decides the categories, 2 to 4 words each), job titles, employers, durations and a short summary. Output must be structured and every extracted item must carry a quote that appears in the uploaded text.
+- **FR-1.4** Map each extracted skill to a taxonomy skill. Skills in our dictionary are matched by name and alias. Any other skill is looked up in the ESCO skills list; the LLM may pick only from what ESCO returns, or say none. A matched ESCO skill becomes a skill we can track from then on. Unmatched phrases are kept as free text and flagged.
 - **FR-1.5** Tag each profile skill with evidence level: **Claimed** (resume only) or **Demonstrated** (supported by a work sample or repository).
 - **FR-1.6** Generate a ≤ 80-word candidate summary. The summary may only reference items extracted from the user's own files.
 - **FR-1.7** Collect no age, gender, ethnicity, nationality or photo. Strip these if present in the upload before processing.
@@ -176,7 +186,7 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 
 ### 7.2 Task exposure (The Mirror)
 - **FR-2.1** Map each job title to a standard occupation (ESCO or O*NET) with a confidence score; let the user confirm or change the match.
-- **FR-2.2** Pull that occupation's task list.
+- **FR-2.2** Pull that occupation's task list, with the ILO's published AI-exposure score for each task. For a job the ILO does not list, the LLM writes the job's main tasks and scores each against the most similar published tasks, citing them. A score outside the range of the tasks it cites is dropped. The result is stored and marked as an estimate, so each job is estimated once.
 - **FR-2.3** For each task, compute an exposure score from the capabilities it relies on (via the capability bridge, 8.5) and those capabilities' signal strength.
 - **FR-2.4** Classify tasks as **AI-exposed** (score ≥ threshold) or **Human edge**; show reason and evidence per card.
 - **FR-2.5** Show the share of tasks per pile, labelled with the active scenario and "estimate".
@@ -187,12 +197,13 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 - **FR-3.2** Blank slots = top-N missing skills from the user's top-matching roles whose status is Emerging or Act now under the active scenario.
 - **FR-3.3** Scenario toggle (Moderate / Fast) recomputes states without a page reload.
 - **FR-3.4** Each state links to its ladder evidence.
+- **FR-3.5** A skill with no measured evidence and no linked AI capability is not left as "stays the same" by default. The LLM judges its 2028 direction (worth more, AI takes over, fading, or holds) with a one-line reason, shown on hover. Measured and curated results always take priority. The judgement is cached.
 
 ### 7.4 Matching and Three Bets
-- **FR-4.1** Role catalogue is limited to roles in stored sources (ESCO occupations, MyCOL list, and occupations present in ingested demand data). The LLM may not create roles.
+- **FR-4.1** Role catalogue is limited to roles in stored sources (ESCO occupations, MyCOL list, and occupations present in ingested demand data). The LLM may not create roles. A role's required skills come from its live Malaysian job ads when at least 5 are found (a skill asked for by at least half of the ads is essential, by at least a fifth optional); otherwise from the hand-made list.
 - **FR-4.2** Match score (explainable):
   - For each skill *s* required by role *r*: weight *w(s)* = importance (essential 1.0, optional 0.5) × demand multiplier from ladder status (Act now 1.2, Emerging 1.1, Stable 1.0, Watch 0.9, Declining 0.7).
-  - User coverage *c(s)* = 1.0 Demonstrated, 0.7 Claimed, 0 missing.
+  - User coverage *c(s)* = 1.0 Demonstrated, 0.7 Claimed, 0 missing. A missing skill still earns partial credit when you have a skill that means almost the same (for example "Recruit personnel" for "Hire staff"). Similarity is judged by comparing stored meaning-vectors of the skill names; credit starts at 50% for a close match and reaches 100% for a near-identical one. Unrelated skills get nothing.
   - **Match(r) = Σ w(s)·c(s) / Σ w(s)**, shown as a percentage with the per-skill breakdown.
   - Weights are configuration, documented and visible in a "How is this calculated?" panel.
 - **FR-4.3** Bet selection:
@@ -236,9 +247,9 @@ The journey has seven named moments. Each maps to one or more of the brief's mus
 
 ### 7.10 AI disclosure and guardrails
 - **FR-10.1** Disclose the language model(s) used, in the UI footer and README.
-- **FR-10.2** LLM use is limited to: (a) extraction from the user's own uploaded files, and (b) writing plain-language explanations of already-computed results. **The LLM is not used in bulk ingestion in the preliminary build** (see 8.4).
+- **FR-10.2** LLM use is limited to: (a) extraction from the user's own uploaded files, (b) writing plain-language explanations of already-computed results, and (c) filling gaps where our data is silent (estimating a job's task exposure, a skill's trend, or which related records bear on a skill). Gap-filling is always based on stored records, never replaces measured data, and its output is cached. **The LLM is not used in bulk ingestion in the preliminary build** (see 8.4).
 - **FR-10.3** Any LLM-extracted item must appear in its source text; otherwise it is discarded.
-- **FR-10.4** Any LLM-written explanation may only reference entity IDs present in the computed result; a post-check rejects outputs that mention unknown roles, courses or numbers.
+- **FR-10.4** Any LLM-written explanation may only reference entity IDs present in the computed result; a post-check rejects outputs that mention unknown roles, courses or numbers. For job reasons, every sentence must cite its evidence, and a reason that fails the check keeps its fixed template.
 - **FR-10.5** Every displayed skill, role, resource and statistic carries a source and date.
 
 ---
@@ -250,7 +261,7 @@ The ingestion engine is the core of Kompas and the focus of the preliminary demo
 ### 8.1 Design principles
 1. **Provenance on every record** — source, URL, published date, fetched date.
 2. **Versioned snapshots** — every run produces a dated snapshot; any two can be compared or replayed.
-3. **Closed world** — skills and roles come only from the taxonomy or matched source text.
+3. **Data first, LLM for gaps** — skills and roles come from the taxonomy or matched source text, and measured results are never overwritten. Where the data has nothing, the LLM may give a judgement that can cite only records we hold (see 8.9).
 4. **History first** — every connector supports fetching past periods, so trends are measured against a real baseline from day one.
 
 ### 8.2 Source registry
@@ -266,6 +277,8 @@ The ladder has three rungs. Each rung must include at least one source that cove
 | 2 · Regional adoption (all occupations) | Singapore MOM job vacancy rate by occupation (data.gov.sg) | Occupation | Quarterly | **Yes** | Open Data Licence; API access; long history available |
 | 3 · Malaysian demand | DOSM job-vacancy releases (Job Market Insights; vacancies by occupation) | Occupation | Quarterly | **Yes** | Use whatever machine-readable form exists; else a once-per-release table import. Covers four recruitment sites only — disclose |
 | 3 · Malaysian demand | MyCOL 2024/2025 (TalentCorp critical occupations) | Occupation | Per edition | **Yes** | Import once per edition; anchors role catalogue |
+| Tasks · AI exposure | ILO generative-AI exposure index (task-level scores for every ISCO-08 job; CC BY 4.0) | Occupation task | Pinned version | Yes | Downloaded once into the database; MASCO follows ISCO-08 so scores apply to Malaysian jobs |
+| Role skills | Live Malaysian job ads (Google for Jobs via JSearch) | Occupation | Refreshed weekly per role | Yes | Used only to list the skills a role asks for, never to trend skills; cached |
 | Taxonomy | ESCO API (skills, occupations, occupation→skill links, multilingual labels) | — | Pinned version | — | Free, no key; lags new AI skills |
 | Tasks | O*NET / ESCO occupation descriptions | — | Pinned version | — | Public datasets |
 
@@ -345,6 +358,22 @@ For skill *s*, source *r*, period *t*:
 - Failed fetch → keep last good snapshot active; log and show "data as of <date>" in the UI.
 - All snapshots stored with metadata so the demo can run offline.
 
+### 8.9 Reference data and LLM-filled gaps
+The stored records stay the evidence. Around them, the backend does these things on request, and stores the result so each is done once:
+
+1. **Skills outside our list.** A skill from a CV or a job ad is matched to ESCO, then counted in the same stored Hacker News and hiring-post records using the same scoring rules as tracked skills. It gets a "talked about" and a "hired abroad" signal. There is no per-skill Malaysian signal, because DOSM publishes by occupation, not by skill.
+2. **Silence is not "no demand".** If a skill has no signal on a rung, the LLM is shown related records (found by looser matching on the words in its name) and picks only the ones that really bear on the skill, such as the same tool or field. It then estimates the movement on the missing rungs. Only the records it was shown can be cited, and a record that merely mentions a word in passing does not count. Measured rungs and evidence are never changed.
+3. **2028 direction for unmeasured skills** — see FR-3.5.
+4. **Job exposure for jobs the ILO does not list** — see FR-2.2.
+5. **Meaning-based skill matching** — see FR-4.2. Each skill name is turned into a stored meaning-vector once. Matching uses a strict cutoff because short names can look falsely alike (for example "English" and "Excel"), so some true matches are missed rather than risk false ones.
+6. **Job reasons.** The LLM rewrites each reason (fit, demand, trend, AI) from an evidence pack and a checker rejects any that go beyond it.
+
+**Speed.** One CV upload makes a handful of LLM calls in order: read the CV, match other skills to ESCO, (if needed) estimate the current job's tasks, fill signal gaps, write reasons. Calls that only choose or sort run with extended thinking off, and every result above is cached, so a repeat of the same CV is much faster.
+
+**Known limits.**
+- Role suggestions depend on roles that have a skill list. Only a small set (mostly finance and tech, plus roles whose job ads have been fetched) does today, so a profile from retail or customer service sees low match scores. Generating skill lists for more roles is planned, not built.
+- Gap-filling judgements are the model's opinion anchored on our records, not measurements. They are not labelled differently in the UI at present.
+
 ---
 
 ## 9. Data model
@@ -366,6 +395,11 @@ signal(skill_id, source_id, period, value, trend, low_confidence)
 snapshot(id, period, created_at, source_versions_json, scenario_params_json)
 skill_status(snapshot_id, skill_id, scenario, rung, status, evidence_ids[])
 role_skill(occupation_id, skill_id, importance)
+ilo_task(isco, task_no, occupation, task, score, band, origin, basis)       -- ILO scores; origin ilo | llm (estimated, with the tasks it cites)
+open_skill(id, label, esco_uri, names[])                                    -- ESCO skills found in CVs and ads
+open_status(snapshot_id, concept_id, status, projected, rungs, evidence)    -- their measured status per snapshot
+skill_embedding(skill_id, model, vector)                                    -- meaning-vector of a skill name
+narration(key, payload, created_at)                                         -- cached LLM outputs (reasons, estimates, trends)
 sdg_tag(entity_type, entity_id, sdg_number, rationale, reference)
 resource(id, title, provider, url, cost_tier, est_hours, language, hrdc_verified, checked_at)
 resource_skill(resource_id, skill_id)
@@ -412,13 +446,13 @@ route_step(route_id, order, skill_id, resource_id, est_hours, completed)
 ---
 
 ## 11. Non-functional requirements
-- **NFR-1 Performance:** resume upload to The Mirror in ≤ 20 s; scenario and SDG toggles ≤ 1 s.
+- **NFR-1 Performance:** resume upload to The Mirror in ≤ 20 s for a cached or small CV (a first-time large CV can take about half a minute, as it makes several LLM calls); scenario and SDG toggles ≤ 1 s.
 - **NFR-2 Transparency:** source + date on every displayed fact; "How is this calculated?" on every score.
 - **NFR-3 Privacy:** synthetic data only in demo; uploaded files deleted after processing in demo mode; no demographic fields stored.
 - **NFR-4 Accessibility & inclusion:** mobile-first; low-bandwidth mode (no heavy charts by default); skill labels in EN with BM/ZH from ESCO where available.
 - **NFR-5 Reliability:** UI always shows the active snapshot date; failed ingestion never blanks the product.
 - **NFR-6 Reproducibility:** any snapshot can be re-scored from stored raw documents.
-- **NFR-7 Cost:** bulk ingestion runs without paid API calls (no LLM in ingestion for the prelim).
+- **NFR-7 Cost:** bulk ingestion runs without paid API calls (no LLM in ingestion for the prelim). Per-user LLM and embedding calls are cached so repeats cost nothing.
 
 ---
 

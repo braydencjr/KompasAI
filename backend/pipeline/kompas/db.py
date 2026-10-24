@@ -311,7 +311,164 @@ def _m3_alias_suggestions(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS alias_suggestion_status ON alias_suggestion(status)")
 
 
-MIGRATIONS = [(1, _m1_ingestion), (2, _m2_legacy_streams), (3, _m3_alias_suggestions)]
+def _m4_reference_data(conn):
+    """Reference data the LLM reads and cites, and what it derived from it. None of it is about a user."""
+    for statement in """
+    -- The ILO's generative-AI exposure index per ISCO-08 task (connectors/ilo.py). origin 'ilo' rows are the
+    -- published scores, origin 'llm' rows are tasks of an occupation the index doesn't list, scored by the LLM
+    -- against cited ILO tasks (kompas/exposure.py), with those tasks in basis.
+    CREATE TABLE IF NOT EXISTS ilo_task (
+      isco TEXT NOT NULL,
+      task_no INTEGER NOT NULL,
+      occupation TEXT NOT NULL,
+      gradient TEXT,
+      task TEXT NOT NULL,
+      score REAL NOT NULL,
+      band TEXT,
+      origin TEXT NOT NULL,
+      basis TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (isco, task_no)
+    );
+
+    -- Skills found in CVs and job postings that aren't Kompas concepts, resolved to ESCO (kompas/open_skills.py).
+    CREATE TABLE IF NOT EXISTS open_skill (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      esco_uri TEXT NOT NULL,
+      names TEXT NOT NULL DEFAULT '[]',   -- how CVs and postings named it, for searching the raw data
+      created_at TEXT NOT NULL
+    );
+    -- A skill label's embedding, for matching skills by meaning (kompas/similar.py)
+    CREATE TABLE IF NOT EXISTS skill_embedding (
+      skill_id TEXT PRIMARY KEY,
+      model TEXT NOT NULL,
+      vector TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS esco_lookup (query TEXT PRIMARY KEY, fetched_at TEXT NOT NULL, payload TEXT NOT NULL);
+
+    -- Signal Ladder status of an ESCO skill, measured from raw_doc on request (kompas/open_signal.py)
+    CREATE TABLE IF NOT EXISTS open_status (
+      snapshot_id TEXT NOT NULL,
+      concept_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      projected TEXT NOT NULL,
+      rungs TEXT NOT NULL,
+      evidence TEXT NOT NULL,
+      computed_at TEXT NOT NULL,
+      PRIMARY KEY (snapshot_id, concept_id)
+    );
+
+    -- A role's skills as Malaysian job postings ask for them (kompas/requirements.py)
+    CREATE TABLE IF NOT EXISTS role_requirement (
+      isco TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      fetched_at TEXT NOT NULL,
+      postings INTEGER NOT NULL,
+      skills TEXT NOT NULL,
+      model TEXT
+    );
+
+    -- LLM-written text over an evidence pack, keyed by the pack's hash, so the same facts are written once
+    CREATE TABLE IF NOT EXISTS narration (key TEXT PRIMARY KEY, created_at TEXT NOT NULL, payload TEXT NOT NULL)
+    """.split(";"):
+        conn.execute(statement)
+
+
+def _m5_trending(conn):
+    """GitHub Trending scrapes and the LLM's reading of each repository, for Radar (kompas/radar.py)."""
+    for statement in """
+    -- One row per repository per scrape. The previous scrape of the same period gives rank changes
+    CREATE TABLE IF NOT EXISTS trending_repo (
+      scraped_at TEXT NOT NULL,
+      since TEXT NOT NULL,              -- daily | weekly
+      full_name TEXT NOT NULL,
+      description TEXT,
+      language TEXT,
+      stars INTEGER NOT NULL,
+      forks INTEGER NOT NULL,
+      period_stars INTEGER NOT NULL,    -- stars gained today / this week, as GitHub reports it
+      PRIMARY KEY (scraped_at, since, full_name)
+    );
+    CREATE INDEX IF NOT EXISTS trending_repo_since ON trending_repo(since, scraped_at);
+
+    -- What a repository is, in plain words, its category and the Kompas skill it relates to. Written once per
+    -- repository by the LLM from its name, description and language.
+    CREATE TABLE IF NOT EXISTS repo_category (
+      full_name TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      plain TEXT NOT NULL,
+      skill_id TEXT,
+      model TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+    """.split(";"):
+        conn.execute(statement)
+
+
+def _m6_plain_words(conn):
+    """Plain-words text the LLM writes once for Radar: a news headline per story, a meaning per skill."""
+    for statement in """
+    -- A Hacker News story rewritten as a newspaper headline for non-programmers, the skill it is about and
+    -- whether it matters to someone's work (relevant = 1) or is niche tech news (0)
+    CREATE TABLE IF NOT EXISTS story_plain (
+      doc_id TEXT PRIMARY KEY,
+      headline TEXT NOT NULL,
+      dek TEXT NOT NULL,
+      skill_id TEXT,
+      relevant INTEGER NOT NULL,
+      model TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    -- What a Kompas skill is, in one plain sentence
+    CREATE TABLE IF NOT EXISTS concept_plain (
+      concept_id TEXT PRIMARY KEY,
+      plain TEXT NOT NULL,
+      model TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+    """.split(";"):
+        conn.execute(statement)
+
+
+def _m7_story_career(conn):
+    """How much a story matters to someone's career (0-3), and the event it is about, so the same story told by
+    several outlets is shown once (kompas/radar.py)."""
+    _add_columns(conn, "story_plain", {"career": "INTEGER", "topic": "TEXT"})
+
+
+def _m8_esco_catalogue(conn):
+    """The whole ESCO skills catalogue, for matching skills without ESCO's search API (connectors/esco_catalogue.py)."""
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS esco_skill (
+      uri TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      alt_labels TEXT NOT NULL DEFAULT '[]',
+      skill_type TEXT,          -- skill | knowledge
+      reuse_level TEXT,         -- transversal | cross-sector | sector-specific | occupation-specific
+      description TEXT,
+      version TEXT NOT NULL,    -- the ESCO release it came from, e.g. v1.2.1
+      loaded_at TEXT NOT NULL
+    )""")
+
+
+def _m9_esco_pick(conn):
+    """The model's answer per skill name and catalogue version (an ESCO skill, or NULL for none), so a name is
+    looked at once instead of on every visit (kompas/open_skills.py)."""
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS esco_pick (
+      name_key TEXT NOT NULL,
+      version TEXT NOT NULL,
+      skill_id TEXT,
+      picked_at TEXT NOT NULL,
+      PRIMARY KEY (name_key, version)
+    )""")
+
+
+MIGRATIONS = [(1, _m1_ingestion), (2, _m2_legacy_streams), (3, _m3_alias_suggestions), (4, _m4_reference_data),
+              (5, _m5_trending), (6, _m6_plain_words), (7, _m7_story_career), (8, _m8_esco_catalogue),
+              (9, _m9_esco_pick)]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
 

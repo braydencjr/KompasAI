@@ -40,6 +40,7 @@ export type FeedItem = {
   points?: number; // Hacker News upvotes
   stars?: number; // GitHub stars
   description?: string; // repo description
+  concepts?: { id: string; label: string }[];
 };
 
 /** One explained card in the personal feed: a skill, what's happening, what it means, what to do. */
@@ -68,9 +69,9 @@ export type Profile = {
   limit?: number;
 };
 
-async function call<T>(path: string, init?: RequestInit): Promise<T | null> {
+async function call<T>(path: string, init?: RequestInit, timeoutMs = 5000): Promise<T | null> {
   try {
-    const res = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(5000), ...init });
+    const res = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(timeoutMs), ...init });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;
@@ -113,6 +114,9 @@ export type CvSkill = {
   family: { id: string; label: string } | null;
   quote: string;
   found_by: "llm" | "dictionary";
+  /** the skill as the CV names it, and the broad group the reader put it in (absent on older profiles) */
+  name?: string;
+  group?: string | null;
 };
 
 export type CvTrace = {
@@ -124,19 +128,35 @@ export type CvTrace = {
   roles: { scored: number; catalogue: number; shown: number };
 };
 
-/** What the API read from an uploaded CV. Nothing here is stored on the server. */
+/** Upload step 1: what the CV says, before it is matched against the market (POST /profile/read). */
+export type CvRead = Pick<CvProfile, "file" | "method" | "model" | "llm_note" | "summary" | "jobs" | "unrecognised" | "groups" | "discarded_unverified"> & {
+  skills: CvReadSkill[];
+  ai_tools: CvReadSkill[];
+  trace: Pick<CvTrace, "text" | "reader" | "skills" | "jobs">;
+};
+
+export type CvReadSkill = Pick<CvSkill, "id" | "label" | "family" | "quote" | "found_by" | "name" | "group">;
+
+/** A broad group of the CV's skills, as the reader grouped them (display only: matching uses the skills) */
+export type SkillGroup = { name: string; skills: string[]; untracked: string[] };
+
+/** What the API read from an uploaded CV, matched against the market. Nothing here is stored on the server. */
 export type CvProfile = {
   file: string | null;
   method: "llm" | "dictionary";
   model: string | null;
   /** why the LLM wasn't used, when it wasn't */
   llm_note: string | null;
+  /** the ESCO skills catalogue was unreachable: skills only it can match wait for a later visit */
+  esco_down?: boolean;
   summary: string | null;
   jobs: { title: string; employer: string; period: string; quote: string; occupation: { isco: string; title: string } | null }[];
   skills: CvSkill[];
   /** AI capabilities the CV names (tools the person used), kept apart from skills */
   ai_tools: CvSkill[];
-  unrecognised: { name: string; quote: string }[];
+  unrecognised: { name: string; quote: string; group?: string | null }[];
+  /** the skills in broad groups, for the stickers; absent on profiles saved before it existed */
+  groups?: SkillGroup[];
   discarded_unverified: number;
   exposed: { id: string; label: string; status: LiveStatus | null; because: { skill: string; why: string }[] }[];
   /** best-fit roles, scored exactly as on the Your direction step (PRD FR-4.2) */
@@ -163,10 +183,14 @@ export type SkillSignal = {
   rungs: {
     rung: 1 | 2 | 3; name: string; movement: "rising fast" | "up" | "slightly up" | "flat" | "slightly down" | "down" | "falling" | "no data";
     sources: string[]; groups: string[];
+    /** the LLM's estimate where the market data is silent */
+    estimated?: boolean;
     /** with `groups`: those groups' share of all job openings now and in the `previous` quarter; `movement` follows it */
     share_pct?: number | null; previous_share_pct?: number | null; previous?: string | null;
   }[];
   meaning: string | null;
+  /** the whole status is the LLM's estimate (no measured data), with its one-sentence reason */
+  estimated?: boolean; basis?: string | null;
   evidence: SignalItem[];
   evidence_count: number;
 };
@@ -196,15 +220,31 @@ export async function readLines(file: File): Promise<string[] | null> {
   }
 }
 
-/** Uploads a CV. Returns the profile, or a message to show the user. */
-export async function extractProfile(file: File): Promise<{ profile: CvProfile } | { error: string }> {
+/** Upload step 1: the LLM reads the CV's skills and jobs. Returns them, or a message to show the user. */
+export async function readProfile(file: File): Promise<{ read: CvRead } | { error: string }> {
   const body = new FormData();
   body.append("file", file);
   try {
-    // reading a CV with the LLM takes a few seconds, longer than the default API timeout here
-    const res = await fetch(`${API_URL}/profile/extract`, { method: "POST", body, signal: AbortSignal.timeout(60_000) });
+    // reading a CV with the LLM takes a while, longer than the default API timeout here
+    const res = await fetch(`${API_URL}/profile/read`, { method: "POST", body, signal: AbortSignal.timeout(120_000) });
     const data = await res.json();
-    return res.ok ? { profile: data as CvProfile } : { error: typeof data.detail === "string" ? data.detail : "Couldn't read this CV." };
+    return res.ok ? { read: data as CvRead } : { error: typeof data.detail === "string" ? data.detail : "Couldn't read this CV." };
+  } catch {
+    return { error: "Can't reach the Kompas API. Is it running?" };
+  }
+}
+
+/** Upload step 2: the read skills matched against the market (statuses, roles and their reasons, evidence). */
+export async function matchProfile(read: CvRead): Promise<{ profile: CvProfile } | { error: string }> {
+  try {
+    const res = await fetch(`${API_URL}/profile/match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(read),
+      signal: AbortSignal.timeout(120_000),
+    });
+    const data = await res.json();
+    return res.ok ? { profile: data as CvProfile } : { error: typeof data.detail === "string" ? data.detail : "Couldn't match your skills." };
   } catch {
     return { error: "Can't reach the Kompas API. Is it running?" };
   }
@@ -217,7 +257,8 @@ export async function rescoreProfile(cv: CvProfile): Promise<CvProfile | null> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cv),
-      signal: AbortSignal.timeout(20_000),
+      // the first re-score after new skills are found measures them and asks the LLM (about 20 s for a 26-skill CV)
+      signal: AbortSignal.timeout(60_000),
     });
     return res.ok ? ((await res.json()) as CvProfile) : null;
   } catch {
@@ -247,4 +288,142 @@ export type LiveJobs = { role: string; jobs: LiveJob[]; source: string; fetched_
 export async function liveJobs(isco: string, skills: string[]): Promise<LiveJobs | null> {
   const params = new URLSearchParams({ isco, skills: skills.join(",") });
   return call<LiveJobs>(`/jobs?${params}`, { signal: AbortSignal.timeout(25_000) });
+}
+
+// ---------- Radar: what is moving right now ----------
+
+export type RadarRepo = {
+  full_name: string;
+  url: string;
+  description: string;
+  /** what it is in plain words, written by the LLM for non-programmers (null until it has read the repo) */
+  plain: string | null;
+  language: string | null;
+  stars: number;
+  forks: number;
+  /** stars gained today or this week, as GitHub reports it */
+  period_stars: number;
+  category: string;
+  rank: number;
+  category_rank: number;
+  /** rank in the same category at the previous scrape; null when new to it */
+  prev_category_rank: number | null;
+  skill: { id: string; label: string } | null;
+};
+
+export type RadarSince = "daily" | "weekly";
+
+export type RadarKeyword = {
+  term: string;
+  mentions: number;
+  baseline: number;
+  change: number;
+  new: boolean;
+  spark: number[];
+  concept_id: string | null;
+  evidence: { title: string; url: string }[];
+};
+
+export type RadarStory = {
+  id: string;
+  title: string;
+  url: string;
+  hn_url: string;
+  published_at: string;
+  points: number;
+  comments: number;
+  points_per_hour: number;
+  keywords: string[];
+};
+
+type LadderRung = { active: boolean; trend: number | null; level: "concept" | "family" | null };
+
+export type RadarTrendSkill = {
+  id: string;
+  label: string;
+  /** what it is in one plain sentence (null until the LLM has written it) */
+  plain: string | null;
+  status: LiveStatus;
+  /** the status at the comparison snapshot, when it differs */
+  was: LiveStatus | null;
+  move: "up" | "down" | null;
+  /** momentum: ladder moves, status and rising trends; the order within a field */
+  score: number;
+  ladder: { talk: LadderRung; abroad: LadderRung; malaysia: LadderRung };
+  /** how often a sample of Malaysian job postings asks for it */
+  postings: { postings: number; roles: { title: string; count: number; of: number }[]; quote: { text: string; role: string } | null } | null;
+  evidence: {
+    news: { headline: string; url: string; points?: number }[];
+    repos: { name: string; plain: string; stars_today: number; url: string }[];
+  };
+};
+
+export type RadarFamily = { id: string; label: string; status: LiveStatus | null; moving: number; skills: RadarTrendSkill[] };
+export type RadarTrends = { as_of: string | null; compared_to: string | null; families: RadarFamily[]; sample: { postings: number; roles: number } | null };
+
+export type RadarBrief = {
+  as_of: string | null;
+  compared_to: string | null;
+  headline: string;
+  summary: string;
+  by: string;
+  meters: { talk: { rising: number }; abroad: { rising: number }; malaysia: { rising: number; sample: { postings: number; roles: number } | null } };
+  climbed: number;
+  fell: number;
+};
+
+/** A shown story: read by the LLM and scored as mattering to people's careers. One per event. */
+export type RadarNews = {
+  id: string;
+  /** the event it tells; several outlets' stories about one event are shown once */
+  topic: string | null;
+  source: "my_news" | "reddit" | "hn_front";
+  outlet: string;
+  /** every outlet that covered the event */
+  outlets: string[];
+  headline: string;
+  dek: string | null;
+  title: string;
+  url: string;
+  published_at: string;
+  /** when the LLM first read it: when it reached Kompas */
+  first_seen: string;
+  /** votes where the source has them (Hacker News; Reddit with an API key) */
+  points: number | null;
+  comments: number | null;
+  /** how much it matters to a career: 2 = an industry change, 3 = jobs, pay, hiring, skills */
+  career: 2 | 3;
+  skill: { id: string; label: string } | null;
+  rank_score: number;
+};
+
+export const radar = {
+  brief: () => call<RadarBrief>("/radar/brief", undefined, 30000),
+  trends: () => call<RadarTrends>("/radar/trends", undefined, 30000),
+  news: () => call<{ as_of: string | null; items: RadarNews[] }>("/radar/news?limit=40", undefined, 20000),
+  repos: (since: RadarSince = "daily") =>
+    call<{ as_of: string | null; since: RadarSince; compared_to: string | null; categories: { label: string; count: number }[]; items: RadarRepo[] }>(
+      `/radar/repos?since=${since}`, undefined, 20000),
+  keywords: () => call<{ as_of: string | null; window_days: number; items: RadarKeyword[] }>("/radar/keywords?limit=20", undefined, 20000),
+};
+
+export type FeedEvent =
+  | { seq: number | string; type: "new" | "rising"; at: string; replay?: boolean; item: FeedItem }
+  | { seq: string; type: "news"; at: string; replay?: boolean; item: RadarNews };
+
+/** Subscribes to the whole live-feed event (not just the id). `onState` reports whether the stream is connected. */
+export function onFeedStream(handler: (event: FeedEvent) => void, onState?: (connected: boolean) => void): () => void {
+  if (typeof EventSource === "undefined") return () => {};
+  const es = new EventSource(`${API_URL}/feed/stream`);
+  const listener = (e: MessageEvent) => {
+    try {
+      handler(JSON.parse(e.data));
+    } catch {}
+  };
+  es.addEventListener("new", listener);
+  es.addEventListener("rising", listener);
+  es.addEventListener("news", listener);
+  es.onopen = () => onState?.(true);
+  es.onerror = () => onState?.(false);
+  return () => es.close();
 }

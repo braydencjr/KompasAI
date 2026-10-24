@@ -16,7 +16,6 @@ export const STEPS = [
   { id: "future", label: "AI & Skills Outlook", title: "AI & Skills Outlook" },
   { id: "bets", label: "Career Impact", title: "Career Impact" },
   { id: "route", label: "Learning Route", title: "Your learning route" },
-  { id: "ping", label: "The Ping", title: "The world moved" },
 ] as const;
 export type StepId = (typeof STEPS)[number]["id"];
 
