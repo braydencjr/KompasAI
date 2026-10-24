@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { listWords, type LiveStatus } from "../../lib/kompas";
-import { journeyApi, ladder, type Brief, type ConceptDetail, type EvidenceItem, type JourneyRequest } from "../../lib/journey";
+import type { LiveStatus } from "../../lib/kompas";
+import { journeyApi, ladder, type Brief, type ConceptDetail, type EvidenceItem, type JourneyRequest, type LadderTask } from "../../lib/journey";
 import { signalClass } from "../Signals";
 import { useJourney } from "./JourneyProvider";
 
@@ -80,20 +80,8 @@ export function BriefBox({ request }: { request: (JourneyRequest & { kind: "bets
 
 // ---------- Signal Ladder drawer (PRD 5.3) ----------
 
-const LadderCtx = createContext<(id: string) => void>(() => {});
+const LadderCtx = createContext<(id: string, task?: LadderTask) => void>(() => {});
 export const useLadder = () => useContext(LadderCtx);
-
-const RUNGS = [
-  { key: "1", name: "Talked about", sub: "research, open source, tech news" },
-  { key: "2", name: "Hiring abroad", sub: "job posts outside Malaysia" },
-  { key: "3", name: "Hiring in Malaysia", sub: "Malaysian job openings posted online" },
-] as const;
-
-// DOSM / MASCO 2020 major occupation groups, in everyday words (as journey.GROUP_WORDS)
-const MAJOR_GROUPS: Record<string, string> = {
-  "1": "manager", "2": "professional", "3": "technician", "4": "clerical", "5": "service and sales",
-  "6": "farming and fishing", "7": "trades", "8": "machine operator", "9": "elementary",
-};
 
 const SOURCE_NAMES: Record<string, string> = {
   arxiv: "arXiv", github: "GitHub", hn_front: "Hacker News", hn_hiring: "HN Who is hiring", dosm_jmi: "Malaysia Job Market Insights",
@@ -101,69 +89,51 @@ const SOURCE_NAMES: Record<string, string> = {
 
 export function LadderProvider({ children }: { children: React.ReactNode }) {
   const { snapshot, scenario } = useJourney();
-  const [open, setOpen] = useState<string | null>(null);
-  const [state, setState] = useState<{ concept: ConceptDetail; evidence: EvidenceItem[] } | null>(null);
+  const [target, setTarget] = useState<{ id: string; task?: LadderTask } | null>(null);
+  const [state, setState] = useState<{ concept: ConceptDetail; evidence: EvidenceItem[]; specific?: boolean; overall?: EvidenceItem[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setState(null);
-    setError(null);
-    ladder(open, snapshot).then(setState).catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [open, snapshot]);
+  const open = (id: string, task?: LadderTask) => setTarget({ id, task });
+  const close = () => setTarget(null);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
+    if (!target) return;
+    setState(null);
+    setError(null);
+    ladder(target.id, snapshot, target.task).then(setState).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [target, snapshot]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const c = state?.concept;
   return (
-    <LadderCtx.Provider value={setOpen}>
+    <LadderCtx.Provider value={open}>
       {children}
-      {open && (
-        <div className="j-drawer-backdrop" onClick={() => setOpen(null)}>
+      {target && (
+        <div className="j-drawer-backdrop" onClick={close}>
           <aside className="j-drawer glass" role="dialog" aria-label="Signal Ladder" onClick={(e) => e.stopPropagation()}>
-            <button className="j-drawer-close" onClick={() => setOpen(null)} aria-label="Close">×</button>
-            <span className="kicker">Signal Ladder · hype or real?</span>
+            <button className="j-drawer-close" onClick={close} aria-label="Close">×</button>
+            <span className="kicker">{target.task ? "Evidence for this task" : "Signal Ladder · hype or real?"}</span>
             {error && <p className="muted">{error}</p>}
             {!c && !error && <div className="j-drawer-loading"><span className="sk sk-title" /><span className="sk sk-tile" /><span className="sk sk-tile" /></div>}
             {c && (
               <>
-                <h2>{c.label}</h2>
+                <h2>{target.task ? target.task.label : c.label}</h2>
+                {target.task && <p className="muted small j-drawer-ai">The AI that could do it: {c.label}. {target.task.why}.</p>}
                 <div className="j-drawer-status">
                   <span className="muted small">Now</span> <Status status={c.status} />
                   <span className="muted small">2028 ({scenario})</span> <Status status={c.projected[scenario]} />
                 </div>
-                <ol className="j-rungs">
-                  {RUNGS.map((r, i) => {
-                    const rung = c.rungs[r.key];
-                    const family = r.key === "3" && rung?.level === "family";
-                    return (
-                      <li key={r.key} className={`${rung?.active ? "on" : ""}${family ? " family" : ""}`} style={{ "--i": i } as React.CSSProperties}>
-                        <span className="j-rung-dot" />
-                        <div>
-                          <strong>{r.name}</strong>
-                          <span className="muted small">
-                            {r.sub}
-                            {rung?.sources.length ? ` · ${rung.sources.map((s) => SOURCE_NAMES[s] ?? s).join(", ")}` : " · no data"}
-                            {family ? " · measured for the job family" : ""}
-                            {r.key === "3" && rung?.level === "group" && rung.groups?.length
-                              ? ` · based on all ${listWords(rung.groups.map((g) => MAJOR_GROUPS[g] ?? g))} job openings, so it doesn't change the status`
-                              : ""}
-                            {rung?.active && rung.low_confidence ? " · low confidence" : ""}
-                          </span>
-                        </div>
-                        {/* a whole-group Malaysian rung's score is for its share of openings, which can rise while
-                            openings fall: the skill cards show the change in openings instead, so no score here */}
-                        <span className="j-rung-trend">{rung?.trend == null || rung.level === "group" ? "–" : `${rung.trend > 0 ? "+" : ""}${rung.trend.toFixed(1)}`}</span>
-                      </li>
-                    );
-                  })}
-                </ol>
-                <h3 className="label">Evidence · snapshot {c.snapshot}</h3>
-                {state.evidence.length === 0 && <p className="muted small">No stored records behind this status in this snapshot.</p>}
+                <h3 className="label">{target.task ? "Evidence for this task" : "Evidence"} · snapshot {c.snapshot}</h3>
+                {state.evidence.length === 0 && (
+                  <p className="muted small">
+                    {target.task ? "No record we hold is specific to this task yet." : "No stored records behind this status in this snapshot."}
+                  </p>
+                )}
                 <ul className="j-evidence">
                   {state.evidence.map((e, i) => (
                     <li key={e.id} style={{ "--i": i } as React.CSSProperties}>
@@ -173,10 +143,25 @@ export function LadderProvider({ children }: { children: React.ReactNode }) {
                         {e.published_at.slice(0, 10)}
                         {e.value != null && ` · ${e.value.toLocaleString()} ${e.value_label ?? ""}`}
                       </span>
+                      {e.why && <span className="j-ev-why">{e.why}</span>}
                       {e.coverage_note && <span className="j-ev-note">{e.coverage_note}</span>}
                     </li>
                   ))}
                 </ul>
+                {target.task && !!state.overall?.length && (
+                  <>
+                    <h3 className="label">The AI overall · {c.label}</h3>
+                    <ul className="j-evidence">
+                      {state.overall.map((e, i) => (
+                        <li key={e.id} style={{ "--i": i } as React.CSSProperties}>
+                          <span className="j-ev-source">{SOURCE_NAMES[e.source] ?? e.source}</span>
+                          <span>{e.title}</span>
+                          {e.coverage_note && <span className="j-ev-note">{e.coverage_note}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </>
             )}
           </aside>

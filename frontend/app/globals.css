@@ -4554,6 +4554,8 @@ h3 {
 .j-evidence a { color: var(--ink); font-weight: 500; }
 .j-ev-source { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-ink); }
 .j-ev-note { font-size: 11.5px; color: var(--faint); }
+.j-ev-why { font-size: 13px; line-height: 1.5; color: var(--ink); }
+.j-drawer-ai { margin: -6px 0 4px; line-height: 1.5; }
 
 @media (max-width: 960px) {
   .j-piles, .j-bets, .j-ping-grid, .j-reorder { grid-template-columns: 1fr; }
@@ -5338,6 +5340,8 @@ h3 {
 
 .mr-cap:hover { background: var(--accent-soft); }
 .mr-cap em { font-style: normal; color: var(--muted); }
+.mr-cap-cta { flex-basis: 100%; font-size: 12.5px; font-weight: 500; color: var(--accent-ink); }
+.mr-cap:hover .mr-cap-cta { text-decoration: underline; text-underline-offset: 3px; }
 
 .mr-move {
   margin-top: auto;
