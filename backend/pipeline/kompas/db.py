@@ -311,7 +311,72 @@ def _m3_alias_suggestions(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS alias_suggestion_status ON alias_suggestion(status)")
 
 
-MIGRATIONS = [(1, _m1_ingestion), (2, _m2_legacy_streams), (3, _m3_alias_suggestions)]
+def _m4_reference_data(conn):
+    """Reference data the LLM reads and cites, and what it derived from it. None of it is about a user."""
+    for statement in """
+    -- The ILO's generative-AI exposure index per ISCO-08 task (connectors/ilo.py). origin 'ilo' rows are the
+    -- published scores, origin 'llm' rows are tasks of an occupation the index doesn't list, scored by the LLM
+    -- against cited ILO tasks (kompas/exposure.py), with those tasks in basis.
+    CREATE TABLE IF NOT EXISTS ilo_task (
+      isco TEXT NOT NULL,
+      task_no INTEGER NOT NULL,
+      occupation TEXT NOT NULL,
+      gradient TEXT,
+      task TEXT NOT NULL,
+      score REAL NOT NULL,
+      band TEXT,
+      origin TEXT NOT NULL,
+      basis TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (isco, task_no)
+    );
+
+    -- Skills found in CVs and job postings that aren't Kompas concepts, resolved to ESCO (kompas/open_skills.py).
+    CREATE TABLE IF NOT EXISTS open_skill (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      esco_uri TEXT NOT NULL,
+      names TEXT NOT NULL DEFAULT '[]',   -- how CVs and postings named it, for searching the raw data
+      created_at TEXT NOT NULL
+    );
+    -- A skill label's embedding, for matching skills by meaning (kompas/similar.py)
+    CREATE TABLE IF NOT EXISTS skill_embedding (
+      skill_id TEXT PRIMARY KEY,
+      model TEXT NOT NULL,
+      vector TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS esco_lookup (query TEXT PRIMARY KEY, fetched_at TEXT NOT NULL, payload TEXT NOT NULL);
+
+    -- Signal Ladder status of an ESCO skill, measured from raw_doc on request (kompas/open_signal.py)
+    CREATE TABLE IF NOT EXISTS open_status (
+      snapshot_id TEXT NOT NULL,
+      concept_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      projected TEXT NOT NULL,
+      rungs TEXT NOT NULL,
+      evidence TEXT NOT NULL,
+      computed_at TEXT NOT NULL,
+      PRIMARY KEY (snapshot_id, concept_id)
+    );
+
+    -- A role's skills as Malaysian job postings ask for them (kompas/requirements.py)
+    CREATE TABLE IF NOT EXISTS role_requirement (
+      isco TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      fetched_at TEXT NOT NULL,
+      postings INTEGER NOT NULL,
+      skills TEXT NOT NULL,
+      model TEXT
+    );
+
+    -- LLM-written text over an evidence pack, keyed by the pack's hash, so the same facts are written once
+    CREATE TABLE IF NOT EXISTS narration (key TEXT PRIMARY KEY, created_at TEXT NOT NULL, payload TEXT NOT NULL)
+    """.split(";"):
+        conn.execute(statement)
+
+
+MIGRATIONS = [(1, _m1_ingestion), (2, _m2_legacy_streams), (3, _m3_alias_suggestions), (4, _m4_reference_data)]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
 

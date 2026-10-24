@@ -12,10 +12,10 @@ import { ScenarioToggle, useLadder } from "./shared";
 type Group = Horizon | "never";
 
 const GROUPS: { id: Group; title: string; sub: string }[] = [
-  { id: "now", title: "AI can do this today", sub: "AI tools that do this are already in use." },
+  { id: "now", title: "AI can do this today", sub: "Generative AI could already do much of this." },
   { id: "moderate", title: "Likely by 2028", sub: "AI that does this is spreading." },
   { id: "fast", title: "Only if AI moves fast", sub: "AI does this at a basic level today. If progress speeds up, it could take it over." },
-  { id: "never", title: "Still needs you", sub: "No AI we track does this yet." },
+  { id: "never", title: "Still needs you", sub: "AI can do little of this, even if it moves fast." },
 ];
 
 const HORIZONS: { id: Horizon; label: string }[] = [
@@ -135,7 +135,7 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
             return (
               <li key={l.id} className={`cvp-skill ${t}`} style={{ "--d": `${i >= 0 ? at(i) : 0}ms` } as React.CSSProperties}>
                 <button onClick={() => openLadder(l.id)}
-                  title={`${l.label}: ${SKILL_PLAIN[l.status_now] ?? l.status_now} now, ${SKILL_PLAIN[l.status] ?? l.status} by ${g.horizon}. See the evidence.`}>
+                  title={l.why ? `${l.label}: ${l.why}` : `${l.label}: ${SKILL_PLAIN[l.status_now] ?? l.status_now} now, ${SKILL_PLAIN[l.status] ?? l.status} by ${g.horizon}. See the evidence.`}>
                   <span className="cvp-skill-text">{l.label}</span>
                 </button>
                 {t === "up" && <span className="cvp-tag up">↑ worth more · {SKILL_PLAIN[l.status] ?? l.status}</span>}
@@ -191,9 +191,9 @@ function TaskCardView({ card, index, focused, arrived, onMove, onUndo }: {
     <li className={`mr-card${arrived ? " arrived" : ""}${focused ? " focused" : ""}${card.override ? " overridden" : ""}`}
       style={{ "--d": `${index * 60}ms` } as React.CSSProperties}>
       <h4>{sentence(card.task).slice(0, -1)}</h4>
+      {!card.override && <p className="mr-why">{card.reason}</p>}
       {cap && !card.override && (
         <>
-          <p className="mr-why">{sentence(cap.rationale)}</p>
           <button className="mr-cap" onClick={() => openLadder(cap.id)} title="See the evidence for this AI">
             <span>AI: {cap.label}</span>
             <em>{CAP_PLAIN[cap.status_now] ?? cap.status_now}</em>
@@ -296,8 +296,9 @@ export default function StepFuture() {
           ))}
         </div>
         <p className="mr-note">
-          Estimates from today&apos;s AI signals, not predictions. &ldquo;By 2028&rdquo; assumes AI keeps its current
-          pace. Disagree with a task? Move it below: your call counts in every step after this.
+          Estimates, not predictions: based on research into what AI can do in each task, and on how fast AI tools
+          are spreading today. &ldquo;By 2028&rdquo; assumes AI keeps its current pace. Disagree with a task? Move it
+          below: your call counts in every step after this.
         </p>
       </section>
 

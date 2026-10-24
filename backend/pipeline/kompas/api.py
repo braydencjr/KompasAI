@@ -16,7 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import brief, curated, cv, db, explain, ingest, journey, live
+from . import brief, curated, cv, db, explain, ingest, journey, live, open_skills, requirements
+from .connectors import ilo
 from .config import PARAMS
 from .http import FetchError
 
@@ -134,6 +135,13 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     cur = curated.load()
     bus = live.Bus()
 
+    def reference(conn):
+        """The reference data beside the curated tables, kept fresh in this process: the ILO index, ESCO skills
+        found so far and the roles measured from postings (each reloads on its own timer)."""
+        ilo.INDEX.load(conn)
+        requirements.load_into(cur, conn)
+        open_skills.load_into(cur, conn)
+
     @asynccontextmanager
     async def background():
         tasks = []
@@ -209,12 +217,29 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
             c for c in out if (not status or c["status"] == status) and (not kind or c["kind"] == kind)
         ]}
 
+    def _open(conn, sid: str, cid: str) -> dict | None:
+        """An ESCO skill's status, measured from the raw data (kompas/open_signal.py), in /concepts' shape."""
+        reference(conn)
+        if cid not in cur.concepts or cur.concepts[cid].origin != "esco":
+            return None
+        st = journey.Statuses(conn, sid)
+        journey.measure_open(conn, [st], [cid])
+        row = st.rows.get(cid)
+        if not row:
+            return None
+        return {"id": cid, "label": cur.concepts[cid].label, "kind": "skill", "parent_id": None, "status": row["status"],
+                "family_id": None, "family_status": None, "projected": row["projected"], "rungs": row["rungs"],
+                "evidence_ids": [e["id"] for e in row["open_evidence"]], "evidence": row["open_evidence"]}
+
     @app.get("/concepts/{cid}")
     def concept(cid: str, snapshot: str | None = None, conn=Depends(get_conn)):
         sid = _snapshot_id(conn, snapshot)
         r = conn.execute("SELECT * FROM concept_status WHERE snapshot_id = ? AND concept_id = ?", (sid, cid)).fetchone()
         if not r:
-            raise HTTPException(404, f"concept {cid!r} not found")
+            o = _open(conn, sid, cid)
+            if o is None:
+                raise HTTPException(404, f"concept {cid!r} not found")
+            return {"snapshot": sid, **{k: v for k, v in o.items() if k != "evidence"}}
         return {"snapshot": sid, **_concept(r, cur)}
 
     @app.get("/concepts/{cid}/evidence")
@@ -223,7 +248,12 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         r = conn.execute("SELECT evidence_ids FROM concept_status WHERE snapshot_id = ? AND concept_id = ?",
                          (sid, cid)).fetchone()
         if not r:
-            raise HTTPException(404, f"concept {cid!r} not found")
+            o = _open(conn, sid, cid)
+            if o is None:
+                raise HTTPException(404, f"concept {cid!r} not found")
+            notes = {s.id: s.coverage_note for s in cur.sources.values()}
+            return {"snapshot": sid, "concept_id": cid, "evidence": [
+                {**e, "concept_ids": [cid], "coverage_note": notes.get(e["source"])} for e in o["evidence"]]}
         ids = json.loads(r["evidence_ids"])
         rows = conn.execute(
             f"SELECT * FROM evidence WHERE snapshot_id = ? AND id IN ({','.join('?' * len(ids)) or 'NULL'})",
@@ -315,6 +345,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         Concept ids must exist (closed world)."""
         have = {s.id for s in profile.skills}
         route, exposed = set(profile.route), set(profile.exposed)
+        open_skills.ensure_known(cur, conn, have | route | exposed)
         unknown = sorted((have | route | exposed) - set(cur.concepts))
         if unknown:
             raise HTTPException(422, {"unknown_concepts": unknown})
@@ -388,18 +419,25 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         from .connectors import jsearch
         from .tag import Tagger
 
-        if isco not in cur.role_titles:
+        reference(conn)
+        title = journey.occupation_title(cur, isco)
+        if not title:
             raise HTTPException(404, f"unknown occupation {isco!r}")
-        title = cur.role_titles[isco]
         try:
             found = jsearch.search(conn, title)
         except FetchError as e:
             return {"role": title, "jobs": [], "source": jsearch.SOURCE, "fetched_at": None, "cached": False, "note": str(e)}
+        # the same postings tell the role's requirements: measured in the background, once a week
+        requirements.ensure_async(cur, isco)
         have = {s for s in skills.split(",") if s}
         tagger = Tagger(cur)
+        esco_names = open_skills.names(conn, sorted(h for h in have if h.startswith("esco-")))
         out = []
         for j in found["jobs"]:
             mentioned = {cid for cid, *_ in tagger.find_all(f"{j['title']}\n{j['description']}")}
+            # your ESCO skills that the posting names, by any of the names they were found under
+            text = f"{j['title']}\n{j['description']}".lower()
+            mentioned |= {cid for cid, names in esco_names.items() if any(n in text for n in names)}
             out.append({**{k: v for k, v in j.items() if k != "description"},
                         "matched": sorted(cur.concepts[c].label for c in mentioned & have)})
         return {"role": title, "jobs": out, "source": found["source"], "fetched_at": found["fetched_at"],
@@ -420,9 +458,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         return {"file": file.filename, "chars": len(text), "lines": lines[:80]}
 
-    @app.post("/profile/extract")
-    def extract_profile(file: UploadFile | None = File(None), text: str | None = Form(None), conn=Depends(get_conn)):
-        """CV -> skills profile. The file is read in memory and never stored; nothing about the user is saved."""
+    def _cv_text(file: UploadFile | None, text: str | None) -> str:
         if file is not None:
             data = file.file.read(cv.MAX_BYTES + 1)
             if len(data) > cv.MAX_BYTES:
@@ -437,6 +473,31 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
             raise HTTPException(422, "No readable text found. A scanned PDF needs to be exported with text.")
         if len(text) > cv.MAX_CHARS:
             raise HTTPException(413, "That's much longer than a CV. Upload just the CV itself.")
+        return text
+
+    @app.post("/profile/read")
+    def read_profile(file: UploadFile | None = File(None), text: str | None = Form(None), conn=Depends(get_conn)):
+        """Upload step 1: what the CV says (skills, AI tools, jobs, summary, each with its quote), not yet matched
+        against the market; send it to /profile/match next. The file is read in memory and never stored."""
+        text = _cv_text(file, text)
+        reference(conn)
+        return {"file": file.filename if file else None, **cv.read(text, cur, conn)}
+
+    @app.post("/profile/match")
+    def match_profile(profile: dict, conn=Depends(get_conn)):
+        """Upload step 2: a read profile matched against the market (statuses, roles and their reasons, evidence,
+        the Malaysian job market). Also re-scores a saved profile, like /profile/rescore."""
+        if not isinstance(profile.get("skills"), list):
+            raise HTTPException(422, "Expected a profile from /profile/read")
+        reference(conn)
+        return cv.rescore(profile, cur, conn)
+
+    @app.post("/profile/extract")
+    def extract_profile(file: UploadFile | None = File(None), text: str | None = Form(None), conn=Depends(get_conn)):
+        """CV -> skills profile, both steps at once (/profile/read then /profile/match). The file is read in memory
+        and never stored; nothing about the user is saved."""
+        text = _cv_text(file, text)
+        reference(conn)
         return {"file": file.filename if file else None, **cv.analyse(text, cur, conn)}
 
     @app.post("/profile/rescore")
@@ -445,14 +506,19 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         (with their quotes) are kept, and statuses, roles, evidence and insights are recomputed."""
         if not isinstance(profile.get("skills"), list):
             raise HTTPException(422, "Expected a profile from /profile/extract")
+        reference(conn)
         return cv.rescore(profile, cur, conn)
 
     # ---------- user journey (PRD 5) ----------
 
-    def _profile(req: JourneyRequest) -> journey.Profile:
+    def _profile(req: JourneyRequest, conn) -> journey.Profile:
+        reference(conn)
         ids = {s.id for s in req.skills} | set(req.completed)
+        open_skills.ensure_known(cur, conn, ids)
         unknown = sorted(i for i in ids if i not in cur.concepts)
-        bad_occ = [o for o in (req.occupation, req.role) if o and o not in cur.role_titles]
+        # any occupation the ILO index has (or has scored), or the catalogue; a chosen role must be scoreable
+        bad_occ = [o for o in (req.occupation,) if o and not journey.occupation_title(cur, o)]
+        bad_occ += [o for o in (req.role,) if o and o not in journey.role_ids(cur)]
         if unknown or bad_occ:
             raise HTTPException(422, {"unknown_concepts": unknown, "unknown_occupations": bad_occ})
         if any(not 1 <= g <= 17 for g in req.sdgs):
@@ -478,15 +544,22 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     def journey_catalog(conn=Depends(get_conn)):
         """Occupations for The Mirror, SDGs for the lens, snapshots for The Ping, and the scoring rules."""
         sid = _snapshot_id(conn, None)
+        reference(conn)
         mycol = journey.mycol_codes(conn, "9999-12-31")
         masco = {isco: code for (system, code), isco in cur.occupation_codes.items() if system == "MASCO"}
         from .connectors import esco
         names = esco.aliases()
-        occupations = [{"isco": isco, "title": title, "occupation": cur.occupation_titles[isco],
+        idx = ilo.INDEX
+        # every occupation The Mirror can read: the catalogue's roles first, then every job in the ILO index (and
+        # the jobs it lacks that the LLM has scored against it)
+        codes = sorted(set(cur.role_titles) | set(idx.occupations),
+                       key=lambda i: (i not in cur.role_titles, (journey.occupation_title(cur, i) or "").lower()))
+        occupations = [{"isco": isco, "title": journey.occupation_title(cur, isco),
+                        "occupation": cur.occupation_titles.get(isco) or idx.occupations[isco].title,
                         "aliases": names.get(isco, []),
                         "esco_occupation": cur.tasks[isco][0].occupation if isco in cur.tasks else None,
-                        "tasks": len(cur.tasks.get(isco, [])), "mycol": mycol.get(masco.get(isco, ""))}
-                       for isco, title in sorted(cur.role_titles.items(), key=lambda x: x[1])]
+                        "tasks": len(idx.tasks.get(isco, [])), "mycol": mycol.get(masco.get(isco, ""))}
+                       for isco in codes]
         goals = sorted({t.sdg for (kind, _), tags in cur.sdg_tags.items() if kind == "role" for t in tags})
         return {
             "latest_snapshot": sid,
@@ -502,19 +575,21 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     @app.post("/journey")
     def journey_build(req: JourneyRequest, conn=Depends(get_conn)):
         """The Mirror, Ghost CV, Three Bets, full ranking and Route for one profile, snapshot and scenario."""
-        return journey.build(cur, conn, _snapshot_id(conn, req.snapshot), _profile(req), _resources(conn))
+        p = _profile(req, conn)
+        requirements.ensure_async(cur, p.occupation)   # your own job's postings, for staying in it
+        return journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p, _resources(conn))
 
     @app.post("/journey/ping")
     def journey_ping(req: PingRequest, conn=Depends(get_conn)):
         """What changed for this profile between two snapshots (The Ping)."""
         return journey.ping(cur, conn, _snapshot_id(conn, req.from_snapshot), _snapshot_id(conn, req.to_snapshot),
-                            _profile(req))
+                            _profile(req, conn))
 
     @app.post("/journey/brief")
     def journey_brief(req: BriefRequest, conn=Depends(get_conn)):
         """A plain-language brief of the bets or of a ping, written by Gemini and checked against the computed
         result (PRD FR-10.4), or the fixed template."""
-        p = _profile(req)
+        p = _profile(req, conn)
         if req.kind == "bets":
             facts, terms, template = brief.bets_facts(journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p, _resources(conn)))
         else:

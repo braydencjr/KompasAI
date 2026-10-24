@@ -113,6 +113,9 @@ export type CvSkill = {
   family: { id: string; label: string } | null;
   quote: string;
   found_by: "llm" | "dictionary";
+  /** the skill as the CV names it, and the broad group the reader put it in (absent on older profiles) */
+  name?: string;
+  group?: string | null;
 };
 
 export type CvTrace = {
@@ -124,7 +127,19 @@ export type CvTrace = {
   roles: { scored: number; catalogue: number; shown: number };
 };
 
-/** What the API read from an uploaded CV. Nothing here is stored on the server. */
+/** Upload step 1: what the CV says, before it is matched against the market (POST /profile/read). */
+export type CvRead = Pick<CvProfile, "file" | "method" | "model" | "llm_note" | "summary" | "jobs" | "unrecognised" | "groups" | "discarded_unverified"> & {
+  skills: CvReadSkill[];
+  ai_tools: CvReadSkill[];
+  trace: Pick<CvTrace, "text" | "reader" | "skills" | "jobs">;
+};
+
+export type CvReadSkill = Pick<CvSkill, "id" | "label" | "family" | "quote" | "found_by" | "name" | "group">;
+
+/** A broad group of the CV's skills, as the reader grouped them (display only: matching uses the skills) */
+export type SkillGroup = { name: string; skills: string[]; untracked: string[] };
+
+/** What the API read from an uploaded CV, matched against the market. Nothing here is stored on the server. */
 export type CvProfile = {
   file: string | null;
   method: "llm" | "dictionary";
@@ -136,7 +151,9 @@ export type CvProfile = {
   skills: CvSkill[];
   /** AI capabilities the CV names (tools the person used), kept apart from skills */
   ai_tools: CvSkill[];
-  unrecognised: { name: string; quote: string }[];
+  unrecognised: { name: string; quote: string; group?: string | null }[];
+  /** the skills in broad groups, for the stickers; absent on profiles saved before it existed */
+  groups?: SkillGroup[];
   discarded_unverified: number;
   exposed: { id: string; label: string; status: LiveStatus | null; because: { skill: string; why: string }[] }[];
   /** best-fit roles, scored exactly as on the Your direction step (PRD FR-4.2) */
@@ -163,10 +180,14 @@ export type SkillSignal = {
   rungs: {
     rung: 1 | 2 | 3; name: string; movement: "rising fast" | "up" | "slightly up" | "flat" | "slightly down" | "down" | "falling" | "no data";
     sources: string[]; groups: string[];
+    /** the LLM's estimate where the market data is silent */
+    estimated?: boolean;
     /** with `groups`: those groups' share of all job openings now and in the `previous` quarter; `movement` follows it */
     share_pct?: number | null; previous_share_pct?: number | null; previous?: string | null;
   }[];
   meaning: string | null;
+  /** the whole status is the LLM's estimate (no measured data), with its one-sentence reason */
+  estimated?: boolean; basis?: string | null;
   evidence: SignalItem[];
   evidence_count: number;
 };
@@ -196,15 +217,31 @@ export async function readLines(file: File): Promise<string[] | null> {
   }
 }
 
-/** Uploads a CV. Returns the profile, or a message to show the user. */
-export async function extractProfile(file: File): Promise<{ profile: CvProfile } | { error: string }> {
+/** Upload step 1: the LLM reads the CV's skills and jobs. Returns them, or a message to show the user. */
+export async function readProfile(file: File): Promise<{ read: CvRead } | { error: string }> {
   const body = new FormData();
   body.append("file", file);
   try {
-    // reading a CV with the LLM takes a few seconds, longer than the default API timeout here
-    const res = await fetch(`${API_URL}/profile/extract`, { method: "POST", body, signal: AbortSignal.timeout(60_000) });
+    // reading a CV with the LLM takes a while, longer than the default API timeout here
+    const res = await fetch(`${API_URL}/profile/read`, { method: "POST", body, signal: AbortSignal.timeout(120_000) });
     const data = await res.json();
-    return res.ok ? { profile: data as CvProfile } : { error: typeof data.detail === "string" ? data.detail : "Couldn't read this CV." };
+    return res.ok ? { read: data as CvRead } : { error: typeof data.detail === "string" ? data.detail : "Couldn't read this CV." };
+  } catch {
+    return { error: "Can't reach the Kompas API. Is it running?" };
+  }
+}
+
+/** Upload step 2: the read skills matched against the market (statuses, roles and their reasons, evidence). */
+export async function matchProfile(read: CvRead): Promise<{ profile: CvProfile } | { error: string }> {
+  try {
+    const res = await fetch(`${API_URL}/profile/match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(read),
+      signal: AbortSignal.timeout(120_000),
+    });
+    const data = await res.json();
+    return res.ok ? { profile: data as CvProfile } : { error: typeof data.detail === "string" ? data.detail : "Couldn't match your skills." };
   } catch {
     return { error: "Can't reach the Kompas API. Is it running?" };
   }

@@ -57,6 +57,8 @@ export type GhostLine = {
   trend: "up" | "hold" | "fade" | "ai";
   /** the AI capabilities taking over its work, and why */
   ai?: { id: string; label: string; why: string }[];
+  /** the LLM's reason, for a skill the data is silent on */
+  why?: string | null;
 };
 export type GhostSlot = {
   id: string; label: string; status: LiveStatus; status_now: LiveStatus; state: "blank" | "filled";

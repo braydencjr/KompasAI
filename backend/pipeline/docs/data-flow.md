@@ -496,7 +496,40 @@ Run from `backend/`:
 .venv/bin/kompas review                 # popular items that matched no skill
 .venv/bin/kompas suggest / suggestions / approve / reject       # alias suggestions (a person decides)
 .venv/bin/kompas validate               # check the curated CSVs
+.venv/bin/kompas ilo-sync               # load the ILO's AI exposure scores per ISCO-08 task (section 15)
+.venv/bin/kompas ilo-links              # link each catalogue job's ILO tasks to the tracked AI capabilities
+.venv/bin/kompas requirements [--isco 2411 2512]   # measure roles' skills from live Malaysian postings
 .venv/bin/kompas unlock <source> <stream>                       # free a lock left by a killed process
 ```
 
 Exit codes from `fetch`: `0` ok, `1` failed/invalid/interrupted, `2` partial, `3` busy.
+
+
+---
+
+## 15. Reference data the LLM reads (added 2026-10-24)
+
+The curated CSVs above are a small, fixed vocabulary: 45 concepts and 18 roles. Four kinds of real data now sit
+beside them **in the database**, and the LLM reads them, cites them and is checked against them. It never makes up
+a score, and nothing new is hand-curated.
+
+| Data | Table | Filled by | Used for |
+|---|---|---|---|
+| **ILO generative-AI exposure index** (Gmyrek et al. 2025, CC BY 4.0): 3,264 ISCO-08 tasks of 427 occupations, each scored 0–1 | `ilo_task` (origin `ilo`) | `kompas ilo-sync` | The Mirror's task cards and every role's "AI and this job" share. Any of the 427 jobs can be picked, not only the 18 roles |
+| **Jobs the index doesn't describe** (a CV's "TikTok content creator") | `ilo_task` (origin `llm`, with `basis`) | CV upload (`exposure.estimate`) | The LLM writes the job's tasks and scores each against 2–4 ILO tasks it must cite. A score outside their range is dropped. Stored once per job |
+| **What Malaysian postings ask for**: the role's live JSearch postings, skills quoted from each posting | `role_requirement` | `kompas requirements`, and in the background when a user opens a role's jobs or picks their own job (weekly) | A role's skills and weights: essential if at least half the postings ask, optional if a fifth do. Replaces `concept_occupation.csv` for that role when there are 5+ postings with descriptions |
+| **ESCO skills** for anything outside the 45 concepts | `open_skill`, `esco_lookup` | CV upload and posting reads: ESCO's search API returns candidates, the LLM picks the same skill or none | CV skills and posting skills share ESCO ids, so they match each other |
+| **Signal Ladder for ESCO skills** | `open_status` | On request, once per snapshot (`open_signal.measure`) | The same rules as section 8, run over HN stories (rung 1) and HN hiring posts (rung 2) searched for the skill's names. No Malaysian rung: DOSM publishes per occupation |
+| **Task → AI capability links** and **written reasons** | `narration` | The LLM, once per job / per evidence pack | Links: which tracked capability a task relies on. Reasons: the fit, demand, trend and AI reasons, rewritten from cited evidence, with the citations stripped before display |
+
+**How The Mirror scores a task now.** Start from its ILO score. Add +0.15, +0.1 or +0.05 while the AI capability
+it relies on is Act now, Emerging or Watch: today's status for "today", the projected one for "by 2028" (current
+pace) and "if AI moves fast". Under "fast", also multiply by 1.3 (PRD 8.7), capped at 1. A task is exposed from 0.5,
+the ILO's boundary. The lifts and ×1.3 are documented defaults, not measurements.
+
+**How a reason gets written.** For each suggested job, `narrate.pack()` collects the facts and the evidence (the
+person's skills and CV quotes, what the postings ask for, the hiring and trend records, the ILO scores), each with
+an id. The LLM must end every sentence with the ids it rests on. `narrate.check()` rejects a reason that cites an
+unknown id, uses a number that isn't in the pack, names a role or skill outside it, or states a status in words no
+evidence uses. A rejected reason keeps its template. The CV upload waits for the reasons. The journey answers with
+the templates and writes the reasons in the background for the next request, so its toggles stay instant.

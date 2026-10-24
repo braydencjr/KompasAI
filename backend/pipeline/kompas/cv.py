@@ -1,6 +1,8 @@
 """CV upload -> skills profile (PRD 5.1 / FR-1). The file is read in memory and never stored (NFR-3).
 
-The LLM labels the CV against Kompas's closed lists; every item must quote the CV verbatim or it is dropped
+The LLM reads the CV against reference data, not a closed list: skills Kompas tracks keep their ids, any other
+skill is resolved to ESCO (kompas/open_skills.py), and jobs map to any ISCO-08 occupation in the ILO's index, or
+are scored against it when none fits (kompas/exposure.py). Every item must quote the CV verbatim or it is dropped
 (FR-10.3). The dictionary tagger always runs too, as a safety net and as the fallback without an API key.
 """
 
@@ -10,7 +12,8 @@ import zipfile
 from collections import Counter
 from html import unescape
 
-from . import journey, llm
+from . import exposure, journey, llm, narrate, open_skills, requirements
+from .connectors import ilo
 from .curated import Curated
 from .tag import Tagger
 
@@ -121,6 +124,10 @@ def score(found: dict[str, dict], cur: Curated, conn, st: "journey.Statuses") ->
     """Everything about a CV that depends on the market data rather than the CV itself: each skill's status, the
     AI capabilities that reach it, the best-fit roles and the evidence. `found` maps concept id -> how the CV shows
     it ({"quote", "found_by"}). Run at upload, and again by rescore() when the data moves on."""
+    have_ids = {cid for cid in found if cur.concepts[cid].kind == "skill"}
+    profile = journey.Profile(skills={cid: "claimed" for cid in have_ids})
+    task_links = journey.prepare(cur, conn, [st], profile)    # measures ESCO skills before they're read below
+
     def item(cid: str, info: dict) -> dict:
         row = st.rows.get(cid)
         return {"id": cid, "label": cur.concepts[cid].label, "status": st.measured(cid),
@@ -141,14 +148,18 @@ def score(found: dict[str, dict], cur: Curated, conn, st: "journey.Statuses") ->
 
     # the same scorer as the Three Bets, so a role's match is the same number on every step
     mycol = journey.mycol_codes(conn, st.as_of or "9999-12-31")
-    scored = journey.score_roles(cur, st, journey.Profile(skills={cid: "claimed" for cid in have}), mycol)
+    scored = journey.score_roles(cur, st, profile, mycol, task_links)
     roles = [r for r in scored if r["match"] > 0][:TOP_ROLES]
     # market evidence for your skills, the shown roles' skills and their job families
     sig = journey.skill_signals(cur, conn, st, have | {b["id"] for r in roles for b in r["breakdown"]}
                   | {r["family"]["id"] for r in roles if r.get("family")})
+    # where the data is silent, the LLM's estimate (flagged as one), so a skill isn't just "No data yet"
+    journey.estimate_signals(conn, cur, sig, {s["id"]: s["label"] for s in skills})
     by_id = {s["id"]: s for s in skills}
     for r in roles:
         r["reasons"] = journey.reasons(r, by_id, sig)
+    # the reasons rewritten from their evidence (postings, ILO scores, signals, your CV), checked; else templates
+    narrate.apply(cur, conn, roles, {cid: s["quote"] for cid, s in by_id.items() if s.get("quote")}, sig, mode="sync")
     pick = journey.recommend(roles)
     return {
         "skills": skills, "ai_tools": ai_tools, "exposed": exposed, "roles": roles,
@@ -164,62 +175,110 @@ def score(found: dict[str, dict], cur: Curated, conn, st: "journey.Statuses") ->
 
 
 def rescore(profile: dict, cur: Curated, conn) -> dict:
-    """A saved profile, re-scored against the latest snapshot without the CV: what the CV said (skills with their
-    quotes, jobs, summary) is kept; statuses, roles, evidence and insights are recomputed. The browser keeps the
-    profile, so this is how a saved one stays current (the CV itself is never stored)."""
-    found = {s["id"]: {k: s[k] for k in ("quote", "found_by") if k in s}
+    """What the CV said, matched against the market: each skill's status, the AI that reaches it, the best-fit roles
+    with their reasons, the evidence and the Malaysian job market. Step 2 of an upload (after read()), and how a
+    profile saved in the browser stays current: the CV itself is never stored, so what it said (skills with their
+    quotes, jobs, summary) is kept and everything else is recomputed against the latest snapshot."""
+    open_skills.load_into(cur, conn)
+    found = {s["id"]: {k: s[k] for k in ("quote", "found_by", "name", "group") if k in s}
              for s in [*profile.get("skills", []), *profile.get("ai_tools", [])]
              if isinstance(s, dict) and s.get("id") in cur.concepts}
-    scored = score(found, cur, conn, journey.Statuses.latest(conn))
-    trace = {**(profile.get("trace") or {}), **scored["trace"]}
-    return {**profile, **{k: v for k, v in scored.items() if k != "trace"}, "trace": trace}
-
-
-def analyse(text: str, cur: Curated, conn, client=None) -> dict:
-    cv_norm = _norm(text)
     st = journey.Statuses.latest(conn)
+    scored = score(found, cur, conn, st)
+    have = {s["id"] for s in scored["skills"]}
+    # the occupation groups behind your skills' "Hired in Malaysia" signal, for the one Malaysian job market panel
+    groups = {g for cid in have for r3 in [(st.rows.get(cid) or {}).get("rungs", {}).get("3") or {}]
+              if r3.get("level") == "group" for g in r3.get("groups") or []}
+    trace = {**(profile.get("trace") or {}), **scored["trace"]}
+    return {**profile, **{k: v for k, v in scored.items() if k != "trace"},
+            "malaysia_market": journey.malaysia_market(conn, st.as_of, sorted(groups)), "trace": trace}
+
+
+MAX_GROUPS = 6
+
+
+def group_skills(skills: list[dict], unrecognised: list[dict]) -> list[dict]:
+    """The CV's skills in the broad groups the reader put them in (a dictionary match without one goes under its
+    job family), largest first: [{name, skills: [ids], untracked: [names]}]. For display only; matching uses the
+    skills themselves."""
+    groups: dict[str, dict] = {}
+    names = {}       # one spelling per group, whatever case the reader used
+
+    def group(name: str | None) -> dict:
+        name = (name or "").strip() or "Other skills"
+        key = name.lower()
+        names.setdefault(key, name[0].upper() + name[1:])
+        return groups.setdefault(key, {"name": names[key], "skills": [], "untracked": []})
+    for s in skills:
+        group(s.get("group") or (s["family"]["label"] if s.get("family") else None))["skills"].append(s["id"])
+    for u in unrecognised:
+        group(u.get("group"))["untracked"].append(u["name"])
+    return sorted(groups.values(), key=lambda g: (-len(g["skills"]), -len(g["untracked"]), g["name"]))
+
+
+def read(text: str, cur: Curated, conn, client=None) -> dict:
+    """Step 1 of an upload: what the CV says. Its skills (Kompas's, or ESCO's for the rest), the AI tools it names,
+    its jobs mapped to occupations, and a summary, each with a verbatim quote. Nothing about the market yet, so
+    the skills can be shown while rescore() matches them."""
+    cv_norm = _norm(text)
+    idx = ilo.INDEX.load(conn)
+    open_skills.load_into(cur, conn)
     found: dict[str, dict] = {}
     unrecognised, jobs, discarded = [], [], 0
 
-    extraction, llm_error = llm.extract_cv(text, cur, client=client)
+    extraction, llm_error = llm.extract_cv(text, cur, {i: o.title for i, o in idx.occupations.items()
+                                                       if o.origin == "ilo"}, client=client)
     if extraction:
+        others = []
         for s in extraction["skills"]:
             if not verbatim(s["quote"], cv_norm):
                 discarded += 1
                 continue
             if s["skill_id"] in cur.concepts:
-                found.setdefault(s["skill_id"], {"quote": s["quote"], "found_by": "llm"})
+                found.setdefault(s["skill_id"], {"quote": s["quote"], "found_by": "llm", "name": s["name"],
+                                                 "group": s.get("group")})
             else:
-                unrecognised.append({"name": s["name"], "quote": s["quote"]})
+                others.append(s)
+        # skills Kompas doesn't track: the ESCO skill that is the same skill, when there is one
+        esco, why = open_skills.resolve(conn, cur, [s["name"] for s in others], "a CV", client=client) if others else ({}, None)
+        llm_error = llm_error or why
+        for s in others:
+            if esco.get(s["name"]):
+                found.setdefault(esco[s["name"]], {"quote": s["quote"], "found_by": "llm", "name": s["name"],
+                                                   "group": s.get("group")})
+            else:
+                unrecognised.append({"name": s["name"], "quote": s["quote"], "group": s.get("group")})
         for j in extraction["jobs"]:
             if not verbatim(j["quote"], cv_norm):
                 discarded += 1
                 continue
-            isco = j["occupation"] if j["occupation"] in cur.occupation_titles else None
+            isco = j["occupation"] if j["occupation"] in idx.occupations or j["occupation"] in cur.role_titles else None
+            if (isco is None or j.get("occupation_fit") == "loose") and j["title"].strip() and not jobs:
+                # no ISCO-08 occupation describes the latest job (the one The Mirror reads): score its own tasks
+                # against the ILO's most similar ones, starting from the nearest group (stored, so once per job)
+                code, why = exposure.estimate(conn, j["title"], near=isco, client=client)
+                isco = code or isco
+                if why:
+                    llm_error = llm_error or f"couldn't score '{j['title']}': {why}"
             jobs.append({"title": j["title"], "employer": j["employer"], "period": j["period"], "quote": j["quote"],
-                         "occupation": {"isco": isco, "title": cur.role_titles[isco]} if isco else None})
+                         "occupation": {"isco": isco, "title": journey.occupation_title(cur, isco) or j["title"]}
+                         if isco else None})
 
     # explicit tool and skill names the model may have skipped; the only extractor without an API key
     for cid, _method, _span, start in Tagger(cur).find_all(text):
         if cur.concepts[cid].kind != "family":
             found.setdefault(cid, {"quote": _line_around(text, start), "found_by": "dictionary"})
 
+    # what Malaysian postings ask for in your own job, measured in the background for the journey that follows
+    if jobs and jobs[0]["occupation"]:
+        requirements.ensure_async(cur, jobs[0]["occupation"]["isco"])
+
+    def item(cid: str) -> dict:
+        return {"id": cid, "label": cur.concepts[cid].label, "family": _family(cur, cid), **found[cid]}
+    skills = [item(cid) for cid in found if cur.concepts[cid].kind == "skill"]
+    ai_tools = [item(cid) for cid in found if cur.concepts[cid].kind == "capability"]
     method = "llm" if extraction else "dictionary"
-    scored = score(found, cur, conn, st)
-    skills = scored["skills"]
-    have = {s["id"] for s in skills}
-
-    # market evidence for your skills, the shown roles' skills and their job families
-    sig = journey.skill_signals(cur, conn, st, have | {b["id"] for r in scored["roles"] for b in r["breakdown"]}
-                  | {r["family"]["id"] for r in scored["roles"] if r.get("family")})
-    by_id = {s["id"]: s for s in skills}
-    for r in scored["roles"]:
-        r["reasons"] = journey.reasons(r, by_id, sig)
-    pick = journey.recommend(scored["roles"])
-    # the occupation groups behind your skills' "Hired in Malaysia" signal, for the one Malaysian job market panel
-    groups = {g for cid in have for r3 in [(st.rows.get(cid) or {}).get("rungs", {}).get("3") or {}]
-              if r3.get("level") == "group" for g in r3.get("groups") or []}
-
+    groups = group_skills(skills, unrecognised)
     return {
         "method": method,
         "model": llm.MODEL if extraction else None,
@@ -229,16 +288,10 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
                    if extraction else None,
         "jobs": jobs,
         "skills": skills,
-        "ai_tools": scored["ai_tools"],
+        "ai_tools": ai_tools,
         "unrecognised": unrecognised,
+        "groups": groups,
         "discarded_unverified": discarded,
-        "exposed": scored["exposed"],
-        "roles": scored["roles"],
-        "recommended": pick["isco"] if pick else None,
-        "signals": sig,
-        "malaysia_market": journey.malaysia_market(conn, st.as_of, sorted(groups)),
-        "insights": scored["insights"],
-        "snapshot": {"id": st.id, "as_of": st.as_of} if st.id else None,
         # what each stage did, with real counts, for "How Kompas read this"
         "trace": {
             "text": {"chars": len(text), "lines": sum(1 for line in text.splitlines() if line.strip())},
@@ -246,8 +299,12 @@ def analyse(text: str, cur: Curated, conn, client=None) -> dict:
             "skills": {"llm": sum(i["found_by"] == "llm" for i in found.values()),
                        "dictionary": sum(i["found_by"] == "dictionary" for i in found.values()),
                        "dropped_unverified": discarded, "unrecognised": len(unrecognised),
-                       "ai_tools": len(scored["ai_tools"])},
+                       "ai_tools": len(ai_tools)},
             "jobs": {"found": len(jobs), "mapped": sum(1 for j in jobs if j["occupation"])},
-            **scored["trace"],
         },
     }
+
+
+def analyse(text: str, cur: Curated, conn, client=None) -> dict:
+    """Both steps at once: read() then rescore()."""
+    return rescore(read(text, cur, conn, client=client), cur, conn)

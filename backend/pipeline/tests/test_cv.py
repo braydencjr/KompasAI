@@ -31,15 +31,12 @@ ANSWER = {
     "summary": "Accounts executive with five years in shared services.",
     "jobs": [{"title": "Accounts Executive", "employer": "Northwind Shared Services", "period": "2022 - present",
               "occupation": "3313", "quote": "Accounts Executive, Northwind Shared Services"}],
-    "skills": [
-        # semantic match: the CV never says "accounts payable" in this line
-        {"name": "Invoice matching", "skill_id": "accounts-payable",
-         "quote": "match them against purchase orders and goods receipts"},
-        {"name": "Variance dashboards", "skill_id": "data-visualisation",
-         "quote": "Built a monthly variance dashboard in Power BI"},
-        {"name": "BlackLine", "skill_id": "none", "quote": "BlackLine"},
-        # invented quote: must be discarded
-        {"name": "Python", "skill_id": "python", "quote": "automated reconciliations with Python scripts"},
+    "categories": [
+        {"category": "Finance and accounting", "skills": [
+            {"name": "Invoice matching", "quote": "match them against purchase orders and goods receipts"},
+            {"name": "BlackLine", "quote": "BlackLine"},
+            # invented quote: must be discarded
+            {"name": "Python", "quote": "automated reconciliations with Python scripts"}]},
     ],
 }
 
@@ -47,18 +44,13 @@ ANSWER = {
 def test_llm_semantic_matches_are_kept_and_invented_quotes_dropped(conn, cur):
     fake = FakeGemini(ANSWER)
     profile = cv.analyse(SAMPLE, cur, conn, client=fake)
-    ids = {s["id"]: s for s in profile["skills"]}
+    names = {u["name"]: u for u in profile["unrecognised"]}
 
     assert profile["method"] == "llm" and profile["model"] == "gemini-2.5-flash"
-    assert ids["accounts-payable"]["found_by"] == "llm"
-    assert ids["data-visualisation"]["quote"] == "Built a monthly variance dashboard in Power BI"
-    assert "python" not in ids                                  # quote isn't in the CV
+    assert "Python" not in names                                # quote isn't in the CV
     assert profile["discarded_unverified"] == 1
-    assert profile["unrecognised"] == [{"name": "BlackLine", "quote": "BlackLine"}]
+    assert names["BlackLine"]["group"] == "Finance and accounting"   # each skill keeps its category
     assert profile["jobs"][0]["occupation"]["title"] == "Accounting associate"
-    # the closed lists are enforced by the schema sent to the model
-    schema = fake.calls[0]["config"].response_json_schema
-    assert "accounts-payable" in schema["properties"]["skills"]["items"]["properties"]["skill_id"]["enum"]
     assert fake.calls[0]["model"] == "gemini-2.5-flash"
 
 
@@ -148,9 +140,9 @@ def test_match_formula(conn, cur):
 
 
 def test_no_personal_data_in_the_prompt_contract(cur):
-    assert "Never extract or mention the person's name" in llm._system(cur)
+    assert "Never include the person's name" in llm._system(cur)
     props = llm._schema(cur)["properties"]
-    assert set(props) == {"summary", "jobs", "skills"}         # nowhere to put a name, age or email
+    assert set(props) == {"summary", "jobs", "categories"}         # nowhere to put a name, age or email
 
 
 def test_docx_text_extraction():

@@ -1,34 +1,42 @@
 """The user journey (PRD 5): The Mirror, Ghost CV, Three Bets with the SDG lens, The Route and The Ping.
 
-Everything here is computed from a snapshot's Signal Ladder statuses and the curated tables, so the same
-profile, snapshot and scenario always give the same result. The only LLM use is the optional plain-language
-briefs (explain.py's checked writer), which only restate what is computed here.
+Everything here is computed from a snapshot's Signal Ladder statuses and the reference data: the ILO's task
+exposure scores, what Malaysian job postings ask for (kompas/requirements.py), ESCO skills measured in the raw data
+(kompas/open_signal.py) and the curated tables, so the same profile, snapshot and data give the same scores. The LLM
+reads that data: it links tasks to AI capabilities and scores jobs the ILO index lacks (kompas/exposure.py), and
+writes the reasons from cited evidence (kompas/narrate.py), checked against it; it never sets a score.
 
 A profile is what the browser holds: skills with an evidence level, the occupation of the current job,
 Mirror overrides, the scenario, the SDGs the user cares about, the chosen role and completed route steps.
 Nothing about the user is stored on the server.
 """
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 
-from . import explain
-from .curated import Curated, task_matches
+from . import explain, exposure, narrate, open_signal, similar
+from .connectors import ilo
+from .curated import Curated
 from .snapshot import _reason
 
 SCENARIOS = ("moderate", "fast")
 # PRD FR-4.2: demand multiplier by ladder status, and coverage by evidence level
 DEMAND = {"Act now": 1.2, "Emerging": 1.1, "Stable": 1.0, "Watch": 0.9, "Declining": 0.7, "Stalled": 0.7}
 COVERAGE = {"demonstrated": 1.0, "claimed": 0.7}
-# The Mirror: how strongly an AI capability's status says it can do a task now (PRD FR-2.3)
+# The Ghost CV: how strongly an AI capability's status says it can do a skill's work (PRD FR-2.3)
 EXPOSURE = {"Act now": 1.0, "Emerging": 0.8, "Watch": 0.6, "Stable": 0.4, "Stalled": 0.3, "Declining": 0.2}
 EXPOSED_AT = 0.6
-# the fast scenario's assumption: any task an AI capability already does at a basic level (Stable) gets taken over
-EXPOSED_AT_FAST = 0.4
+# PRD 8.7: the fast scenario amplifies exposure scores x1.3, capped at 1.0 (a documented default)
+FAST_FACTOR = 1.3
+# The Mirror: a task's ILO score, raised while the AI capability it relies on gains ground on the Signal Ladder
+# (documented defaults, not measurements). A task is exposed from the ILO's own 0.5 boundary.
+LIFT = {"Act now": 0.15, "Emerging": 0.1, "Watch": 0.05}
+TASK_EXPOSED_AT = ilo.EXPOSED_AT
 
 
-def exposed_at(scenario: str) -> float:
-    return EXPOSED_AT_FAST if scenario == "fast" else EXPOSED_AT
+def amplify(score: float, scenario: str) -> float:
+    return min(1.0, score * FAST_FACTOR) if scenario == "fast" else score
 # The Route: steps on the ladder's higher rungs come first (PRD FR-6.2)
 PRIORITY = {"Act now": 0, "Emerging": 1, "Watch": 2, "Stable": 3, "Stalled": 4, "Declining": 5}
 MIN_MATCH = 40          # PRD FR-4.3: Rising and Impact bets need at least this match
@@ -42,7 +50,9 @@ SDG_NAMES = {1: "No poverty", 2: "Zero hunger", 3: "Good health and well-being",
              15: "Life on land", 16: "Peace, justice and strong institutions", 17: "Partnerships for the goals"}
 
 WEIGHTS_DOC = {
-    "match": "Match = Σ weight × coverage ÷ Σ weight, over the role's skills.",
+    "match": "Match = Σ weight × coverage ÷ Σ weight, over the role's skills: the skills its live Malaysian job "
+             "postings ask for (essential when at least half ask, optional when a fifth do), or Kompas's curated "
+             "list when there are too few postings.",
     "weight": "Weight = importance (essential 1.0, optional 0.5) × demand (Act now 1.2, Emerging 1.1, Stable 1.0, "
               "Watch 0.9, Declining or Stalled 0.7), using each skill's status under the chosen scenario.",
     "coverage": "Coverage = 1.0 demonstrated, 0.7 claimed on a CV, 0 missing.",
@@ -53,9 +63,11 @@ WEIGHTS_DOC = {
               "Occupations List (MyCOL).",
     "impact": "Impact Bet: highest SDG alignment × match among roles matching at least 40%. Alignment is the "
               "share of your chosen SDGs the role contributes to.",
-    "exposure": "A task is AI-exposed when an AI capability that can do it scores at least 0.6: Act now 1.0, "
-                "Emerging 0.8, Watch 0.6, Stable 0.4, Stalled 0.3, Declining 0.2, under the chosen scenario. The fast "
-                "scenario assumes AI also takes over tasks a capability already does at a basic level (0.4 and up).",
+    "exposure": "Each task starts from its score in the ILO's 2025 generative-AI exposure index (0 to 1). It rises "
+                "while the AI capability the task relies on gains ground: +0.15 Act now, +0.1 Emerging, +0.05 Watch, "
+                "using the capability's status today, by 2028 at the current pace, or if AI moves fast. The fast "
+                "scenario also multiplies scores by 1.3 (capped at 1). A task is AI-exposed from 0.5, the ILO's "
+                "boundary. Jobs the index doesn't list are scored by the LLM against the ILO's most similar tasks.",
     "route": "Route: missing skills of the chosen role (and the prerequisites you don't have), prerequisites "
              "first, then Act now, Emerging, Watch, Stable, then by weight.",
 }
@@ -87,6 +99,9 @@ class Statuses:
             self.rows[r["concept_id"]] = {"status": r["status"], "projected": json.loads(r["projected"]),
                                           "rungs": json.loads(r["rungs"]), "family_status": r["family_status"],
                                           "evidence": len(json.loads(r["evidence_ids"]))}
+        # ESCO skills, measured from the same raw data when first needed (measure_open)
+        for cid, row in open_signal.rows(conn, snapshot_id).items():
+            self.rows.setdefault(cid, row)
 
     @classmethod
     def latest(cls, conn) -> "Statuses":
@@ -104,6 +119,30 @@ class Statuses:
         """Status projected to the Ghost CV horizon under the scenario (the current one if not projected)."""
         row = self.rows.get(cid)
         return row["projected"].get(scenario, row["status"]) if row else "Stable"
+
+
+def measure_open(conn, statuses: list[Statuses], ids) -> None:
+    """Gives every ESCO skill in `ids` a status in each snapshot, measuring the ones not measured yet."""
+    ids = sorted({i for i in ids if str(i).startswith("esco-")})
+    todo = [s for s in statuses if s.id and any(i not in s.rows for i in ids)]
+    if not ids or not todo:
+        return
+    open_signal.measure(conn, [(s.id, s.as_of) for s in todo], ids)
+    for s in todo:
+        for cid, row in open_signal.rows(conn, s.id).items():
+            s.rows.setdefault(cid, row)
+
+
+def occupation_title(cur: Curated, isco: str | None) -> str | None:
+    """A readable name for any occupation: the catalogue's role name, the postings' title, else the ILO's."""
+    if not isco:
+        return None
+    if isco in cur.role_titles:
+        return cur.role_titles[isco]
+    if isco in cur.posting_meta:
+        return cur.posting_meta[isco]["title"]
+    occ = ilo.INDEX.occupations.get(isco)
+    return occ.title if occ else None
 
 
 def mycol_codes(conn, as_of: str) -> dict[str, str]:
@@ -131,47 +170,62 @@ def _sdgs(cur: Curated, kind: str, eid: str) -> list[dict]:
 HORIZONS = ("now", "moderate", "fast")
 
 
-def mirror(cur: Curated, st: Statuses, p: Profile) -> dict:
-    tasks = cur.tasks.get(p.occupation or "", [])
+# what a capability's status means for the work it does, in words
+CAP_WORDS = {"Act now": "in wide use", "Emerging": "spreading", "Watch": "gaining ground"}
+
+
+def task_cards(cur: Curated, st: Statuses, tasks: list[ilo.Task], links: dict, overrides: dict, scenario: str) -> list[dict]:
+    """One card per task: its ILO score (or the LLM's estimate against ILO scores), raised by the AI capability it
+    relies on as that capability moves up the Signal Ladder, at each horizon."""
     cards = []
     for t in tasks:
         caps = []
-        for rule in cur.task_rules:
-            if task_matches(rule.pattern, t.label) and rule.capability_id not in [c["id"] for c in caps]:
-                status = st.get(rule.capability_id, p.scenario)
-                caps.append({"id": rule.capability_id, "label": _label(cur, rule.capability_id), "status": status,
-                             "status_now": st.now(rule.capability_id), "score": EXPOSURE.get(status, 0.4),
-                             "rationale": rule.rationale})
-        score = max((c["score"] for c in caps), default=0.0)
-        # when AI can take the task: today, by the projection horizon under moderate progress, or only if it's fast
-        by = {h: max((EXPOSURE.get(st.now(c["id"]) if h == "now" else st.get(c["id"], h), 0.4) for c in caps),
-                     default=0.0) for h in HORIZONS}
-        when = next((h for h in HORIZONS if by[h] >= exposed_at(h)), "never")
-        auto = "exposed" if score >= exposed_at(p.scenario) else "human"
-        override = p.overrides.get(t.uri)
+        for cap, rationale in links.get(t.id, []):
+            if cap not in cur.concepts or any(c["id"] == cap for c in caps):
+                continue
+            status = st.get(cap, scenario)
+            caps.append({"id": cap, "label": _label(cur, cap), "status": status, "status_now": st.now(cap),
+                         "score": LIFT.get(status, 0.0), "rationale": rationale or f"{_label(cur, cap)} does part of it"})
+
+        def at(h: str) -> float:
+            lift = max((LIFT.get(st.now(c["id"]) if h == "now" else st.get(c["id"], h), 0.0) for c in caps), default=0.0)
+            return amplify(min(1.0, t.score + lift), h)
+        by = {h: at(h) for h in HORIZONS}
+        when = next((h for h in HORIZONS if by[h] >= TASK_EXPOSED_AT), "never")
+        score = by[scenario]
+        auto = "exposed" if score >= TASK_EXPOSED_AT else "human"
+        override = overrides.get(t.id)
         pile = override["pile"] if override and override.get("pile") in ("exposed", "human") else auto
         top = max(caps, key=lambda c: c["score"]) if caps else None
-        if top and auto == "exposed":
-            reason = f"{top['label']} can do this: {top['rationale'].lower()}."
-        elif top:
-            reason = f"{top['label']} is {top['status']} under this scenario, not yet enough to take this over."
-        else:
-            reason = "No AI capability Kompas tracks does this task."
-        cards.append({"id": t.uri, "task": t.label, "pile": pile, "auto_pile": auto, "score": round(score, 2),
+        # plain words for the card; where the score comes from stays in the rules ("How is this calculated?")
+        reason = exposure.why(t)
+        if top and top["score"] > 0 and when != "now":
+            reason += " AI that does this is improving fast, so expect more of it by 2028."
+        cards.append({"id": t.id, "task": t.label, "pile": pile, "auto_pile": auto, "score": round(score, 2),
                       "when": when, "scores": {h: round(v, 2) for h, v in by.items()},
-                      "capabilities": caps, "reason": reason,
+                      "capabilities": caps, "reason": reason, "ilo_score": t.score, "origin": t.origin,
                       "override": override if override and pile != auto else None})
+    return cards
+
+
+def mirror(cur: Curated, st: Statuses, p: Profile, tasks: list[ilo.Task] | None = None, links: dict | None = None) -> dict:
+    tasks = ilo.INDEX.tasks.get(p.occupation or "", []) if tasks is None else tasks
+    cards = task_cards(cur, st, tasks, links or {}, p.overrides, p.scenario)
     exposed = [c for c in cards if c["pile"] == "exposed"]
 
     def share(h: str) -> int:
         """Exposed share at a horizon; the user's own moves count at every horizon."""
-        hit = sum((c["override"]["pile"] if c["override"] else ("exposed" if c["scores"][h] >= exposed_at(h) else "human"))
+        hit = sum((c["override"]["pile"] if c["override"] else ("exposed" if c["scores"][h] >= TASK_EXPOSED_AT else "human"))
                   == "exposed" for c in cards)
         return round(100 * hit / len(cards)) if cards else 0
+    esco = cur.tasks.get(p.occupation or "")
+    occ = ilo.INDEX.occupations.get(p.occupation or "")
     return {
-        "occupation": p.occupation, "title": cur.role_titles.get(p.occupation or ""),
-        "esco_occupation": tasks[0].occupation if tasks else None,
-        "esco_uri": tasks[0].occupation_uri if tasks else None,
+        "occupation": p.occupation, "title": occupation_title(cur, p.occupation),
+        "esco_occupation": esco[0].occupation if esco else (occ.title if occ else None),
+        "esco_uri": esco[0].occupation_uri if esco else None,
+        "source": {"name": ilo.SOURCE, "url": ilo.PAPER, "gradient": occ.gradient if occ else None,
+                   "estimated": bool(occ and occ.origin == "llm")},
         "cards": cards, "exposed_share": round(100 * len(exposed) / len(cards)) if cards else 0,
         "shares": {h: share(h) for h in HORIZONS},
         # capabilities on the AI pile after the user's corrections: these drive the live feed's "affects your work"
@@ -183,26 +237,27 @@ def mirror(cur: Curated, st: Statuses, p: Profile) -> dict:
 
 
 def role_skills(cur: Curated, isco: str) -> list[tuple[str, float]]:
-    """(skill, importance) pairs the role needs, from concept_occupation.csv."""
+    """(skill, importance) pairs the role needs: what its Malaysian job postings ask for (kompas/requirements.py),
+    else concept_occupation.csv."""
+    if isco in cur.posting_roles:
+        return list(cur.posting_roles[isco])
     return [(cid, w) for cid, occs in cur.concept_occupations.items() if cur.concepts[cid].kind == "skill"
             for i, w in occs if i == isco]
 
 
-def exposure_share(cur: Curated, st: Statuses, isco: str, scenario: str, overrides: dict) -> int | None:
-    """Share of an occupation's ESCO tasks on the AI-exposed pile (the user's Mirror corrections apply)."""
-    tasks = cur.tasks.get(isco, [])
+def role_ids(cur: Curated) -> list[str]:
+    """Every role that can be suggested: the catalogue, plus any job whose postings have been measured."""
+    return sorted(set(cur.role_titles) | set(cur.posting_roles))
+
+
+def exposure_share(cur: Curated, st: Statuses, isco: str, scenario: str, overrides: dict,
+                   links: dict | None = None) -> int | None:
+    """Share of an occupation's ILO tasks on the AI-exposed pile (the user's Mirror corrections apply)."""
+    tasks = ilo.INDEX.tasks.get(isco, [])
     if not tasks:
         return None
-    exposed = 0
-    for t in tasks:
-        score = max((EXPOSURE.get(st.get(r.capability_id, scenario), 0.4) for r in cur.task_rules
-                     if task_matches(r.pattern, t.label)), default=0.0)
-        pile = "exposed" if score >= exposed_at(scenario) else "human"
-        o = overrides.get(t.uri)
-        if o and o.get("pile") in ("exposed", "human"):
-            pile = o["pile"]
-        exposed += pile == "exposed"
-    return round(100 * exposed / len(tasks))
+    cards = task_cards(cur, st, tasks, links or {}, overrides, scenario)
+    return round(100 * sum(c["pile"] == "exposed" for c in cards) / len(cards))
 
 
 def demand_index(st: Statuses, skills: list[tuple[str, float]], scenario: str) -> float:
@@ -210,13 +265,17 @@ def demand_index(st: Statuses, skills: list[tuple[str, float]], scenario: str) -
     return sum(i * DEMAND.get(st.get(cid, scenario), 1.0) for cid, i in skills) / total if total else 1.0
 
 
-def score_roles(cur: Curated, st: Statuses, p: Profile, mycol: dict[str, str]) -> list[dict]:
+def score_roles(cur: Curated, st: Statuses, p: Profile, mycol: dict[str, str],
+                links: dict[str, dict] | None = None) -> list[dict]:
+    """links: ISCO -> the capability links of its tasks (exposure.capability_links), for each role's AI exposure."""
+    links = links or {}
     have = dict(p.skills)
     for s in p.completed:
         have.setdefault(s, "claimed")
     masco = {isco: code for (system, code), isco in cur.occupation_codes.items() if system == "MASCO"}
     roles = []
-    for isco, title in cur.role_titles.items():
+    for isco in role_ids(cur):
+        title = occupation_title(cur, isco)
         skills = role_skills(cur, isco)
         if len(skills) < 2:
             continue
@@ -224,11 +283,14 @@ def score_roles(cur: Curated, st: Statuses, p: Profile, mycol: dict[str, str]) -
         for cid, importance in sorted(skills, key=lambda x: (-x[1], x[0])):
             status = st.get(cid, p.scenario)
             weight = importance * DEMAND.get(status, 1.0)
-            cov = COVERAGE.get(have.get(cid, ""), 0.0)
+            cov, via = COVERAGE.get(have.get(cid, ""), 0.0), None
+            if not cov and (near := similar.closest(cid, list(have))):     # a skill you have that means the same
+                cov = round(COVERAGE[have[near[0]]] * similar.credit(near[1]), 2)
+                via = _label(cur, near[0]) if cov else None
             total, got = total + weight, got + weight * cov
             rows.append({"id": cid, "label": _label(cur, cid), "importance": importance, "status": status,
                          "measured": cid in st.rows, "weight": round(weight, 3), "coverage": cov,
-                         "evidence": have.get(cid)})
+                         "evidence": have.get(cid), "via": via})
         match = round(100 * got / total) if total else 0
         imp_total = sum(i for _, i in skills)
         demand = sum(r["importance"] * DEMAND.get(r["status"], 1.0) for r in rows) / imp_total
@@ -246,13 +308,16 @@ def score_roles(cur: Curated, st: Statuses, p: Profile, mycol: dict[str, str]) -
         role_goals = {t["sdg"] for t in tags}
         alignment = len(role_goals & set(p.sdgs)) / len(p.sdgs) if p.sdgs else 0.0
         roles.append({
-            "isco": isco, "title": title, "occupation": cur.occupation_titles[isco], "match": match,
+            "isco": isco, "title": title, "occupation": cur.occupation_titles.get(isco, title), "match": match,
             "breakdown": rows, "have": [r for r in rows if r["coverage"]], "gaps": [r for r in rows if not r["coverage"]],
             "demand": round(demand, 3), "mycol": critical, "safe_share": round(safe_share, 2),
             "sdgs": tags, "alignment": round(alignment, 2), "covered": not any(not r["coverage"] for r in rows),
             "family": {"id": family, "label": _label(cur, family)} if family else None,
             "family_status": st.measured(family) if family else None,
-            "ai_exposure": exposure_share(cur, st, isco, p.scenario, p.overrides),
+            "ai_exposure": exposure_share(cur, st, isco, p.scenario, p.overrides, links.get(isco)),
+            # where the role's skills come from: its live postings (count and date) or the curated list
+            "skills_from": ({"postings": cur.posting_meta[isco]["postings"], "fetched_at": cur.posting_meta[isco]["fetched_at"],
+                             "source": cur.posting_meta[isco].get("source")} if isco in cur.posting_roles else None),
             "scores": {"safe": match if safe_share >= SAFE_SHARE else None,
                        "rising": round(demand * match, 1) if match >= MIN_MATCH else None,
                        "impact": round(alignment * match, 1) if match >= MIN_MATCH and alignment > 0 else None},
@@ -321,7 +386,37 @@ def family_of(cur: Curated, cid: str) -> str | None:
     return next((a for a in cur.ancestors(cid) if a in cur.concepts and cur.concepts[a].kind == "family"), None)
 
 
-def ghost(cur: Curated, st: Statuses, p: Profile, roles: list[dict]) -> dict:
+def judge_trends(conn, cur: Curated, st: Statuses, p: Profile, client=None) -> dict[str, dict]:
+    """cid -> {trend, why}: the LLM's 2028 judgment of the skills you have that the data is silent on (no measured
+    evidence, no tracked AI capability reaching them), which would otherwise all read as "hold". One call for all
+    of them, stored in `narration` so each set is judged once."""
+    import hashlib
+    import json
+
+    from . import llm
+    from .periods import utcnow
+
+    reached = {skill for links in cur.capability_skills.values() for skill, _ in links}
+    ask = [{"id": cid, "label": _label(cur, cid)} for cid in sorted(p.skills)
+           if cid in cur.concepts and cid not in reached and (cid not in st.rows or not st.rows[cid]["evidence"])]
+    if not ask:
+        return {}
+    key = "trend1:" + hashlib.sha256(json.dumps([llm.MODEL, ask], sort_keys=True).encode()).hexdigest()[:24]
+    row = conn.execute("SELECT payload FROM narration WHERE key = ?", (key,)).fetchone()
+    if row:
+        result = json.loads(row["payload"])
+    else:
+        result, _error = llm.judge_trends(ask, client=client)
+        if result is None:
+            return {}
+        conn.execute("INSERT INTO narration (key, created_at, payload) VALUES (?, ?, ?) ON CONFLICT (key) DO NOTHING",
+                     (key, utcnow(), json.dumps(result)))
+        conn.commit()
+    known = {a["id"] for a in ask}
+    return {r["id"]: {"trend": r["trend"], "why": (r.get("why") or "").strip()} for r in result if r.get("id") in known}
+
+
+def ghost(cur: Curated, st: Statuses, p: Profile, roles: list[dict], judged: dict[str, dict] | None = None) -> dict:
     """Your CV at the projection horizon: each skill you have is worth more, holds its value, fades, or is work AI takes
     over under the scenario (as in The Mirror); blank slots are
     rising skills you don't have yet, from the closest roles you could grow into, then your skills' families, then the
@@ -330,7 +425,7 @@ def ghost(cur: Curated, st: Statuses, p: Profile, roles: list[dict]) -> dict:
     # skills whose work AI takes over under this scenario: the same rule as The Mirror, through capability_skill.csv
     reach: dict[str, list[dict]] = {}
     for cap, links in cur.capability_skills.items():
-        if EXPOSURE.get(st.get(cap, p.scenario), 0.4) >= exposed_at(p.scenario):
+        if amplify(EXPOSURE.get(st.get(cap, p.scenario), 0.4), p.scenario) >= EXPOSED_AT:
             for skill, why in links:
                 reach.setdefault(skill, []).append({"id": cap, "label": _label(cur, cap), "why": why})
     lines = []
@@ -339,9 +434,14 @@ def ghost(cur: Curated, st: Statuses, p: Profile, roles: list[dict]) -> dict:
             continue
         status = st.get(cid, p.scenario)
         trend = "up" if status in RISING else "fade" if status in FADING else "ai" if cid in reach else "hold"
+        ai = reach.get(cid, [])
+        if trend == "hold" and cid in (judged or {}):      # the data is silent on it: the LLM's judgment
+            trend = judged[cid]["trend"]
+            status = {"up": "Emerging", "fade": "Declining"}.get(trend, status)
+            ai = [{"id": "", "label": "AI", "why": judged[cid]["why"]}] if trend == "ai" else []
         lines.append({"id": cid, "label": _label(cur, cid), "status": status, "status_now": st.now(cid),
                       "evidence": evidence, "state": "faded" if status in FADING else "solid",
-                      "trend": trend, "ai": reach.get(cid, [])})
+                      "trend": trend, "ai": ai, "why": (judged or {}).get(cid, {}).get("why")})
     slots, seen = [], set(p.skills)
 
     def add(cid: str, why: str, for_role: str | None = None):
@@ -575,6 +675,8 @@ def skill_signals(cur: Curated, conn, st, ids: set[str]) -> dict[str, dict]:
         evidence = sorted((items[e] for e in ev_ids.get(cid, []) if e in items and items[e]["kind"] != "occupation_group_stat"),
                           key=lambda e: (-cur.sources[e["source"]].rung if e["source"] in cur.sources else 0,
                                          -(e["value"] or 0)))
+        if "open_evidence" in row:      # an ESCO skill: the records it was measured from (kompas/open_signal.py)
+            evidence = row["open_evidence"]
         out[cid] = {
             "status": row["status"], "projected": row["projected"],
             "rungs": [rung(k, row["rungs"].get(k)) for k in ("1", "2", "3")],
@@ -582,9 +684,102 @@ def skill_signals(cur: Curated, conn, st, ids: set[str]) -> dict[str, dict]:
             "evidence": [{"title": _title(e, cur.concepts[cid].label), "url": e["url"], "date": e["published_at"][:10],
                           "source": cur.sources[e["source"]].name if e["source"] in cur.sources else e["source"],
                           "value": e["value"], "value_label": e["value_label"]} for e in evidence[:3]],
-            "evidence_count": len(evidence),
+            "evidence_count": row["evidence"] if "open_evidence" in row else len(evidence),
         }
     return out
+
+
+_RELATED_STOP = {"and", "the", "for", "with", "use", "using", "manage", "perform", "apply", "provide", "assist", "work",
+                 "skills", "skill", "ability", "knowledge", "support", "develop", "maintain", "ensure", "other"}
+
+
+_corpus_cache: dict = {"at": 0.0, "rows": []}
+
+
+def _corpus(conn) -> list[dict]:
+    """The Hacker News stories and hiring posts (title and the start of the text, lowercased for matching), loaded in
+    one query and kept for ten minutes, so looking up related records for many skills costs no round trips."""
+    import time
+
+    if time.time() - _corpus_cache["at"] > 600 or not _corpus_cache["rows"]:
+        rows = conn.execute("SELECT id, source, kind, title, substr(text, 1, 600) AS text, url, published_at FROM raw_doc "
+                            "WHERE source IN ('hn_front', 'hn_hiring') ORDER BY published_at DESC").fetchall()
+        _corpus_cache.update(at=time.time(), rows=[
+            {**{k: r[k] for k in ("id", "source", "kind", "title", "text", "url", "published_at")},
+             "hay": f"{r['title'] or ''} {r['text'] or ''}".lower()} for r in rows])
+    return _corpus_cache["rows"]
+
+
+def _related(conn, label: str, limit: int = 6) -> list:
+    """Records that bear on a skill without naming it: those sharing the most of its significant words, newest
+    first among equals."""
+    words = [w for w in dict.fromkeys(re.findall(r"[a-z][a-z+#.]{3,}", label.lower())) if w not in _RELATED_STOP][:4]
+    if not words:
+        return []
+    scored = [(sum(w in r["hay"] for w in words), r) for r in _corpus(conn)]
+    need = 2 if len(words) > 1 else 1       # one shared word is a coincidence ("written", "instructions")
+    return [r for n, r in sorted((x for x in scored if x[0] >= need), key=lambda x: -x[0])[:limit]]
+
+
+def estimate_signals(conn, cur: Curated, sig: dict[str, dict], skills: dict[str, str], client=None) -> None:
+    """Fills what the market data is silent on, in place: a skill with no status at all, or a rung with "no data".
+    The LLM is shown related records (looser word matches) and judges which really bear on the skill; those become
+    its evidence, alongside its estimate of each rung. Measured rungs are never touched. One call for all the
+    skills, stored in `narration` so each set is estimated once."""
+    import hashlib
+    import json
+
+    from . import llm
+    from .periods import utcnow
+
+    need = []
+    for cid, label in skills.items():
+        s = sig.get(cid)
+        rungs = [r["rung"] for r in s["rungs"] if r["movement"] == "no data"] if s else [1, 2, 3]
+        if rungs:
+            need.append({"id": cid, "label": label, "rungs": rungs, "status": s["status"] if s else None})
+    if not need:
+        return
+    key = "est3:" + hashlib.sha256(json.dumps([llm.MODEL, need], sort_keys=True).encode()).hexdigest()[:24]
+    row = conn.execute("SELECT payload FROM narration WHERE key = ?", (key,)).fetchone()
+    if row:
+        result = json.loads(row["payload"])
+    else:
+        docs = {}
+        for n in need:
+            rel = _related(conn, n["label"])
+            docs.update({r["id"]: r for r in rel})
+            n["related"] = [{"id": r["id"], "title": _title(r, n["label"]), "snippet": (r["text"] or "")[:160]} for r in rel]
+        result, error = llm.estimate_signals(need, client=client)
+        if result is None:
+            return
+        for e in result:     # keep only ids that were offered, with what the page needs to show them
+            offered = {r["id"] for n in need if n["id"] == e.get("id") for r in n["related"]}
+            e["evidence"] = [{"title": _title(docs[i], ""), "url": docs[i]["url"], "date": docs[i]["published_at"][:10],
+                              "source": cur.sources[docs[i]["source"]].name if docs[i]["source"] in cur.sources else docs[i]["source"],
+                              "value": None, "value_label": None}
+                             for i in dict.fromkeys(e.get("evidence") or []) if i in offered][:3]
+        conn.execute("INSERT INTO narration (key, created_at, payload) VALUES (?, ?, ?) ON CONFLICT (key) DO NOTHING",
+                     (key, utcnow(), json.dumps(result)))
+        conn.commit()
+    asked = {n["id"]: n for n in need}
+    for e in result:
+        n = asked.get(e.get("id"))
+        if not n:
+            continue
+        move = {r["rung"]: r["movement"] for r in e.get("rungs") or []}
+        s = sig.get(n["id"])
+        if s is None:
+            s = sig[n["id"]] = {"status": e["status"], "projected": {"moderate": e["status"], "fast": e["status"]},
+                                "rungs": [{"rung": int(k), "name": RUNG_NAMES[k], "movement": "no data", "sources": [],
+                                           "groups": []} for k in ("1", "2", "3")],
+                                "meaning": explain.MEANING.get(e["status"]), "evidence": [], "evidence_count": 0}
+        for r in s["rungs"]:
+            if r["rung"] in n["rungs"] and r["movement"] == "no data" and r["rung"] in move:
+                r["movement"] = move[r["rung"]]
+        if not s["evidence"] and e.get("evidence"):
+            s["evidence"], s["evidence_count"] = e["evidence"], len(e["evidence"])
+        s["basis"] = (e.get("basis") or "").strip() or None
 
 
 def recommend(roles: list[dict]) -> dict | None:
@@ -603,8 +798,10 @@ def reasons(role: dict, skills: dict[str, dict], sig: dict[str, dict]) -> list[d
     for h in have:
         if h["id"] in skills:
             quotes.setdefault(skills[h["id"]]["quote"], []).append(h["label"])
+    src = role.get("skills_from")
     out.append({"kind": "fit", "title": f"Fits your profile: you have {len(have)} of its {len(role['breakdown'])} skills",
-                "text": ", ".join(h["label"] for h in have) + ".",
+                "text": ", ".join(h["label"] for h in have) + "."
+                        + (f" Its skills are what {src['postings']} live Malaysian job postings ask for." if src else ""),
                 "evidence": [{"type": "quote", "label": ", ".join(labels), "text": q} for q, labels in quotes.items()]})
     fam, fstat = role.get("family"), role.get("family_status")
     demand_ev = []
@@ -637,7 +834,8 @@ def reasons(role: dict, skills: dict[str, dict], sig: dict[str, dict]) -> list[d
                     "text": "None of its skills is trending right now: demand is steady, not rising.", "evidence": []})
     if role.get("ai_exposure") is not None:
         out.append({"kind": "ai", "title": "AI and this job",
-                    "text": f"AI can already do about {role['ai_exposure']}% of the everyday tasks in this job. The rest needs a person.",
+                    "text": f"About {role['ai_exposure']}% of this job's tasks are exposed to generative AI, by the ILO's "
+                            f"2025 task scores and today's AI signals. The rest needs a person.",
                     "evidence": []})
     if role.get("sdgs"):
         t = role["sdgs"][0]
@@ -677,7 +875,7 @@ def stay_option(cur: Curated, p: Profile, m: dict, g: dict, current: dict | None
     out.append({"kind": "gap", "title": "To strengthen it",
                 "text": f"Add {', '.join(learn)}." if learn else "Keep your skills current: nothing rising is missing.",
                 "evidence": []})
-    return {"isco": p.occupation, "title": cur.role_titles.get(p.occupation, p.occupation),
+    return {"isco": p.occupation, "title": occupation_title(cur, p.occupation) or p.occupation,
             "match": current["match"] if current else None, "family": current.get("family") if current else None,
             "family_status": current.get("family_status") if current else None, "shares": sh,
             "learn": learn, "learn_ids": learn_ids, "reasons": out}
@@ -686,18 +884,34 @@ def stay_option(cur: Curated, p: Profile, m: dict, g: dict, current: dict | None
 # ---------- the whole journey ----------
 
 
+def prepare(cur: Curated, conn, statuses: list[Statuses], p: Profile) -> dict[str, dict]:
+    """Loads the reference data a journey reads: the ILO index, ESCO skills' statuses in every snapshot used, and
+    each role's capability links (the user's own job's are linked now if they aren't yet; the others' only once
+    stored, by `kompas ilo-links`). Returns ISCO -> links."""
+    idx = ilo.INDEX.load(conn)
+    ids = set(p.skills) | set(p.completed) | {cid for isco in role_ids(cur) for cid, _ in role_skills(cur, isco)}
+    measure_open(conn, statuses, ids)
+    similar.ensure(conn, cur, ids)
+    links = {isco: exposure.capability_links(conn, cur, idx.tasks.get(isco, []), cached_only=True) for isco in role_ids(cur)}
+    if p.occupation:
+        links[p.occupation] = exposure.capability_links(conn, cur, idx.tasks.get(p.occupation, []))
+    return links
+
+
 def build(cur: Curated, conn, snapshot_id: str, p: Profile, resources: dict | None = None) -> dict:
     st = Statuses(conn, snapshot_id)
+    history = [st if row["id"] == st.id else Statuses(conn, row["id"]) for row in conn.execute(
+        "SELECT id FROM snapshot WHERE as_of <= ? ORDER BY as_of DESC LIMIT 6", (st.as_of,)).fetchall()[::-1]]
+    links = prepare(cur, conn, [st, *history], p)
     mycol = mycol_codes(conn, st.as_of)
-    roles = score_roles(cur, st, p, mycol)
+    roles = score_roles(cur, st, p, mycol, links)
     bets = pick_bets(roles, p.occupation)
     suggestions = pick_suggestions(roles, p.occupation)
     first_bet = next((b for b in bets.values() if is_bet(b)), None)
     chosen = next((r for r in roles if r["isco"] == p.role), None) or first_bet or (roles[0] if roles else None)
-    history = [Statuses(conn, row["id"]) for row in conn.execute(
-        "SELECT id FROM snapshot WHERE as_of <= ? ORDER BY as_of DESC LIMIT 6", (st.as_of,)).fetchall()[::-1]]
-    m, r = mirror(cur, st, p), route(cur, st, p, chosen, resources)
-    g = ghost(cur, st, p, roles)
+    m = mirror(cur, st, p, ilo.INDEX.tasks.get(p.occupation or "", []), links.get(p.occupation or ""))
+    r = route(cur, st, p, chosen, resources)
+    g = ghost(cur, st, p, roles, judge_trends(conn, cur, st, p))
     current = next((x for x in roles if x["isco"] == p.occupation), None)
     # an empty category shows its closest job instead, so that job needs its reasons too
     closest = [x for b in bets.values() if not is_bet(b) and b.get("closest")
@@ -716,6 +930,8 @@ def build(cur: Curated, conn, snapshot_id: str, p: Profile, resources: dict | No
         o["growth"] = round(100 * (trend[-1] / trend[0] - 1)) if trend and trend[0] else 0
         o["trend_from"] = history[0].as_of if history else None
         o["route"] = route(cur, st, p, o, resources)
+    # the reasons, rewritten from their evidence by the LLM once written; until then (and if it fails) the templates
+    narrate.apply(cur, conn, [o for o in options if o is not current], {}, sig, mode="background")
     stay = stay_option(cur, p, m, g, current, sig)
     if current and stay:
         # staying means adding the skills that strengthen the job: that is its route

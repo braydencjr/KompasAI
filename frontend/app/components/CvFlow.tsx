@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { listWords, type CvProfile, type MalaysiaMarket, type SkillSignal } from "../lib/kompas";
+import { listWords, type CvProfile, type CvRead, type MalaysiaMarket, type SkillSignal } from "../lib/kompas";
 import { useJourney } from "./journey/JourneyProvider";
 import { signalClass } from "./Signals";
 import { matchJobs, type JobOption } from "../lib/jobMatch";
@@ -44,7 +44,9 @@ type Props = {
   fileName: string;
   /** the CV's own lines, when this session read it */
   lines: string[] | null;
-  /** null while the reader is working */
+  /** the skills the CV shows; null while the reader is working (and for a restored profile, which has `cv`) */
+  read: CvRead | null;
+  /** the skills matched against the market; null while matching */
   cv: CvProfile | null;
   /** play the stages (a fresh read) or show them finished (a restored profile) */
   animate: boolean;
@@ -52,26 +54,29 @@ type Props = {
 
 /** You, step 1: the CV is read, its skills become stickers, and each skill is checked against the market. Which
  * job to aim for comes later (Your direction), after The Mirror has shown whether the current job is at risk. */
-export default function CvFlow({ fileName, lines, cv, animate }: Props) {
+export default function CvFlow({ fileName, lines, read, cv, animate }: Props) {
   const { next } = useJourney();
   const [play, setPlay] = useState(animate);
   const [stage, setStage] = useState(cv && !animate ? 3 : 1);
   const refs = useRef<(HTMLElement | null)[]>([]);
+  // the skills to show: from the reader as soon as it answers, before they're matched
+  const found = read ?? cv;
 
+  // stage 2 opens when the CV is read; stage 3 once its stickers are in, matching (or matched) by then
   useEffect(() => {
-    if (!cv) return setStage(1);
+    if (!found) return setStage(1);
     if (!play) return setStage(3);
     setStage(2);
-    const timer = setTimeout(() => setStage(3), 900 + (cv.skills.length + cv.ai_tools.length) * STICKER_GAP);
+    const timer = setTimeout(() => setStage(3), 900 + stickersOf(found).length * STICKER_GAP);
     return () => clearTimeout(timer);
-  }, [cv, play]);
+  }, [found, play]);
 
   // follow the flow down the page as each stage opens
   useEffect(() => {
     if (play && stage > 1) refs.current[stage - 1]?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [stage, play]);
 
-  const quotes = cv?.skills.map((s) => s.quote) ?? [];
+  const quotes = found?.skills.map((s) => s.quote) ?? [];
   const finished = !!cv && stage === 3;
 
   return (
@@ -88,7 +93,7 @@ export default function CvFlow({ fileName, lines, cv, animate }: Props) {
             );
           })}
         </ol>
-        {cv && (stage < 3 ? (
+        {found && (stage < 3 ? (
           <button className="btn btn-ghost btn-sm" onClick={() => setPlay(false)}>Skip</button>
         ) : (
           <button className="btn btn-ghost btn-sm" onClick={() => { setPlay(false); setTimeout(() => setPlay(true)); }}>Replay</button>
@@ -97,10 +102,10 @@ export default function CvFlow({ fileName, lines, cv, animate }: Props) {
 
       {/* 1 · read */}
       <div className="flow-stage" ref={(el) => { refs.current[0] = el; }}>
-        <StageHead n={1} title="Read your CV" busy={!cv}>
-          {!cv && <>Reading <strong>{fileName}</strong>…</>}
+        <StageHead n={1} title="Read your CV" busy={!found}>
+          {!found && <>Reading <strong>{fileName}</strong>…</>}
         </StageHead>
-        {(lines || !cv) && (
+        {(lines || !found) && (
           <div className="flow-doc" aria-hidden>
             <div className="flow-doc-lines">
               {lines
@@ -114,21 +119,31 @@ export default function CvFlow({ fileName, lines, cv, animate }: Props) {
                   })
                 : PLACEHOLDER.map((w, i) => <div key={i} className={`flow-bar${w ? "" : " gap"}`} style={{ width: `${w}%` }} />)}
             </div>
-            {!cv && <div className="scan-beam" />}
+            {!found && <div className="scan-beam" />}
           </div>
         )}
       </div>
 
       {/* 2 · skills */}
-      {cv && stage >= 2 && (
+      {found && stage >= 2 && (
         <div className="flow-stage" ref={(el) => { refs.current[1] = el; }}>
           <StageHead n={2} title="Find your skills" />
-          <Stickers cv={cv} />
-          <CurrentJob cv={cv} />
+          <Stickers cv={found} />
+          {/* the job is set on the journey once the profile is saved, after matching */}
+          {cv && <CurrentJob cv={cv} />}
         </div>
       )}
 
-      {/* 3 · market */}
+      {/* 3 · market: matching, then matched */}
+      {found && !cv && stage >= 3 && (
+        <div className="flow-stage" ref={(el) => { refs.current[2] = el; }}>
+          <StageHead n={3} title="Your skills in the market" busy>
+            Matching your {stickersOf(found).filter((g) => g.skillIds.length).length} skill categories against hiring posts, Malaysian job postings and the ILO&apos;s
+            AI exposure scores…
+          </StageHead>
+          <Matching cv={found} />
+        </div>
+      )}
       {cv && stage >= 3 && (
         <div className="flow-stage" ref={(el) => { refs.current[2] = el; }}>
           <StageHead n={3} title="Your skills in the market">
@@ -157,27 +172,69 @@ function StageHead({ n, title, busy, children }: { n: number; title: string; bus
   );
 }
 
-function Stickers({ cv }: { cv: CvProfile }) {
+/** Stage 3 while matching: each skill's card, being checked. */
+function Matching({ cv }: { cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognised" | "groups"> }) {
+  // one card per category, the same as the finished view
+  const groups = stickersOf(cv).filter((g) => g.skillIds.length);
+  return (
+    <div className="market-cards" aria-hidden>
+      {groups.map((g, i) => (
+        <article key={g.name} className="mcard checking" style={{ "--d": `${i * 110}ms` } as React.CSSProperties}>
+          <div className="mcard-head">
+            <h4>{g.name}</h4>
+            <span className="checking-dots"><i /><i /><i /></span>
+          </div>
+          <span className="sk sk-line" />
+          <span className="sk sk-line short" />
+        </article>
+      ))}
+    </div>
+  );
+}
+
+type Sticker = { name: string; quote: string; skillIds: string[]; tool: boolean };
+
+/** One entry per broad group of the CV's skills: its name, the one CV line that best shows it, and the tracked
+ * skills in it. Profiles saved before the reader grouped skills fall back to their job families. */
+export function stickersOf(cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognised" | "groups">): Sticker[] {
+  const quote = new Map(cv.skills.map((s) => [s.id, s.quote]));
+  const groups = cv.groups?.length ? cv.groups : Object.values(
+    [...cv.skills.map((s) => ({ g: s.group ?? s.family?.label ?? "Skills", id: s.id, name: null as string | null })),
+     ...cv.unrecognised.map((u) => ({ g: u.group ?? "Other skills", id: null, name: u.name }))]
+      .reduce<Record<string, { name: string; skills: string[]; untracked: string[] }>>((acc, x) => {
+        const g = (acc[x.g] ??= { name: x.g, skills: [], untracked: [] });
+        if (x.id) g.skills.push(x.id);
+        else if (x.name) g.untracked.push(x.name);
+        return acc;
+      }, {}));
+  const out: Sticker[] = groups.map((g) => {
+    const line = g.skills.map((id) => quote.get(id)).find(Boolean)
+      ?? cv.unrecognised.find((u) => g.untracked.includes(u.name))?.quote ?? "";
+    return { name: g.name, quote: line, skillIds: g.skills, tool: false };
+  });
+  if (cv.ai_tools.length) {
+    out.push({ name: "AI tools you used", quote: cv.ai_tools[0].quote, skillIds: cv.ai_tools.map((t) => t.id), tool: true });
+  }
+  return out.filter((g) => g.quote);
+}
+
+function Stickers({ cv }: { cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognised" | "groups"> }) {
   const [open, setOpen] = useState<string | null>(null);
-  const all = [...cv.skills.map((s) => ({ ...s, tool: false })), ...cv.ai_tools.map((s) => ({ ...s, tool: true }))];
-  const picked = all.find((s) => s.id === open);
+  const all = stickersOf(cv);
+  const picked = all.find((g) => g.name === open);
   return (
     <div className="stickers">
       <div className="sticker-tray">
-        {all.map((s, i) => (
-          <button key={s.id} className={`sticker${s.tool ? " tool" : ""}${open === s.id ? " on" : ""}`}
-            style={{ "--d": `${i * STICKER_GAP}ms` } as React.CSSProperties} onClick={() => setOpen(open === s.id ? null : s.id)}>
-            <span className="sticker-label">{s.label}</span>
-            <span className="sticker-sub">{s.tool ? "AI tool you used" : s.family?.label ?? "Skill"}</span>
+        {all.map((g, i) => (
+          <button key={g.name} className={`sticker${g.tool ? " tool" : ""}${open === g.name ? " on" : ""}`}
+            style={{ "--d": `${i * STICKER_GAP}ms` } as React.CSSProperties} onClick={() => setOpen(open === g.name ? null : g.name)}>
+            <span className="sticker-label">{g.name}</span>
           </button>
         ))}
       </div>
       <p className="sticker-quote">
-        {picked ? <>From your CV: <q>{picked.quote}</q></> : <span className="muted small">Tap a skill to see the line of your CV it came from.</span>}
+        {picked ? <>From your CV: <q>{picked.quote}</q></> : <span className="muted small">Tap a group to see the line of your CV it came from.</span>}
       </p>
-      {cv.unrecognised.length > 0 && (
-        <p className="muted small">Also in your CV, not tracked by Kompas yet: {cv.unrecognised.map((u) => u.name).join(", ")}.</p>
-      )}
     </div>
   );
 }
@@ -360,18 +417,27 @@ function MalaysiaMarket({ m }: { m: MalaysiaMarket }) {
 
 function Market({ cv }: { cv: CvProfile }) {
   const rank = (id: string) => ORDER[cv.signals[id]?.status ?? ""] ?? 9;
-  const skills = [...cv.skills].sort((a, b) => rank(a.id) - rank(b.id));
+  // one card per broad group: the group's best skill sets its status, meaning, rungs and evidence
+  const groups = stickersOf(cv)
+    .filter((g) => g.skillIds.length)
+    .map((g) => {
+      const best = [...g.skillIds].sort((x, y) => rank(x) - rank(y))[0];
+      return { ...g, best, sig: cv.signals[best], count: g.skillIds.length };
+    })
+    .sort((a, b) => rank(a.best) - rank(b.best));
   return (
     <div className="market-cards">
-      {skills.map((s, i) => {
-        const sig = cv.signals[s.id];
+      {groups.map((g, i) => {
+        const { sig } = g;
         const top = sig?.evidence[0];
+        const label = cv.skills.find((s) => s.id === g.best)?.label ?? g.name;
         return (
-          <article key={s.id} className={`mcard${sig && RISING.includes(sig.status) ? " up" : sig?.status === "Watch" ? " watch" : ""}`} style={{ "--d": `${i * 110}ms` } as React.CSSProperties}>
+          <article key={g.name} className={`mcard${sig && RISING.includes(sig.status) ? " up" : sig?.status === "Watch" ? " watch" : ""}`} style={{ "--d": `${i * 110}ms` } as React.CSSProperties}>
             <header className="mcard-head">
-              <h4>{s.label}</h4>
+              <h4>{g.name}</h4>
               {sig ? <span className={signalClass(sig.status)}>{sig.status}</span> : <span className="muted small">No data yet</span>}
             </header>
+            <p className="muted small">{g.count} {g.count === 1 ? "skill" : "skills"}, led by {label}</p>
             {sig?.meaning && <p className="mcard-meaning">{sig.meaning}</p>}
             {sig && <div className="rungs">{sig.rungs.map((r) => <Rung key={r.rung} rung={r} />)}</div>}
             {top && (
