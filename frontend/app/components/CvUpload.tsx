@@ -35,7 +35,7 @@ export default function CvUpload() {
           ) : source === "cv" ? (
             "Your skills and how they're doing in the market, read from this CV. The file was never stored."
           ) : (
-            "PDF, DOCX or TXT, up to 5 MB. Read in memory and never stored. We never use age, gender or photos."
+            "PDF, DOCX or TXT, up to 5 MB. We never use age, gender or photos."
           )}
         </p>
         {busy && <div className="upload-progress" />}
