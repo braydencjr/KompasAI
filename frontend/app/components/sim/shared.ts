@@ -11,6 +11,18 @@ export const TOOL_LABEL: Record<SimTask["tool"], string> = {
   review: "AI review",
 };
 
+const MAKES: Record<SimTask["tool"], string> = {
+  sheet: "Build a spreadsheet and work out the answers",
+  code: "Write a short function that passes its tests",
+  doc: "Write a short document",
+  calendar: "Plan a schedule that satisfies every constraint",
+  prompt: "Brief an AI assistant until its answer is useful",
+  review: "Check an AI draft and flag what's wrong",
+};
+
+/** the core of the task in plain words, whatever professional title it was given */
+export const deliverableOf = (t: SimTask) => t.deliverable ?? MAKES[t.tool];
+
 export const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export function initials(name: string) {

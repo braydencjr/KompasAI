@@ -582,7 +582,10 @@ class Doc(BaseModel):
 class PracticeTask(BaseModel):
     id: str
     tool: Literal["sheet", "code", "doc", "prompt", "review"]
-    title: str
+    title: str = Field(description="Names the work itself in plain words, e.g. 'Write a materiality memo for a retailer', "
+                                   "not a grand professional-sounding label")
+    deliverable: str = Field(description="One short sentence: what the learner actually produces, in plain words, "
+                                         "e.g. 'Write a one-page memo ranking 5 ESG topics and why each matters'")
     competency: str
     minutes: int
     from_name: str
@@ -630,6 +633,8 @@ in one sitting: a sheet with 5–9 data rows, at most 3 period or scenario colum
 - Requirements spell out exactly what counts as done (for a sheet, every formula in words).
 - `competency` is the skill's name. `feedback` is the sender's one-sentence reaction to strong, partial and weak work.
 - Fill only the field for the chosen tool (sheet, code or doc); set the others to null.
+- Be honest about what the work is: the title says what the learner actually does ("Write a memo…", "Build a \
+cash-flow sheet…"), and `deliverable` says what they hand in. A memo is a memo, however professional the topic.
 - Plain English, short sentences.""",
     SHEET_SPEC, CODE_SPEC, DOC_SPEC, PROMPT_SPEC, REVIEW_SPEC,
     "For prompt and review tasks also fill ai_name and why. Fill only the field for the chosen tool; set the others to null.",
@@ -672,8 +677,9 @@ def practice_problems(p: PracticeTask) -> list[str]:
 
 def practice_to_frontend(p: PracticeTask) -> dict:
     if p.tool != "doc":
-        return _task(_as_task(p))
+        return {**_task(_as_task(p)), "deliverable": p.deliverable}
     return {
+        "deliverable": p.deliverable,
         "id": p.id, "tool": "doc", "title": p.title, "competency": p.competency, "minutes": p.minutes,
         "from": p.from_name, "fromRole": p.from_role, "subject": p.subject, "brief": p.brief,
         "requirements": p.requirements, "review": p.feedback.model_dump(),

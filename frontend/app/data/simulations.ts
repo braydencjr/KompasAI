@@ -22,6 +22,8 @@ type TaskBase = {
   brief: string;
   requirements: string[];
   review: Review;
+  /** what the learner actually produces, in plain words ("Write a one-page memo") */
+  deliverable?: string;
 };
 
 export type SheetTask = TaskBase & { tool: "sheet"; sheet: SheetSpec };

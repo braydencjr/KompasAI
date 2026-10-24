@@ -8,7 +8,8 @@ import PerformanceReport from "./sim/PerformanceReport";
 import PromptTool from "./sim/PromptTool";
 import ReviewTool from "./sim/ReviewTool";
 import SheetTool from "./sim/SheetTool";
-import { FEELINGS, TOOL_LABEL, clock, initials } from "./sim/shared";
+import { FEELINGS, TOOL_LABEL, clock, deliverableOf, initials } from "./sim/shared";
+import { useSplit } from "./sim/useSplit";
 import type { SimSource } from "./SimulatorProvider";
 import { isAiTask, quadrantOf, reviewFor, type Outcome, type SimResult, type Simulation } from "../data/simulations";
 
@@ -61,6 +62,7 @@ function Generating({ onUseSample }: { onUseSample?: () => void }) {
 }
 
 export default function WorkSimulator({ sim, source, note, onUseSample, onRegenerate, onClose, onFinish }: Props) {
+  const split = useSplit();
   // -1 = welcome, 0..n-1 = tasks, n = report
   const [step, setStep] = useState(-1);
   const [attempt, setAttempt] = useState(0);
@@ -231,9 +233,10 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
         )}
 
         {task && (
-          <div className="workspace" key={`${task.id}-${attempt}`}>
+          <div className="workspace" key={`${task.id}-${attempt}`} style={split.style}>
             <aside className="inbox">
               <div className="label">Inbox</div>
+              <div className="sim-makes"><span className="label">What you'll do</span>{deliverableOf(task)}</div>
               <article className="sim-email">
                 <div className="sim-email-head">
                   <span className="sim-avatar" aria-hidden>
@@ -263,6 +266,7 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
                 </ul>
               </div>
             </aside>
+            {split.handle}
 
             <div className="workspace-main">
               {task.tool === "sheet" && <SheetTool task={task} onDone={taskDone} />}

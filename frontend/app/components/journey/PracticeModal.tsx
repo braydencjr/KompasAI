@@ -8,7 +8,8 @@ import DocTool from "../sim/DocTool";
 import PromptTool from "../sim/PromptTool";
 import ReviewTool from "../sim/ReviewTool";
 import SheetTool from "../sim/SheetTool";
-import { clock, initials } from "../sim/shared";
+import { clock, deliverableOf, initials } from "../sim/shared";
+import { useSplit } from "../sim/useSplit";
 import { ApiError, postJson } from "../../lib/api";
 import { prepareSimulation } from "../../lib/prepare";
 import { reviewFor, type SimTask } from "../../data/simulations";
@@ -38,6 +39,7 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
   const [tick, setTick] = useState(0);
   const startedAt = useRef(Date.now());
   const dialogRef = useRef<HTMLDivElement>(null);
+  const split = useSplit();
 
   const load = useCallback(
     async (fresh: boolean, signal?: AbortSignal) => {
@@ -150,9 +152,10 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
         )}
 
         {task && (
-          <div className="workspace" key={attempt}>
+          <div className="workspace" key={attempt} style={split.style}>
             <aside className="inbox">
               <div className="label">Brief</div>
+              <div className="sim-makes"><span className="label">What you'll do</span>{deliverableOf(task)}</div>
               <article className="sim-email">
                 <div className="sim-email-head">
                   <span className="sim-avatar" aria-hidden>{initials(task.from)}</span>
@@ -169,6 +172,7 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
               </div>
               <p className="muted small">About {task.minutes} minutes. Pass with {Math.round(PASS * 100)}% to complete this stop.</p>
             </aside>
+            {split.handle}
 
             <div className="workspace-main">
               {task.tool === "sheet" && <SheetTool task={task} onDone={done} />}

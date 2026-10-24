@@ -1716,8 +1716,8 @@ h3 {
 /* inbox on the left, the tool on the right */
 .workspace {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: var(--brief-w, 360px) 14px minmax(0, 1fr);
+  gap: 6px;
   align-items: start;
   animation: plan-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -1751,13 +1751,54 @@ h3 {
 }
 
 .sim-subject {
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 600;
 }
 
 .sim-email > p {
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.sim-makes {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.sim-makes .label {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.split-handle {
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: 8px;
+}
+
+.split-handle span {
+  width: 3px;
+  margin: 8px 0;
+  border-radius: 3px;
+  background: var(--hair);
+  transition: background 0.15s, width 0.15s;
+}
+
+.split-handle:hover span,
+.split-handle:focus-visible span {
+  width: 5px;
+  background: var(--accent);
+}
+
+.split-handle:focus-visible {
+  outline: none;
 }
 
 .sim-reqs {
@@ -1771,8 +1812,8 @@ h3 {
   flex-direction: column;
   gap: 6px;
   padding-left: 18px;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14.5px;
+  line-height: 1.55;
 }
 
 .workspace-main {
@@ -2899,6 +2940,10 @@ h3 {
 @media (max-width: 1000px) {
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .split-handle {
+    display: none;
   }
 
   .inbox {
