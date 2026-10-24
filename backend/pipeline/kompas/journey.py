@@ -16,6 +16,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from . import explain, exposure, narrate, open_signal, open_skills, similar
+from . import sdg
+from .sdg import SDG_NAMES
 from .connectors import ilo
 from .curated import Curated
 from .snapshot import _reason
@@ -42,12 +44,6 @@ PRIORITY = {"Act now": 0, "Emerging": 1, "Watch": 2, "Stable": 3, "Stalled": 4, 
 MIN_MATCH = 40          # PRD FR-4.3: Rising and Impact bets need at least this match
 SAFE_SHARE = 0.7        # PRD FR-4.3: share of essential weight that must hold up under both scenarios
 GHOST_SLOTS = 5
-SDG_NAMES = {1: "No poverty", 2: "Zero hunger", 3: "Good health and well-being", 4: "Quality education",
-             5: "Gender equality", 6: "Clean water and sanitation", 7: "Affordable and clean energy",
-             8: "Decent work and economic growth", 9: "Industry, innovation and infrastructure",
-             10: "Reduced inequalities", 11: "Sustainable cities and communities",
-             12: "Responsible consumption and production", 13: "Climate action", 14: "Life below water",
-             15: "Life on land", 16: "Peace, justice and strong institutions", 17: "Partnerships for the goals"}
 
 WEIGHTS_DOC = {
     "match": "Match = Σ weight × coverage ÷ Σ weight, over the role's skills: the skills its live Malaysian job "
@@ -160,8 +156,7 @@ def _label(cur: Curated, cid: str) -> str:
 
 
 def _sdgs(cur: Curated, kind: str, eid: str) -> list[dict]:
-    return [{"sdg": t.sdg, "name": SDG_NAMES[t.sdg], "target": t.target, "rationale": t.rationale}
-            for t in cur.sdg_tags.get((kind, eid), [])]
+    return sdg.curated(cur, kind, eid)
 
 
 # ---------- The Mirror ----------
@@ -290,7 +285,7 @@ def score_roles(cur: Curated, st: Statuses, p: Profile, mycol: dict[str, str],
             total, got = total + weight, got + weight * cov
             rows.append({"id": cid, "label": _label(cur, cid), "importance": importance, "status": status,
                          "measured": cid in st.rows, "weight": round(weight, 3), "coverage": cov,
-                         "evidence": have.get(cid), "via": via})
+                         "evidence": have.get(cid), "via": via, "sdgs": _sdgs(cur, "skill", cid)})
         match = round(100 * got / total) if total else 0
         imp_total = sum(i for _, i in skills)
         demand = sum(r["importance"] * DEMAND.get(r["status"], 1.0) for r in rows) / imp_total

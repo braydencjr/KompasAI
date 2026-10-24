@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Role } from "../data/bets";
+import { SdgTags } from "./Sdg";
 import { GapSignal, SignalPill } from "./Signals";
 
 const HOURS_PER_WEEK = 5;
@@ -54,6 +55,7 @@ export function SkillColumns({ role, gapClosed, quotes, onRemove, haveLabel = "S
             <span key={s} className={`chip chip-have${quotes ? " pop" : ""}`} style={{ "--i": i } as React.CSSProperties}
               title={quotes?.[s] ? `From your CV: “${quotes[s]}”` : undefined}>
               ✓ {s}
+              {role.skillMeta?.[s] && <SdgTags kind="skill" id={role.skillMeta[s].id} tags={role.skillMeta[s].sdgs} subject={s} />}
               {onRemove && (
                 <button className="chip-x" aria-label={`Remove ${s}`} onClick={() => onRemove(s)}>×</button>
               )}
@@ -71,6 +73,7 @@ export function SkillColumns({ role, gapClosed, quotes, onRemove, haveLabel = "S
             <span key={g} className={`chip chip-gap${gapClosed(g) ? " closed" : ""}`}>
               {gapClosed(g) ? "✓" : "+"} {g}
               <GapSignal skill={g} />
+              {role.skillMeta?.[g] && <SdgTags kind="skill" id={role.skillMeta[g].id} tags={role.skillMeta[g].sdgs} subject={g} />}
             </span>
           ))}
         </div>

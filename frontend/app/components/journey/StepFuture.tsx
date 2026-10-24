@@ -83,7 +83,8 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
   const profile = useProfile();
   const openLadder = useLadder();
   const cv = profile.source === "cv" ? profile.cv : null;
-  const headline = cv?.jobs[0]?.title ?? (profile.source === "cv" ? "Your CV" : "Aisyah");
+  // the job this page is about (the one you chose, or read from your CV), not the first role listed on the CV
+  const headline = job || cv?.jobs[0]?.title || "Your CV";
 
   const of = (t: GhostLine["trend"]) => g.lines.filter((l) => (l.trend ?? "hold") === t);
   const [up, ai, hold, fade] = [of("up"), of("ai"), of("hold"), of("fade")];
@@ -98,7 +99,7 @@ function Paper({ g, job, onTasks }: { g: Ghost; job: string; onTasks: (capabilit
 
       <header className="cvp-head">
         <h2 className="cvp-name">{headline}</h2>
-        <p className="cvp-role">{job} · as employers may read it in {g.horizon}</p>
+        <p className="cvp-role">Your CV as employers may read it in {g.horizon}</p>
       </header>
 
       {/* profile and experience only make it read like a CV: kept short, the skills are the point */}

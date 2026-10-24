@@ -25,10 +25,17 @@ export function routeSteps(route: Route | null | undefined): Step[] {
   }));
 }
 
+/** each skill's id and SDG tags, by name, for the chips */
+const skillMeta = (r?: RoleScore) =>
+  Object.fromEntries([...(r?.have ?? []), ...(r?.gaps ?? [])].map((s) => [s.label, { id: s.id, sdgs: s.sdgs }]));
+
 export function toBet(kind: BetKind, r: RoleScore): Bet {
   const sdg = r.sdgs[0];
   return {
     id: r.isco,
+    isco: r.isco,
+    sdgs: r.sdgs,
+    skillMeta: skillMeta(r),
     kind: KIND[kind],
     title: r.title,
     note: NOTE[kind],
@@ -53,6 +60,9 @@ export function toBet(kind: BetKind, r: RoleScore): Bet {
 export function toRole(route: Route, r: RoleScore | undefined): Role {
   return {
     id: `route-${route.role.isco}`,
+    isco: route.role.isco,
+    sdgs: r?.sdgs,
+    skillMeta: skillMeta(r),
     title: route.role.title,
     summary: r ? `${r.occupation} (MASCO ${r.isco})` : "",
     match: route.role.match,

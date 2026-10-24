@@ -8,7 +8,7 @@ export type Scenario = "moderate" | "fast";
 export type Pile = "exposed" | "human";
 export type BetKind = "safe" | "rising" | "impact";
 
-export type Sdg = { sdg: number; name: string; target?: string; rationale?: string };
+export type Sdg = { sdg: number; name: string; target?: string | null; rationale?: string | null; origin?: "curated" | "ai" | "default" };
 
 export type Catalog = {
   latest_snapshot: string;
@@ -79,6 +79,8 @@ export type SkillRow = {
   weight: number;
   coverage: number;
   evidence: string | null;
+  /** the SDGs Kompas has mapped for this skill (others are asked for when shown) */
+  sdgs?: Sdg[];
 };
 
 export type Evidence =

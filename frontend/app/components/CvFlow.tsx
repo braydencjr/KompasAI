@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { listWords, type CvProfile, type CvRead, type MalaysiaMarket, type SkillSignal } from "../lib/kompas";
 import { useJourney } from "./journey/JourneyProvider";
+import { SdgGroupTags, SdgTags } from "./Sdg";
 import { signalClass } from "./Signals";
 import { matchJobs, type JobOption } from "../lib/jobMatch";
 
@@ -263,15 +264,21 @@ export function stickersOf(cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognise
 function Stickers({ cv }: { cv: Pick<CvRead, "skills" | "ai_tools" | "unrecognised" | "groups"> }) {
   const [open, setOpen] = useState<string | null>(null);
   const all = stickersOf(cv);
+  const labels = new Map(cv.skills.map((s) => [s.id, s.label]));
   const picked = all.find((g) => g.name === open);
   return (
     <div className="stickers">
       <div className="sticker-tray">
         {all.map((g, i) => (
-          <button key={g.name} className={`sticker${g.tool ? " tool" : ""}${open === g.name ? " on" : ""}`}
-            style={{ "--d": `${i * STICKER_GAP}ms` } as React.CSSProperties} onClick={() => setOpen(open === g.name ? null : g.name)}>
-            <span className="sticker-label">{g.name}</span>
-          </button>
+          <span key={g.name} className="sticker-item">
+            <button className={`sticker${g.tool ? " tool" : ""}${open === g.name ? " on" : ""}`}
+              style={{ "--d": `${i * STICKER_GAP}ms` } as React.CSSProperties} onClick={() => setOpen(open === g.name ? null : g.name)}>
+              <span className="sticker-label">{g.name}</span>
+            </button>
+            {!g.tool && g.skillIds.length > 0 && (
+              <SdgGroupTags subject={g.name} skills={g.skillIds.map((id) => ({ id, label: labels.get(id) ?? id }))} />
+            )}
+          </span>
         ))}
       </div>
       <p className="sticker-quote">
@@ -312,6 +319,7 @@ function CurrentJob({ cv }: { cv: CvProfile }) {
           <p>
             <strong>{title}</strong>
             {fromCv && <span className="muted"> · from &ldquo;{job!.title}&rdquo; on your CV</span>}
+            {occupation && <> <SdgTags kind="role" id={occupation} subject={title ?? "This job"} /></>}
           </p>
           <button className="current-job-change" onClick={() => setEditing(true)}>Change</button>
         </div>
@@ -503,6 +511,9 @@ function Market({ cv }: { cv: CvProfile }) {
               <h4>{g.name}</h4>
               {sig ? <span className={signalClass(sig.status)}>{sig.status}</span> : <span className="muted small">No data yet</span>}
             </header>
+            {g.skillIds.length > 0 && (
+              <SdgGroupTags subject={g.name} skills={g.skillIds.map((id) => ({ id, label: cv.skills.find((s) => s.id === id)?.label ?? id }))} />
+            )}
             <p className="muted small">{g.count} {g.count === 1 ? "skill" : "skills"}, led by {label}</p>
             {sig?.meaning && <p className="mcard-meaning">{sig.meaning}</p>}
             {sig && <div className="rungs">{sig.rungs.map((r) => <Rung key={r.rung} rung={r} />)}</div>}

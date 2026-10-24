@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import brief, curated, cv, db, explain, ingest, journey, live, open_skills, radar, requirements
+from . import brief, curated, cv, db, explain, ingest, journey, live, open_skills, radar, requirements, sdg
 from .connectors import ilo
 from .config import PARAMS
 from .http import FetchError
@@ -100,6 +100,15 @@ class Profile(BaseModel):
     route: list[str] = []      # concepts the user is learning (their Route / Ghost CV gaps)
     exposed: list[str] = []    # capability concepts that reach the user's tasks (from the Mirror)
     limit: int = 20
+
+
+class SdgItem(BaseModel):
+    kind: Literal["skill", "role"]
+    id: str = Field(max_length=120)
+
+
+class SdgRequest(BaseModel):
+    items: list[SdgItem] = Field(max_length=40)
 
 
 class JourneyRequest(BaseModel):
@@ -626,6 +635,22 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         p = _profile(req, conn)
         requirements.ensure_async(cur, p.occupation)   # your own job's postings, for staying in it
         return journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p, _resources(conn))
+
+    @app.post("/sdg/tags")
+    def sdg_tags(req: SdgRequest, conn=Depends(get_conn)):
+        """SDG tags for skills and roles the page shows: the curated ones, else the AI's (written once, then saved),
+        else a general default, so every item has at least one. Ids this app doesn't know are left out; names come
+        from the app's own data, never from the caller."""
+        open_skills.ensure_known(cur, conn, [i.id for i in req.items if i.kind == "skill"])
+        items = []
+        for i in req.items:
+            if i.kind == "skill":
+                label = cur.concepts[i.id].label if i.id in cur.concepts and cur.concepts[i.id].kind == "skill" else None
+            else:
+                label = journey.occupation_title(cur, i.id)
+            if label:
+                items.append({"kind": i.kind, "id": i.id, "label": label})
+        return {"tags": sdg.resolve(conn, cur, items)}
 
     @app.post("/journey/plan")
     def journey_plan(req: JourneyRequest, conn=Depends(get_conn)):
