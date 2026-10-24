@@ -209,10 +209,13 @@ def mirror(cur: Curated, st: Statuses, p: Profile, tasks: list[ilo.Task] | None 
     exposed = [c for c in cards if c["pile"] == "exposed"]
 
     def share(h: str) -> int:
-        """Exposed share at a horizon; the user's own moves count at every horizon."""
-        hit = sum((c["override"]["pile"] if c["override"] else ("exposed" if c["scores"][h] >= TASK_EXPOSED_AT else "human"))
-                  == "exposed" for c in cards)
-        return round(100 * hit / len(cards)) if cards else 0
+        """Average task exposure intensity at a horizon; the user's own moves count at every horizon."""
+        if not cards:
+            return 0
+        total = sum(1.0 if (c.get("override") and c["override"]["pile"] == "exposed")
+                    else 0.0 if (c.get("override") and c["override"]["pile"] == "human")
+                    else c["scores"][h] for c in cards)
+        return round(100 * total / len(cards))
     esco = cur.tasks.get(p.occupation or "")
     occ = ilo.INDEX.occupations.get(p.occupation or "")
     return {
@@ -221,8 +224,10 @@ def mirror(cur: Curated, st: Statuses, p: Profile, tasks: list[ilo.Task] | None 
         "esco_uri": esco[0].occupation_uri if esco else None,
         "source": {"name": ilo.SOURCE, "url": ilo.PAPER, "gradient": occ.gradient if occ else None,
                    "estimated": bool(occ and occ.origin == "llm")},
-        "cards": cards, "exposed_share": round(100 * len(exposed) / len(cards)) if cards else 0,
+        "cards": cards, "exposed_share": share(p.scenario),
         "shares": {h: share(h) for h in HORIZONS},
+        "exposed_task_count": len(exposed),
+        "total_task_count": len(cards),
         # capabilities on the AI pile after the user's corrections: these drive the live feed's "affects your work"
         "exposed_capabilities": sorted({c["id"] for card in exposed for c in card["capabilities"]}),
     }
@@ -247,12 +252,15 @@ def role_ids(cur: Curated) -> list[str]:
 
 def exposure_share(cur: Curated, st: Statuses, isco: str, scenario: str, overrides: dict,
                    links: dict | None = None) -> int | None:
-    """Share of an occupation's ILO tasks on the AI-exposed pile (the user's Mirror corrections apply)."""
+    """Average task exposure intensity of an occupation's ILO tasks (the user's Mirror corrections apply)."""
     tasks = ilo.INDEX.tasks.get(isco, [])
     if not tasks:
         return None
     cards = task_cards(cur, st, tasks, links or {}, overrides, scenario)
-    return round(100 * sum(c["pile"] == "exposed" for c in cards) / len(cards))
+    total = sum(1.0 if (c.get("override") and c["override"]["pile"] == "exposed")
+                else 0.0 if (c.get("override") and c["override"]["pile"] == "human")
+                else c["scores"][scenario] for c in cards)
+    return round(100 * total / len(cards))
 
 
 def demand_index(st: Statuses, skills: list[tuple[str, float]], scenario: str) -> float:

@@ -69,7 +69,7 @@ export type Profile = {
   limit?: number;
 };
 
-async function call<T>(path: string, init?: RequestInit, timeoutMs = 5000): Promise<T | null> {
+async function call<T>(path: string, init?: RequestInit, timeoutMs = 15000): Promise<T | null> {
   try {
     const res = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(timeoutMs), ...init });
     return res.ok ? ((await res.json()) as T) : null;

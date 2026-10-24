@@ -154,11 +154,13 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
       journeyApi
         .build(JSON.parse(key), ctrl.signal)
         .then((j) => {
+          if (ctrl.signal.aborted || !j) return;
           setData(j);
           setError(null);
         })
         .catch((e) => {
-          if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : String(e));
+          if (ctrl.signal.aborted || (e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError"))) return;
+          setError(e instanceof Error ? e.message : String(e));
         })
         .finally(() => {
           if (!ctrl.signal.aborted) setLoading(false);
