@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import CvMatch from "../CvMatch";
-import JobsButton from "../JobsButton";
-import { toBet, toRole } from "../../lib/adapters";
+import { toRole } from "../../lib/adapters";
 import { journeyApi, type LearningPlan as Plan } from "../../lib/journey";
 import { useJourney } from "./JourneyProvider";
 import LearningPlan from "./LearningPlan";
@@ -70,7 +69,6 @@ export default function StepRoute() {
             ) : (
               <span className="chip chip-origin">{r.hours_left} h left · {r.done}/{r.steps.length} done</span>
             ),
-          extra: score && <JobsButton bet={toBet("safe", score)} />,
           body:
             plan.status === "ready" ? (
               <LearningPlan

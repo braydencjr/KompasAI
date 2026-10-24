@@ -22,6 +22,8 @@ type TaskBase = {
   brief: string;
   requirements: string[];
   review: Review;
+  /** what the learner actually produces, in plain words ("Write a one-page memo") */
+  deliverable?: string;
 };
 
 export type SheetTask = TaskBase & { tool: "sheet"; sheet: SheetSpec };
@@ -102,26 +104,25 @@ export type Simulation = {
   tasks: SimTask[];
   /** written by the AI for this user rather than one of the built-in samples */
   generated?: boolean;
+  /** all four tasks use AI tools (brief it, then check it), with no core-work tasks */
+  aiOnly?: boolean;
 };
 
 /** what a finished task reports back */
-export type Outcome = { score: number; evidence: string[]; seconds: number; enjoy: number };
-
-export type Quadrant = "Strong fit" | "Capable, may burn out" | "Learnable" | "Probably not for you";
+export type Outcome = { score: number; evidence: string[]; seconds: number };
 
 export type SimResult = {
   can: number;
-  want: number;
-  quadrant: Quadrant;
   weakest?: { skill: string; gap?: string };
   at: string;
 };
 
-export const FIT_THRESHOLD = 60;
-
-export function quadrantOf(can: number, want: number): Quadrant {
-  if (can >= FIT_THRESHOLD) return want >= FIT_THRESHOLD ? "Strong fit" : "Capable, may burn out";
-  return want >= FIT_THRESHOLD ? "Learnable" : "Probably not for you";
+/** how a day went, from the average task score (0–100) */
+export function rating(score: number) {
+  if (score >= 85) return { label: "Exceeds expectations", tone: "great" };
+  if (score >= 65) return { label: "Meets expectations", tone: "good" };
+  if (score >= 40) return { label: "Developing", tone: "mid" };
+  return { label: "Not yet ready", tone: "low" };
 }
 
 export function reviewFor(task: SimTask, score: number) {

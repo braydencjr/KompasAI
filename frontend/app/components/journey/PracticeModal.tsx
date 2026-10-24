@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import CalendarTool from "../sim/CalendarTool";
 import CodeTool from "../sim/CodeTool";
+import CoachChat from "../sim/CoachChat";
 import DocTool from "../sim/DocTool";
 import PromptTool from "../sim/PromptTool";
 import ReviewTool from "../sim/ReviewTool";
 import SheetTool from "../sim/SheetTool";
-import { clock, initials } from "../sim/shared";
+import { clock, deliverableOf, initials } from "../sim/shared";
+import { useSplit } from "../sim/useSplit";
 import { ApiError, postJson } from "../../lib/api";
 import { prepareSimulation } from "../../lib/prepare";
 import { reviewFor, type SimTask } from "../../data/simulations";
@@ -38,6 +40,7 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
   const [tick, setTick] = useState(0);
   const startedAt = useRef(Date.now());
   const dialogRef = useRef<HTMLDivElement>(null);
+  const split = useSplit();
 
   const load = useCallback(
     async (fresh: boolean, signal?: AbortSignal) => {
@@ -119,6 +122,7 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
     <div className="modal-backdrop sim-backdrop" onClick={onClose}>
       <div ref={dialogRef} tabIndex={-1} className="modal sim glass" role="dialog" aria-modal="true"
         aria-labelledby="practice-title" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-scroll">
         <button className="modal-close" onClick={onClose} aria-label="Close mini project">×</button>
 
         <header className="sim-head">
@@ -150,9 +154,10 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
         )}
 
         {task && (
-          <div className="workspace" key={attempt}>
+          <div className="workspace" key={attempt} style={split.style}>
             <aside className="inbox">
               <div className="label">Brief</div>
+              <div className="sim-makes"><span className="label">What you'll do</span>{deliverableOf(task)}</div>
               <article className="sim-email">
                 <div className="sim-email-head">
                   <span className="sim-avatar" aria-hidden>{initials(task.from)}</span>
@@ -169,6 +174,7 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
               </div>
               <p className="muted small">About {task.minutes} minutes. Pass with {Math.round(PASS * 100)}% to complete this stop.</p>
             </aside>
+            {split.handle}
 
             <div className="workspace-main">
               {task.tool === "sheet" && <SheetTool task={task} onDone={done} />}
@@ -184,29 +190,26 @@ export default function PracticeModal({ role, step, onPassed, onClose }: Props) 
                     <strong>{Math.round(result.score * 100)}%</strong>
                     <span>{passed ? "Passed · stop completed" : `Not yet · ${Math.round(PASS * 100)}% to pass`}</span>
                   </div>
-                  <div className="sim-bubble">
-                    <span className="sim-avatar" aria-hidden>{initials(task.from)}</span>
-                    <div>
-                      <div className="sim-from">{task.from} <span className="muted">· replied</span></div>
-                      <p>{reviewFor(task, result.score)}</p>
-                    </div>
-                  </div>
-                  <ul className="sim-evidence">
-                    {[...result.evidence, `Took ${clock(result.seconds)}`].map((e) => <li key={e}>{e}</li>)}
-                  </ul>
-                  <div className="sim-intro-actions">
-                    {passed ? (
-                      <button className="btn btn-primary" onClick={onClose}>Back to my route →</button>
-                    ) : (
-                      <button className="btn btn-primary" onClick={retry}>Try again</button>
-                    )}
-                    <button className="sim-link" onClick={() => void load(true)}>✦ Give me a different project</button>
-                  </div>
+                </div>
+              )}
+
+              <CoachChat key={`${task.id}-${attempt}`} task={task}
+                feedback={result ? { text: reviewFor(task, result.score), evidence: [...result.evidence, `Took ${clock(result.seconds)}`] } : undefined} />
+
+              {result && (
+                <div className="sim-intro-actions">
+                  {passed ? (
+                    <button className="btn btn-primary" onClick={onClose}>Back to my route →</button>
+                  ) : (
+                    <button className="btn btn-primary" onClick={retry}>Try again</button>
+                  )}
+                  <button className="sim-link" onClick={() => void load(true)}>✦ Give me a different project</button>
                 </div>
               )}
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>,
     document.body,

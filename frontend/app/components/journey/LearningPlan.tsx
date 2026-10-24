@@ -1,5 +1,6 @@
 "use client";
 
+import { rating } from "../../data/simulations";
 import { useState } from "react";
 import { signalClass } from "../Signals";
 import { useSim, type SimRole } from "../SimulatorProvider";
@@ -54,11 +55,6 @@ export default function LearningPlan({ plan, completed, onToggle, capstone }: Pr
       {plan.summary && <p className="lp-summary">{plan.summary}</p>}
 
       <ol className="lp-path">
-        <li className="lp-end lp-start">
-          <span className="lp-dot" aria-hidden />
-          <span className="muted small">Today: the skills you already have</span>
-        </li>
-
         {plan.steps.map((s) => {
           const isDone = completed.includes(s.id);
           return (
@@ -147,27 +143,27 @@ export default function LearningPlan({ plan, completed, onToggle, capstone }: Pr
             <article className="lp-card">
               <header className="lp-card-head">
                 <div>
-                  <span className="label">Final project · about 20 minutes</span>
-                  <h4>A day as {capstone.title}</h4>
+                  <span className="label">Your work with AI · about 20 minutes</span>
+                  <h4>{capstone.title} with AI tools</h4>
                 </div>
-                {finalResult && <span className="lp-final-result">Last time: {finalResult.quadrant}</span>}
+                {finalResult && <span className="lp-final-result">Last time: {rating(finalResult.can).label}</span>}
               </header>
               <p className="lp-goal">
-                Put it all together on a normal working day: two everyday tasks from the job, then two using the AI tools
-                this field is starting to use. You finish with a performance report on both.
+                Put it into practice the way the job is changing: four short tasks, all with AI tools. Brief an AI to get
+                real work done, then catch the mistakes in what it wrote. You finish with a report on how you worked with it.
               </p>
               <div className="lp-grid">
                 <section className="lp-box">
-                  <h5><Icon d={ICON.project} /> Everyday work</h5>
-                  <p className="small">The core of the job as it&apos;s done today, in a spreadsheet, calendar or code editor.</p>
+                  <h5><Icon d={ICON.project} /> Direct the AI</h5>
+                  <p className="small">Write a brief, see how the AI answers, and sharpen it until the result is useful.</p>
                 </section>
                 <section className="lp-box">
-                  <h5><Icon d={ICON.courses} /> The field&apos;s AI tools</h5>
-                  <p className="small">Brief an AI tool to get work done, then catch the mistakes in an AI-written draft.</p>
+                  <h5><Icon d={ICON.courses} /> Check its work</h5>
+                  <p className="small">Spot the wrong numbers and invented facts in an AI-written draft before it goes out.</p>
                 </section>
               </div>
-              <button className="btn btn-primary lp-start" onClick={() => sim.open(capstoneId, { ...capstone, id: capstoneId })}>
-                ▶ {finalResult ? "Try another day" : "Start the final project"}
+              <button className="btn btn-primary lp-start" onClick={() => sim.open(capstoneId, { ...capstone, id: capstoneId, aiOnly: true })}>
+                ▶ {finalResult ? "Try another round" : "Start your work with AI"}
               </button>
             </article>
           </li>
@@ -176,7 +172,7 @@ export default function LearningPlan({ plan, completed, onToggle, capstone }: Pr
         <li className="lp-end lp-goal-end">
           <span className="lp-flag" aria-hidden><Icon d={ICON.flag} /></span>
           <strong>{plan.role.title}</strong>
-          <span className="muted small">ready to apply</span>
+          <span className="muted small">where this route leads</span>
         </li>
       </ol>
 

@@ -405,6 +405,8 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         return {"role": title, "jobs": out, "source": found["source"], "fetched_at": found["fetched_at"],
                 "cached": found.get("cached", False), "note": found.get("note")}
 
+    MAX_TEXT_LINES = 600     # the whole of a normal CV; the reader shows it scrollable
+
     @app.post("/profile/text")
     def profile_text(file: UploadFile = File(...)):
         """The CV's text lines, fast, so the scanner can show the real document while the reader works."""
@@ -418,7 +420,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         except Exception:
             raise HTTPException(422, "Couldn't read this file. Try saving it again as PDF or DOCX.")
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        return {"file": file.filename, "chars": len(text), "lines": lines[:80]}
+        return {"file": file.filename, "chars": len(text), "lines": lines[:MAX_TEXT_LINES]}
 
     @app.post("/profile/extract")
     def extract_profile(file: UploadFile | None = File(None), text: str | None = Form(None), conn=Depends(get_conn)):

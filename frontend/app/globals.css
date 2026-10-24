@@ -246,13 +246,16 @@ html.lg-refract .glass {
   overscroll-behavior: contain;
 }
 
+/* fills the space beside the sidebar up to a comfortable reading width, then centres on very wide screens */
 .main > :not(.bubble, .modal-backdrop) {
   width: 100%;
-  max-width: 1080px;
+  max-width: min(100%, 1440px);
+  margin-inline: auto;
 }
 
 .main > .hero {
   max-width: 640px;
+  margin-inline: 0;
 }
 
 /* ---------- sidebar ---------- */
@@ -1569,9 +1572,23 @@ h3 {
   z-index: 60;
 }
 
+/* the glass rim and sheen are drawn on the modal itself, so it must not scroll: an inner wrapper does */
 .modal.sim {
   width: min(1160px, 100%);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.modal-scroll {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
+  flex: 1;
+  min-height: 0;
+  padding: 30px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .sim-head h2 {
@@ -1716,8 +1733,8 @@ h3 {
 /* inbox on the left, the tool on the right */
 .workspace {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: var(--brief-w, 360px) 14px minmax(0, 1fr);
+  gap: 6px;
   align-items: start;
   animation: plan-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -1751,13 +1768,54 @@ h3 {
 }
 
 .sim-subject {
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 600;
 }
 
 .sim-email > p {
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.sim-makes {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.sim-makes .label {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.split-handle {
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  border-radius: 8px;
+}
+
+.split-handle span {
+  width: 3px;
+  margin: 8px 0;
+  border-radius: 3px;
+  background: var(--hair);
+  transition: background 0.15s, width 0.15s;
+}
+
+.split-handle:hover span,
+.split-handle:focus-visible span {
+  width: 5px;
+  background: var(--accent);
+}
+
+.split-handle:focus-visible {
+  outline: none;
 }
 
 .sim-reqs {
@@ -1771,8 +1829,8 @@ h3 {
   flex-direction: column;
   gap: 6px;
   padding-left: 18px;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14.5px;
+  line-height: 1.55;
 }
 
 .workspace-main {
@@ -2899,6 +2957,10 @@ h3 {
 @media (max-width: 1000px) {
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .split-handle {
+    display: none;
   }
 
   .inbox {
@@ -4607,14 +4669,17 @@ h3 {
 /* 1 · the document being read */
 .flow-doc {
   position: relative;
-  max-height: 300px;
-  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 18px 22px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.7);
   box-shadow: inset 0 0 0 1px rgba(15, 30, 60, 0.06);
-  -webkit-mask-image: linear-gradient(180deg, #000 80%, transparent);
-  mask-image: linear-gradient(180deg, #000 80%, transparent);
+}
+
+.flow-doc:focus-visible {
+  outline: 2px solid var(--accent);
 }
 
 .flow-doc-lines {
@@ -4632,9 +4697,7 @@ h3 {
   padding: 1px 6px;
   margin-left: -6px;
   border-radius: 6px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .flow-line.hit {
@@ -5688,6 +5751,7 @@ button.cvp-tag.ai:hover { background: #fde68a; }
 .kp-rank.safe { background: var(--accent-soft); color: var(--accent-ink); }
 
 /* the upskilling suggestion: one card across the page, summary on the left and the plan on the right */
+.kp-card.wide > .kp-card-head { grid-column: 1 / -1; }
 .kp-card.wide { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; }
 .kp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
@@ -5758,6 +5822,10 @@ button.cvp-tag.ai:hover { background: #fde68a; }
 /* The Route: the skill match and the route as two cards, one above the other */
 .plan-split { display: flex; flex-direction: column; gap: 18px; }
 .plan-split > .plan + .plan .plan-tags { margin-bottom: 0; }
+/* the page header's job boards button sits at the right edge */
+.j-head.has-action { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 32px; }
+.j-head-action { flex: none; position: relative; z-index: 1; }
+.j-head-action .jobs-cta { padding: 12px 18px; }
 
 /* the skill match card: the score on the left, the skills you have and the gaps stacked on the right */
 .plan-match { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: 32px; align-items: start; }
@@ -5809,7 +5877,7 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
   font-size: 12.5px;
   font-weight: 600;
 }
-.lp-summary { font-size: 15px; line-height: 1.6; max-width: 75ch; }
+.lp-summary { font-size: 15px; line-height: 1.6; max-width: none; }
 
 /* the path: a line down the left joining one node per stop */
 .lp-path { position: relative; list-style: none; display: flex; flex-direction: column; gap: 18px; padding-left: 0; }
@@ -5817,7 +5885,7 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
   content: "";
   position: absolute;
   left: 21px;
-  top: 10px;
+  top: 22px;
   bottom: 24px;
   width: 3px;
   border-radius: 3px;
@@ -5975,3 +6043,117 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 
 /* the AI's comments on a written task */
 .doc-feedback { padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); font-size: 13.5px; line-height: 1.55; }
+
+/* ask the sender how to do the task */
+.coach-open {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ai);
+  background: var(--ai-soft);
+}
+
+.coach-open:hover {
+  background: rgba(124, 108, 240, 0.16);
+}
+
+.coach {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(124, 108, 240, 0.25), 0 10px 30px -18px rgba(20, 40, 80, 0.4);
+}
+
+.coach-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.coach-head .sim-link {
+  margin-left: auto;
+}
+
+.coach-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.coach-feedback .sim-evidence {
+  margin-left: 0;
+}
+
+.coach-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.coach-you,
+.coach-them {
+  max-width: 86%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.coach-you {
+  align-self: flex-end;
+  color: #fff;
+  background: var(--ai);
+}
+
+.coach-them {
+  align-self: flex-start;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.coach-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coach-ideas .chip {
+  cursor: pointer;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+}
+
+.coach-form {
+  display: flex;
+  gap: 8px;
+}
+
+.coach-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14.5px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.coach-form input:focus {
+  outline: 2px solid var(--ai);
+}

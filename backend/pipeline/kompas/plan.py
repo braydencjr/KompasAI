@@ -27,7 +27,9 @@ wants to move into the role below. The steps are fixed: the skills they still ne
 For each step, write:
 - `goal`: one sentence on what they will be able to do, in the context of the role.
 - `learn`: 3 to 5 concrete subtopics to learn, in order.
-- `practice`: one small, realistic task to prove the skill (something they could show an employer).
+- `practice`: one small task that proves the skill, in plain words. Say what they will actually make (a
+  spreadsheet, a short memo, a function, a checklist…) and the decision or calculation it has to get right, so it needs
+  the `learn` topics applied, not recalled. No grand labels: call a memo a memo, not an "assessment" or "framework".
 - `weeks`: a realistic estimate at about 5 hours a week (a whole number, 1 to 12).
 - `queries`: 3 short course-search phrases (2 to 4 words each) that would find beginner-to-intermediate online
   courses for this skill, using the words course titles use (e.g. "carbon footprint", "greenhouse gas emissions").
@@ -80,7 +82,7 @@ def _cache(conn):
 
 
 def _key(role: dict, steps: list[dict], have: list[str]) -> str:
-    raw = json.dumps({"role": role["isco"], "steps": [s["id"] for s in steps], "have": sorted(have)})
+    raw = json.dumps({"v": 2, "role": role["isco"], "steps": [s["id"] for s in steps], "have": sorted(have)})
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 

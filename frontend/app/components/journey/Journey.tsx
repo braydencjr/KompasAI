@@ -1,5 +1,7 @@
 "use client";
 
+import JobsButton from "../JobsButton";
+import { toBet } from "../../lib/adapters";
 import { STEPS, useJourney } from "./JourneyProvider";
 import StepBets from "./StepBets";
 import StepFuture from "./StepFuture";
@@ -12,8 +14,8 @@ const COPY: Record<(typeof STEPS)[number]["id"], { title: React.ReactNode; sub: 
     title: <>See where your work is heading <span className="accent">before it moves.</span></>,
     sub: "Upload your resume, or start with Aisyah's. Kompas reads your skills and the job you do today.",
   },
-  future: { title: "Your work in 2028", sub: "Is your job safe from AI, what your skills will be worth, and the tasks behind both." },
-  bets: { title: "Where your Kompas points", sub: "Upskill where you are, or switch: the fastest-growing job you fit, or the safest move." },
+  future: { title: "AI & Skills Outlook", sub: "AI Impact on Your Career" },
+  bets: { title: "Career Impact", sub: "Upskill where you are, or switch: the fastest-growing job you fit, or the safest move." },
   route: { title: "Your learning route", sub: "An ordered plan to your chosen role, with verified courses and the evidence for every step." },
   ping: { title: "The world moved. Here's what changed for you.", sub: "Each new snapshot re-scores the market. Kompas shows what moved, why, and re-plans." },
 };
@@ -24,10 +26,14 @@ export default function Journey() {
   const { step, direction, back, next, go, error, loading, data } = useJourney();
   const index = STEPS.findIndex((s) => s.id === step);
   const View = VIEWS[step];
+  // the route page's header carries the job boards button for the job it leads to
+  const route = step === "route" ? data?.route : undefined;
+  const score = route ? data?.roles.find((x) => x.isco === route.role.isco) : undefined;
 
   return (
     <div className="j-journey">
-      {step !== "you" && <header className="j-head" key={`head-${step}`}>
+      {step !== "you" && <header className={`j-head${score ? " has-action" : ""}`} key={`head-${step}`}>
+        <div className="j-head-text">
         <span className="eyebrow">{index === 0 ? "AI watches the market. You grow." : `${String(index).padStart(2, "0")} · ${STEPS[index].label}`}</span>
         {step === "route" && data?.route ? (
           // the route page is named after the job it leads to
@@ -39,13 +45,8 @@ export default function Journey() {
           <h1>{COPY[step].title}</h1>
         )}
         <p>{COPY[step].sub}</p>
-        {data && (
-          <div className="hud">
-            <span>Snapshot <strong>{data.snapshot.as_of.replaceAll("-", ".")}</strong></span>
-            <span>Scenario <strong>{data.scenario === "fast" ? "Fast" : "Moderate"}</strong></span>
-            <span className={loading ? "j-hud-busy" : ""}>{loading ? "Updating…" : "Live"}</span>
-          </div>
-        )}
+        </div>
+        {score && <div className="j-head-action"><JobsButton bet={toBet("safe", score)} /></div>}
       </header>}
 
       {error && (

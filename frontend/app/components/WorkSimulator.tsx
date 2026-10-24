@@ -8,9 +8,11 @@ import PerformanceReport from "./sim/PerformanceReport";
 import PromptTool from "./sim/PromptTool";
 import ReviewTool from "./sim/ReviewTool";
 import SheetTool from "./sim/SheetTool";
-import { FEELINGS, TOOL_LABEL, clock, initials } from "./sim/shared";
+import CoachChat from "./sim/CoachChat";
+import { TOOL_LABEL, clock, deliverableOf, initials } from "./sim/shared";
+import { useSplit } from "./sim/useSplit";
 import type { SimSource } from "./SimulatorProvider";
-import { isAiTask, quadrantOf, reviewFor, type Outcome, type SimResult, type Simulation } from "../data/simulations";
+import { isAiTask, reviewFor, type Outcome, type SimResult, type Simulation } from "../data/simulations";
 
 type Props = {
   sim: Simulation;
@@ -61,12 +63,12 @@ function Generating({ onUseSample }: { onUseSample?: () => void }) {
 }
 
 export default function WorkSimulator({ sim, source, note, onUseSample, onRegenerate, onClose, onFinish }: Props) {
+  const split = useSplit();
   // -1 = welcome, 0..n-1 = tasks, n = report
   const [step, setStep] = useState(-1);
   const [attempt, setAttempt] = useState(0);
   const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const [pending, setPending] = useState<{ score: number; evidence: string[]; seconds: number } | null>(null);
-  const [enjoy, setEnjoy] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const startedAt = useRef(0);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -87,7 +89,7 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
   }, [onClose]);
 
   useEffect(() => {
-    dialogRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    dialogRef.current?.querySelector(".modal-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
     if (!task) return;
     startedAt.current = Date.now();
     setElapsed(0);
@@ -100,22 +102,18 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
   }
 
   function next() {
-    if (!pending || enjoy === null) return;
-    const all = [...outcomes, { ...pending, enjoy }];
+    if (!pending) return;
+    const all = [...outcomes, pending];
     setOutcomes(all);
     setPending(null);
-    setEnjoy(null);
     if (step < n - 1) {
       setStep(step + 1);
       return;
     }
     const can = Math.round((all.reduce((s, o) => s + o.score, 0) / n) * 100);
-    const want = Math.round((all.reduce((s, o) => s + o.enjoy, 0) / (n * 2)) * 100);
     const low = all.reduce((lo, o, i) => (o.score < all[lo].score ? i : lo), 0);
     onFinish({
       can,
-      want,
-      quadrant: quadrantOf(can, want),
       weakest: all[low].score < 1 ? { skill: sim.tasks[low].competency, gap: sim.tasks[low].gap } : undefined,
       at: new Date().toISOString(),
     });
@@ -125,7 +123,6 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
   function restart() {
     setOutcomes([]);
     setPending(null);
-    setEnjoy(null);
     setAttempt((a) => a + 1);
     setStep(0);
   }
@@ -141,13 +138,14 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
         aria-labelledby="sim-title"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="modal-scroll">
         <button className="modal-close" onClick={onClose} aria-label="Close simulation">
           ×
         </button>
 
         <header className="sim-head">
           <div className="plan-tags">
-            <span className="label">Work simulation{source !== "loading" && sim.setting ? ` · ${sim.setting}` : ""}</span>
+            <span className="label">{sim.aiOnly ? "Your work with AI" : "Work simulation"}{source !== "loading" && sim.setting ? ` · ${sim.setting}` : ""}</span>
             {source === "ai" && <span className="chip sim-source ai">✦ Written by AI for you</span>}
             {source === "sample" && <span className="chip sim-source">Sample scenario</span>}
             {task && <span className="chip chip-blue">⏱ {clock(pending ? pending.seconds : elapsed)}</span>}
@@ -194,11 +192,11 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
               </div>
             </div>
             <p className="muted">
-              It&apos;s your first day as {sim.title}. You&apos;ll do four real pieces of work in a mini workspace: two
-              from the core of the job, and two using the AI tools now arriving in this field, because how this work
-              gets done is changing. At the end you get a performance report.
+              {sim.aiOnly
+                ? `Here's how ${sim.title} work looks with AI. You'll do four pieces of it, all with the AI tools now arriving in this field: brief the AI, then check what it made. At the end you get a report on how you worked with it.`
+                : `It's your first day as ${sim.title}. You'll do four real pieces of work in a mini workspace: two from the core of the job, and two using the AI tools now arriving in this field, because how this work gets done is changing. At the end you get a performance report.`}
             </p>
-            {(["core", "ai"] as const).map((track) => (
+            {(["core", "ai"] as const).filter((track) => !(sim.aiOnly && track === "core")).map((track) => (
               <div key={track} className="sim-plan-group">
                 <div className="label">{track === "core" ? "Core work" : "✦ Working with AI"}</div>
                 <ul className="sim-plan">
@@ -221,7 +219,7 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
             <p className="muted small">Names, companies and figures are fictional.</p>
             <div className="sim-intro-actions">
               <button className="btn btn-primary" onClick={() => setStep(0)}>
-                Start my first day →
+                {sim.aiOnly ? "Start →" : "Start my first day →"}
               </button>
               <button className="sim-link" onClick={onRegenerate}>
                 ✦ {source === "ai" ? "Generate a different scenario" : "Try generating one with AI"}
@@ -231,9 +229,10 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
         )}
 
         {task && (
-          <div className="workspace" key={`${task.id}-${attempt}`}>
+          <div className="workspace" key={`${task.id}-${attempt}`} style={split.style}>
             <aside className="inbox">
               <div className="label">Inbox</div>
+              <div className="sim-makes"><span className="label">What you'll do</span>{deliverableOf(task)}</div>
               <article className="sim-email">
                 <div className="sim-email-head">
                   <span className="sim-avatar" aria-hidden>
@@ -263,6 +262,7 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
                 </ul>
               </div>
             </aside>
+            {split.handle}
 
             <div className="workspace-main">
               {task.tool === "sheet" && <SheetTool task={task} onDone={taskDone} />}
@@ -272,42 +272,14 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
               {task.tool === "prompt" && <PromptTool task={task} field={sim.title} onDone={taskDone} />}
               {task.tool === "review" && <ReviewTool task={task} onDone={taskDone} />}
 
+              <CoachChat key={`${task.id}-${attempt}`} task={task}
+                feedback={pending ? { text: reviewFor(task, pending.score), evidence: pending.evidence } : undefined} />
+
               {pending && (
                 <div className="sim-after">
-                  <div className="sim-bubble">
-                    <span className="sim-avatar" aria-hidden>
-                      {initials(task.from)}
-                    </span>
-                    <div>
-                      <div className="sim-from">
-                        {task.from} <span className="muted">· replied</span>
-                      </div>
-                      <p>{reviewFor(task, pending.score)}</p>
-                    </div>
-                  </div>
-                  <ul className="sim-evidence">
-                    {pending.evidence.map((e) => (
-                      <li key={e}>{e}</li>
-                    ))}
-                  </ul>
-                  <div className="sim-feel">
-                    <div className="sim-question">Honestly, how did that task feel?</div>
-                    <div className="sim-feel-row">
-                      {FEELINGS.map((f, i) => (
-                        <button
-                          key={f}
-                          className={`sim-feel-btn${enjoy === i ? " on" : ""}`}
-                          onClick={() => setEnjoy(i)}
-                          aria-pressed={enjoy === i}
-                        >
-                          {f}
-                        </button>
-                      ))}
-                    </div>
-                    <button className="btn btn-primary tool-submit" disabled={enjoy === null} onClick={next}>
-                      {step === n - 1 ? "End the day: see my report →" : "Next task →"}
-                    </button>
-                  </div>
+                  <button className="btn btn-primary tool-submit" onClick={next}>
+                    {step === n - 1 ? "See my report →" : "Next task →"}
+                  </button>
                 </div>
               )}
             </div>
@@ -317,6 +289,7 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
         {step === n && outcomes.length === n && (
           <PerformanceReport sim={sim} outcomes={outcomes} onRestart={restart} onClose={onClose} />
         )}
+        </div>
       </div>
     </div>
   );

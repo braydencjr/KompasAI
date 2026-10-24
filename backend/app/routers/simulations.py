@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.llm import LLMError, LLMUnavailable, is_configured
-from app.services.simulations import RubricItem, generate_practice, generate_simulation, grade_doc, run_brief
+from app.services.simulations import RubricItem, coach, generate_practice, generate_simulation, grade_doc, run_brief
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 
@@ -15,6 +15,8 @@ class SimulationRequest(BaseModel):
     gaps: list[str] = []
     # skip the cache and write a new scenario
     fresh: bool = False
+    # four AI-tool tasks (brief, check, brief, check) instead of two core tasks and two AI ones
+    ai_only: bool = False
 
 
 class PracticeRequest(BaseModel):
@@ -62,7 +64,7 @@ async def status() -> dict:
 @router.post("")
 async def create_simulation(req: SimulationRequest) -> dict:
     try:
-        return await generate_simulation(req.role_id, req.title, req.summary, req.skills, req.gaps, req.fresh)
+        return await generate_simulation(req.role_id, req.title, req.summary, req.skills, req.gaps, req.fresh, req.ai_only)
     except (LLMUnavailable, LLMError) as e:
         _fail(e)
 
@@ -83,6 +85,27 @@ async def grade_document(req: DocGradeRequest) -> dict:
     to keyword matching when this fails."""
     try:
         return await grade_doc(req.brief, req.requirements, req.checklist, req.text)
+    except (LLMUnavailable, LLMError) as e:
+        _fail(e)
+
+
+class CoachRequest(BaseModel):
+    sender: str
+    sender_role: str = ""
+    title: str
+    brief: str
+    requirements: list[str] = []
+    material: str = Field("", max_length=6000, description="What's on the learner's screen, answers hidden")
+    evidence: list[str] = Field([], max_length=8, description="What the automatic check said about their last attempt")
+    history: list[Turn] = Field([], max_length=12)
+    question: str = Field(min_length=1, max_length=600)
+
+
+@router.post("/coach")
+async def coach_help(req: CoachRequest) -> dict:
+    try:
+        return await coach(req.sender, req.sender_role, req.title, req.brief, req.requirements, req.material,
+                           req.evidence, [(t.prompt, t.reply) for t in req.history], req.question)
     except (LLMUnavailable, LLMError) as e:
         _fail(e)
 

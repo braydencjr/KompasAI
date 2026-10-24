@@ -120,10 +120,6 @@ function OptionCard({ o, chosen, onChoose, wide = false, rank }: CardProps) {
 
   const summary = (
     <>
-      <header className="kp-card-head">
-        {rank ? <span className={`kp-rank ${o.kind}`}>#{rank}</span> : <span className={`kp-kind ${o.kind}`}>{KIND[o.kind].label}</span>}
-      </header>
-
       <div className="kp-title">
         <div>
           <h3>{o.title}</h3>
@@ -194,15 +190,21 @@ function OptionCard({ o, chosen, onChoose, wide = false, rank }: CardProps) {
 
       {o.bet && <JobsButton bet={o.bet} />}
 
-      <div className="kp-actions">
-        {/* picks this job and opens its route, where the AI learning plan is written */}
-        <button className="btn btn-ghost" onClick={onChoose}>View full roadmap →</button>
-      </div>
     </>
+  );
+
+  // the label on the left and the roadmap button at the top right, across the whole card
+  const head = (
+    <header className="kp-card-head">
+      {rank ? <span className={`kp-rank ${o.kind}`}>#{rank}</span> : <span className={`kp-kind ${o.kind}`}>{KIND[o.kind].label}</span>}
+      {/* picks this job and opens its route, where the AI learning plan is written */}
+      <button className="btn btn-ghost btn-sm" onClick={onChoose}>View full roadmap →</button>
+    </header>
   );
 
   return (
     <article className={`kp-card bet ${o.kind}${chosen ? " chosen" : ""}${wide ? " wide" : ""}`}>
+      {head}
       {wide ? (
         <>
           <div className="kp-col">{summary}</div>
