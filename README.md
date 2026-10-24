@@ -2,6 +2,8 @@
 
 *AI watches the market. You grow.*
 
+**Live demo:** [kompas-ai.replit.app](https://kompas-ai.replit.app)
+
 KompasAI is a career signal engine for working adults and students. Upload a resume, or start with the sample persona Aisyah. KompasAI reads your skills and current job, shows how much of that job AI can do now and by 2028, and lays out your options: stay and strengthen, or switch to a job you already fit. Then it builds a learning route to the job you choose. Behind it, an ingestion engine tracks AI research, open-source activity and Malaysian job-market data, so every judgement points to real evidence.
 
 Built for the SDC XMUM Hackathon, Domain 1: The Aiversecity Future-Ready Workforce.
@@ -74,6 +76,25 @@ To use Supabase:
 1. Run [`supabase/schema.sql`](supabase/schema.sql) once in the Supabase SQL Editor.
 2. Set `DATABASE_URL` to the session pooler connection string.
 3. Copy an existing local database over with `.venv/bin/kompas copy-to-postgres`.
+
+## Deploying on Replit
+
+KompasAI is deployed on [Replit](https://replit.com) at [kompas-ai.replit.app](https://kompas-ai.replit.app), with the backend and frontend running together in one Repl.
+
+1. **Import the repo.** Create a Repl from this GitHub repository.
+2. **Add secrets.** Put the backend's environment variables (the keys in the table above, plus `DATABASE_URL` for Supabase) in Replit's **Secrets** tool instead of a `.env` file. Replit passes them to both apps as environment variables.
+3. **Point the apps at each other.**
+   - `NEXT_PUBLIC_API_URL`: the backend's public Replit URL. Next.js reads it at build time, so rebuild after changing it.
+   - `CORS_ORIGINS`: the frontend's public Replit URL, so the browser is allowed to call the API.
+4. **Run both apps.** The Repl starts the backend, then the frontend:
+
+   ```bash
+   cd backend && pip install -r requirements.txt && fastapi run app/main.py --port 8000 &
+   cd frontend && npm install && npm run build && npm run start
+   ```
+
+   Use `fastapi run`, not `fastapi dev`: it listens on `0.0.0.0`, so Replit can expose it.
+5. **Deploy.** Publish the Repl from Replit's **Deploy** button. Supabase holds the data, so a redeploy doesn't lose snapshots, profiles or learning routes.
 
 ## Signal engine CLI
 
