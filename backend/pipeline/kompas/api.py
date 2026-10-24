@@ -481,6 +481,8 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         return {"role": title, "jobs": out, "source": found["source"], "fetched_at": found["fetched_at"],
                 "cached": found.get("cached", False), "note": found.get("note")}
 
+    MAX_TEXT_LINES = 600     # the whole of a normal CV; the reader shows it scrollable
+
     @app.post("/profile/text")
     def profile_text(file: UploadFile = File(...)):
         """The CV's text lines, fast, so the scanner can show the real document while the reader works."""
@@ -494,7 +496,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         except Exception:
             raise HTTPException(422, "Couldn't read this file. Try saving it again as PDF or DOCX.")
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        return {"file": file.filename, "chars": len(text), "lines": lines[:80]}
+        return {"file": file.filename, "chars": len(text), "lines": lines[:MAX_TEXT_LINES]}
 
     def _cv_text(file: UploadFile | None, text: str | None) -> str:
         if file is not None:
@@ -616,6 +618,23 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         p = _profile(req, conn)
         requirements.ensure_async(cur, p.occupation)   # your own job's postings, for staying in it
         return journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p, _resources(conn))
+
+    @app.post("/journey/plan")
+    def journey_plan(req: JourneyRequest, conn=Depends(get_conn)):
+        """The Route as an AI learning plan: Gemini writes what to learn and a practice task per step, and picks
+        courses from a search of the real Coursera catalogue. 503 with a reason when no plan can be written; the
+        page then shows the rule-based route."""
+        from . import plan
+
+        p = _profile(req)
+        j = journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p, _resources(conn))
+        if not j["route"]:
+            raise HTTPException(422, "Choose a job first")
+        have = [cur.concepts[s].label for s in p.skills if s in cur.concepts]
+        try:
+            return plan.build(conn, j["route"], j["route"]["role"], have)
+        except plan.PlanUnavailable as e:
+            raise HTTPException(503, str(e))
 
     @app.post("/journey/ping")
     def journey_ping(req: PingRequest, conn=Depends(get_conn)):

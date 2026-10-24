@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { SkillRow } from "../lib/journey";
 import Ring from "./Ring";
 import Roadmap, { SkillColumns, useStepProgress } from "./Roadmap";
@@ -11,7 +10,7 @@ type Props = {
   role: Role;
   /** what Kompas read about the person, shown above the role */
   intro?: React.ReactNode;
-  /** the role's per-skill score rows: "How is this calculated?" shows them */
+  /** the role's per-skill score rows (no longer shown here) */
   breakdown?: SkillRow[];
   /** where this profile came from (sample, or which CV and how it was read) */
   origin?: React.ReactNode;
@@ -30,8 +29,9 @@ type Props = {
   emptyNote?: React.ReactNode;
   /** progress kept elsewhere (the journey); default: this browser's per-role progress */
   progress?: ReturnType<typeof useStepProgress>;
-  /** two cards instead of one: the skill match first, then the route under its own heading */
-  split?: { label: string; tags?: React.ReactNode };
+  /** two cards instead of one: the skill match first, then the route under its own heading; `extra` goes under
+   * the score (e.g. the job boards button) */
+  split?: { label: string; tags?: React.ReactNode; extra?: React.ReactNode; body?: React.ReactNode };
 };
 
 const FORMULA =
@@ -62,10 +62,9 @@ export function Breakdown({ rows }: { rows: SkillRow[] }) {
   );
 }
 
-export default function CvMatch({ role, intro, breakdown, origin, details, footer, skillQuotes, onRemoveSkill, haveLabel, animate, label, emptyNote, progress, split }: Props) {
+export default function CvMatch({ role, intro, origin, details, footer, skillQuotes, onRemoveSkill, haveLabel, animate, label, emptyNote, progress, split }: Props) {
   const local = useStepProgress(role);
   const { done, toggle, gapClosed } = progress ?? local;
-  const [showHow, setShowHow] = useState(false);
 
   const match = (
     <>
@@ -86,14 +85,9 @@ export default function CvMatch({ role, intro, breakdown, origin, details, foote
           <div>
             <div className="profile-stat-title">Skill match</div>
             <div className="muted small">{role.signal ? `${role.signal} demand` : "No demand signal yet"} · estimate</div>
-            <button className="plan-how" onClick={() => setShowHow(!showHow)} aria-expanded={showHow}>
-              {showHow ? "Hide the calculation" : "How is this calculated?"}
-            </button>
           </div>
         </div>
       </header>
-
-      {showHow && (breakdown?.length ? <Breakdown rows={breakdown} /> : <p className="muted small plan-empty">{FORMULA}</p>)}
 
       {details}
 
@@ -111,16 +105,12 @@ export default function CvMatch({ role, intro, breakdown, origin, details, foote
           <div>
             <div className="profile-stat-title">Skill match</div>
             <div className="muted small">{role.signal ? `${role.signal} demand` : "No demand signal yet"} · estimate</div>
-            <button className="plan-how" onClick={() => setShowHow(!showHow)} aria-expanded={showHow}>
-              {showHow ? "Hide the calculation" : "How is this calculated?"}
-            </button>
           </div>
           <SimButton roleId={role.id} />
+          {split?.extra}
         </div>
         <SkillColumns role={role} gapClosed={gapClosed} quotes={skillQuotes} onRemove={onRemoveSkill} haveLabel={haveLabel} />
       </div>
-
-      {showHow && (breakdown?.length ? <Breakdown rows={breakdown} /> : <p className="muted small plan-empty">{FORMULA}</p>)}
 
       {details}
     </>
@@ -152,7 +142,7 @@ export default function CvMatch({ role, intro, breakdown, origin, details, foote
               <span className="label">{split.label}</span>
               {split.tags}
             </div>
-            {route}
+            {split.body ?? route}
           </div>
         </section>
       </div>

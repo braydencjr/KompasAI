@@ -13,6 +13,8 @@ type Stored = {
   skills: string[];
   /** ISCO code of the role the user is looking at */
   roleIsco: string | null;
+  /** the CV's text, kept in this browser (like the profile) so it can be read back under "Read your CV" */
+  lines?: string[] | null;
 };
 
 const SAMPLE: Stored = { source: "sample", cv: null, skills: sampleProfile.skills.map((s) => s.id), roleIsco: null };
@@ -41,14 +43,13 @@ const ProfileContext = createContext<ProfileState | null>(null);
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** The CV's first lines, shown in the scanner. Only plain-text files can be read in the browser. */
+/** The CV's text lines, shown under "Read your CV". Only plain-text files can be read in the browser. */
 function textLines(text: string) {
   return text
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)
-    .slice(0, 80)
-    .map((l) => (l.length > 96 ? `${l.slice(0, 95)}…` : l));
+    .slice(0, 600);
 }
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
@@ -119,12 +120,15 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     const local = /\.(txt|md)$/i.test(file.name) ? textLines(await file.text()) : null;
     const at = epoch.current;
+    let lines = local;
     setScan({ name: file.name, lines: local, read: null, result: null });
     try {
       // the real lines of a PDF/DOCX arrive quickly from the API, while the reader is still working
-      if (!local) {
-        readLines(file).then((lines) => lines && setScan((s) => (s && s.name === file.name && !s.read ? { ...s, lines } : s)));
-      }
+      const reading = local ? null : readLines(file).then((got) => {
+        if (!got) return;
+        lines = got;
+        setScan((s) => (s && s.name === file.name && !s.read ? { ...s, lines: got } : s));
+      });
       // 1 · read: the skills the CV shows (a floor on the scan so it reads even when the API answers instantly)
       const [got] = await Promise.all([readProfile(file), wait(2200)]);
       if (epoch.current !== at) return;
@@ -134,10 +138,11 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const read = got.read;
-      setScan((s) => ({ name: file.name, lines: s?.lines ?? local, read, result: null }));
+      setScan((s) => ({ name: file.name, lines: lines ?? s?.lines ?? local, read, result: null }));
       // 2 · match: those skills against the market, while the stickers show (a floor so the matching reads too)
       const [res] = await Promise.all([matchProfile(read), wait(1500)]);
       if (epoch.current !== at) return;
+      if (reading) await Promise.race([reading, wait(3000)]);
       if ("error" in res) {
         setError(res.error);
         setScan(null);
@@ -149,8 +154,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const cv = res.profile;
-      setScan((s) => ({ name: file.name, lines: s?.lines ?? local, read, result: cv }));
-      save({ source: "cv", cv, skills: cv.skills.map((s) => s.id), roleIsco: cv.recommended ?? cv.roles[0]?.isco ?? null });
+      setScan((s) => ({ name: file.name, lines: lines ?? s?.lines ?? null, read, result: cv }));
+      save({ source: "cv", cv, skills: cv.skills.map((s) => s.id), roleIsco: cv.recommended ?? cv.roles[0]?.isco ?? null, lines });
       setGeneration((g) => g + 1);
     } catch {
       setError("Something went wrong reading this CV. Please try again.");

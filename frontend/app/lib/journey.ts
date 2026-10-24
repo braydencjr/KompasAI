@@ -217,6 +217,33 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
   return data as T;
 }
 
+export type PlanCourse = { id: string; title: string; provider: string; platform: string; url: string; workload: string | null };
+
+/** The Route as an AI learning plan (POST /journey/plan): Gemini's advice per step, courses from Coursera's catalogue */
+export type LearningPlan = {
+  role: { isco: string; title: string };
+  summary: string;
+  steps: {
+    id: string;
+    label: string;
+    status: LiveStatus;
+    order: number;
+    goal: string;
+    learn: string[];
+    practice: string;
+    weeks: number;
+    courses: PlanCourse[];
+    course_note: string;
+    /** the rule-based route's course for this step, shown when the search found none */
+    resource: RouteStep["resource"];
+  }[];
+  weeks: number;
+  by: string;
+  courses_from: string | null;
+  note: string | null;
+  cached: boolean;
+};
+
 export const journeyApi = {
   catalog: async (): Promise<Catalog> => {
     const res = await fetch(`${API_URL}/journey/catalog`);
@@ -228,6 +255,7 @@ export const journeyApi = {
     post<Ping>("/journey/ping", req, signal),
   brief: (req: JourneyRequest & { kind: "bets" | "ping"; from_snapshot?: string | null }, signal?: AbortSignal) =>
     post<Brief>("/journey/brief", req, signal),
+  plan: (req: JourneyRequest, signal?: AbortSignal) => post<LearningPlan>("/journey/plan", req, signal),
 };
 
 export type ConceptDetail = {

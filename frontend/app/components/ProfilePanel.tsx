@@ -7,11 +7,11 @@ import { useProfile } from "./Profile";
 
 /** Section 01: the reading flow for an uploaded CV (live, or finished when restored), else the sample profile. */
 export default function ProfilePanel() {
-  const { source, cv, scan } = useProfile();
+  const { source, cv, scan, lines } = useProfile();
 
   if (scan) return <CvFlow key={scan.name} fileName={scan.name} lines={scan.lines} read={scan.read} cv={scan.result} animate />;
 
-  if (source === "cv" && cv) return <CvFlow fileName={cv.file ?? "Your CV"} lines={null} read={null} cv={cv} animate={false} />;
+  if (source === "cv" && cv) return <CvFlow fileName={cv.file ?? "Your CV"} lines={lines ?? null} read={null} cv={cv} animate={false} />;
 
   return <CvMatch role={cvMatch} origin={<span className="chip chip-origin">Sample profile · Aisyah</span>} />;
 }

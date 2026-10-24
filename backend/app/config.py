@@ -18,5 +18,6 @@ APP_VERSION = "0.1.0"
 # PRD FR-1.1: resumes up to 5 MB
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "5")) * 1024 * 1024
 
-# Claude model used for generating and running work simulations.
+# Model for generating and running work simulations: Claude when ANTHROPIC_API_KEY is set, otherwise Gemini.
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")

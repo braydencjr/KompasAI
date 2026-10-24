@@ -6,7 +6,7 @@ import { useProfile } from "../Profile";
 import { useJourney } from "./JourneyProvider";
 import { ScenarioToggle, useLadder } from "./shared";
 
-/* Your 2028: is your job safe (the verdict), what your CV is worth (the paper), and the tasks behind both.
+/* AI Exposure: is your job safe (the verdict), what your CV is worth (the paper), and the tasks behind both.
    One step for what used to be The Mirror and the Ghost CV: they read the same AI signals, as tasks and as skills. */
 
 type Group = Horizon | "never";
@@ -237,7 +237,7 @@ function TaskCardView({ card, index, focused, arrived, onMove, onUndo }: {
 }
 
 export default function StepFuture() {
-  const { data, occupation, catalog, set, move, undoMove, next, go } = useJourney();
+  const { data, occupation, catalog, set, move, undoMove } = useJourney();
   const profile = useProfile();
   const [arrived, setArrived] = useState<string | null>(null);
   const [focus, setFocus] = useState<string[] | null>(null);
@@ -313,7 +313,7 @@ export default function StepFuture() {
       <section className="fx-cv">
         <header className="fx-head">
           <div>
-            <h3>Your CV in {g.horizon}</h3>
+            <h3>Your skills outlook for {g.horizon}</h3>
             <p className="muted">Which skills gain value, which AI can take over, and what to add.</p>
           </div>
           <ScenarioToggle />
@@ -351,17 +351,6 @@ export default function StepFuture() {
           );
         })}
       </section>
-
-      <div className="flow-next-cta">
-        <p>
-          <strong>Next: where your Kompas points</strong>
-          <span className="muted"> Stay and strengthen your job, or switch: options built on everything so far.</span>
-        </p>
-        <div className="gh-actions">
-          {g.slots.some((s) => s.state === "blank") && <button className="btn btn-ghost" onClick={() => go("route")}>Plan how to add these skills</button>}
-          <button className="btn btn-primary" onClick={next}>Open your Kompas →</button>
-        </div>
-      </div>
     </div>
   );
 }

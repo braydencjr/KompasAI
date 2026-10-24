@@ -106,10 +106,10 @@ export default function CvFlow({ fileName, lines, read, cv, animate }: Props) {
           {!found && <>Reading <strong>{fileName}</strong>…</>}
         </StageHead>
         {(lines || !found) && (
-          <div className="flow-doc" aria-hidden>
+          <div className="flow-doc" role="region" aria-label="The text read from your CV" tabIndex={0}>
             <div className="flow-doc-lines">
               {lines
-                ? lines.slice(0, 40).map((line, i) => {
+                ? lines.map((line, i) => {
                     const q = stage >= 2 ? quoteIn(line, quotes) : -1;
                     return (
                       <div key={i} className={`flow-line${q >= 0 ? " hit" : ""}`} style={{ "--d": `${Math.max(q, 0) * STICKER_GAP}ms` } as React.CSSProperties}>
@@ -117,10 +117,13 @@ export default function CvFlow({ fileName, lines, read, cv, animate }: Props) {
                       </div>
                     );
                   })
-                : PLACEHOLDER.map((w, i) => <div key={i} className={`flow-bar${w ? "" : " gap"}`} style={{ width: `${w}%` }} />)}
+                : PLACEHOLDER.map((w, i) => <div key={i} className={`flow-bar${w ? "" : " gap"}`} style={{ width: `${w}%` }} aria-hidden />)}
             </div>
             {!found && <div className="scan-beam" />}
           </div>
+        )}
+        {cv && !lines && (
+          <p className="muted small">The text of a CV read in an earlier visit isn&apos;t kept. Upload it again to see it here.</p>
         )}
       </div>
 
