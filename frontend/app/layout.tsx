@@ -41,7 +41,8 @@ export default function RootLayout({
         {/* Only Chromium renders SVG filters in backdrop-filter; elsewhere the glass falls back to plain blur. */}
         <script dangerouslySetInnerHTML={{ __html: "if(window.chrome)document.documentElement.classList.add('lg-refract')" }} />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      {/* browser extensions such as Grammarly add attributes to <body> before React loads: expected, not a bug */}
+      <body className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

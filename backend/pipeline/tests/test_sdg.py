@@ -7,7 +7,7 @@ from kompas.api import create_app
 def fake_model(monkeypatch, items):
     calls = []
 
-    def generate(system, contents, schema, client):
+    def generate(system, contents, schema, client, **_):
         calls.append(contents)
         return {"items": items}, None
 
@@ -50,6 +50,18 @@ def test_at_most_two_goals_and_no_repeats(conn, cur, monkeypatch):
     assert [t["sdg"] for t in out] == [9, 4]
 
 
+def test_the_model_is_called_without_thinking(conn, cur, monkeypatch):
+    seen = {}
+
+    def generate(system, contents, schema, client, **kw):
+        seen.update(kw)
+        return {"items": []}, None
+
+    monkeypatch.setattr(sdg.llm, "_generate", generate)
+    sdg.resolve(conn, cur, [{"kind": "skill", "id": "S5", "label": "x"}])
+    assert seen == {"thinking": 0}
+
+
 def test_the_model_can_only_tag_what_was_asked(conn, cur, monkeypatch):
     fake_model(monkeypatch, [{"id": "other", "kind": "skill", "tags": [good()]}])
     out = sdg.resolve(conn, cur, [{"kind": "role", "id": "R1", "label": "A job"}])
@@ -58,7 +70,7 @@ def test_the_model_can_only_tag_what_was_asked(conn, cur, monkeypatch):
 
 
 def test_no_model_means_every_item_still_has_a_tag(conn, cur, monkeypatch):
-    monkeypatch.setattr(sdg.llm, "_generate", lambda *a: (None, "no Gemini API key configured"))
+    monkeypatch.setattr(sdg.llm, "_generate", lambda *a, **k: (None, "no Gemini API key configured"))
     out = sdg.resolve(conn, cur, [{"kind": "skill", "id": "S3", "label": "x"}, {"kind": "role", "id": "R3", "label": "y"}])
     assert out["skill:S3"][0]["sdg"] == 4 and out["role:R3"][0]["sdg"] == 8
 
@@ -72,7 +84,7 @@ def test_every_catalogue_role_and_skill_has_a_curated_tag(cur):
 
 
 def test_the_endpoint_names_things_itself_and_skips_unknown_ids(conn, cur, monkeypatch):
-    monkeypatch.setattr(sdg.llm, "_generate", lambda *a: (None, "no key"))
+    monkeypatch.setattr(sdg.llm, "_generate", lambda *a, **k: (None, "no key"))
     client = TestClient(create_app(live_mode=False, replay=False))
     role = next(iter(cur.role_titles))
     r = client.post("/sdg/tags", json={"items": [{"kind": "role", "id": role}, {"kind": "role", "id": "no-such-job"},

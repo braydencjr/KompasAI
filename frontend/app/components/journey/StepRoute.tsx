@@ -27,7 +27,10 @@ export default function StepRoute() {
     setPlan({ status: "loading" });
     journeyApi
       .plan(JSON.parse(planKey), ctrl.signal)
-      .then((p) => setPlan({ status: "ready", plan: p }))
+      .then((p) => {
+        if (ctrl.signal.aborted || !p) return;     // leaving the page cancels the request, and a cancelled one answers null
+        setPlan({ status: "ready", plan: p });
+      })
       .catch((e) => !ctrl.signal.aborted && setPlan({ status: "error", message: e instanceof Error ? e.message : String(e) }));
     return () => ctrl.abort();
   }, [planKey]);
@@ -62,13 +65,13 @@ export default function StepRoute() {
         split={{
           label: "Your route",
           tags:
-            plan.status === "ready" ? null : plan.status === "error" ? (
+            plan.status === "ready" && plan.plan ? null : plan.status === "error" ? (
               <span className="chip chip-origin" title={plan.message}>Rule-based route · AI plan unavailable</span>
             ) : (
               <span className="chip chip-origin">{r.hours_left} h left · {r.done}/{r.steps.length} done</span>
             ),
           body:
-            plan.status === "ready" ? (
+            plan.status === "ready" && plan.plan ? (
               <LearningPlan
                 plan={plan.plan}
                 completed={completed}

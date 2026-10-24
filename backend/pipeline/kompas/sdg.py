@@ -111,7 +111,8 @@ def generate(conn, items: list[dict], client=None) -> dict[tuple[str, str], list
     for start in range(0, len(items), MAX_BATCH):
         batch = items[start:start + MAX_BATCH]
         facts = [{"id": i["id"], "kind": i["kind"], "name": i["label"]} for i in batch]
-        answer, error = llm._generate(INSTRUCTIONS, json.dumps(facts, ensure_ascii=False), SCHEMA, client)
+        # no thinking: picking a goal from a name is a short, structured answer, and thinking tokens are billed like output
+        answer, error = llm._generate(INSTRUCTIONS, json.dumps(facts, ensure_ascii=False), SCHEMA, client, thinking=0)
         if error or not isinstance(answer, dict):
             continue
         _table(conn)
