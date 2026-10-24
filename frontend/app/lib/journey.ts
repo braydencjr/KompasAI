@@ -215,7 +215,11 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
   return data as T;
 }
 
-export type PlanCourse = { id: string; title: string; provider: string; platform: string; url: string; workload: string | null };
+export type PlanCourse = {
+  id: string; title: string; provider: string; platform: string; url: string; workload: string | null;
+  /** from a free learning site (costs nothing) */
+  free?: boolean;
+};
 
 /** The Route as an AI learning plan (POST /journey/plan): Gemini's advice per step, courses from Coursera's catalogue */
 export type LearningPlan = {

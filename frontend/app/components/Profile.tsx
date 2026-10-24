@@ -35,6 +35,8 @@ type ProfileState = Stored & {
   addSkill: (id: string) => void;
   /** goes up when a new CV is read or the user returns to the sample (not when a saved profile is restored) */
   generation: number;
+  /** the saved profile has been read back from this browser (before this, `source` is the sample by default) */
+  ready: boolean;
   reset: () => void;
 };
 
@@ -56,6 +58,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [scan, setScan] = useState<Scan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
+  const [ready, setReady] = useState(false);
   // bumped by every upload or reset, so a slow refresh of an older profile can't overwrite a newer one
   const epoch = useRef(0);
 
@@ -72,6 +75,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         setState(saved);
       else localStorage.removeItem(STORAGE_KEY);
     } catch {}
+    setReady(true);
   }, []);
 
   const save = useCallback((next: Stored) => {
@@ -179,6 +183,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       setGeneration((g) => g + 1);
     },
     generation,
+    ready,
   };
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;

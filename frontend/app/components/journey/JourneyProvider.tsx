@@ -56,6 +56,8 @@ type JourneyState = Choices & {
   toggleSdg: (sdg: number) => void;
   toggleStep: (skillId: string) => void;
   chooseRole: (isco: string) => void;
+  /** the saved choices (job, steps done…) have been read back from this browser */
+  restored: boolean;
 };
 
 const Ctx = createContext<JourneyState | null>(null);
@@ -92,6 +94,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [data, setData] = useState<Journey | null>(null);
   const [loading, setLoading] = useState(false);
+  const [restored, setRestored] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loaded = useRef(false);
 
@@ -103,6 +106,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     } catch {}
     setStep(stepFromHash());
     loaded.current = true;
+    setRestored(true);
     const onHash = () => setStep(stepFromHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -203,6 +207,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
     toggleStep: (skillId) =>
       set({ completed: choices.completed.includes(skillId) ? choices.completed.filter((s) => s !== skillId) : [...choices.completed, skillId] }),
     chooseRole: (isco) => set({ role: isco, completed: [] }),
+    restored,
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

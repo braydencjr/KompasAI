@@ -3,6 +3,7 @@
 import JobsButton from "../JobsButton";
 import { toBet } from "../../lib/adapters";
 import { STEPS, useJourney } from "./JourneyProvider";
+import RouteGate, { useStepGate } from "./RouteGate";
 import StepBets from "./StepBets";
 import StepFuture from "./StepFuture";
 import StepPing from "./StepPing";
@@ -27,7 +28,9 @@ export default function Journey() {
   const index = STEPS.findIndex((s) => s.id === step);
   const View = VIEWS[step];
   // the route page's header carries the job boards button for the job it leads to
-  const route = step === "route" ? data?.route : undefined;
+  const gate = useStepGate(step);
+  const gated = !!gate;
+  const route = step === "route" && !gated ? data?.route : undefined;
   const score = route ? data?.roles.find((x) => x.isco === route.role.isco) : undefined;
 
   return (
@@ -35,7 +38,7 @@ export default function Journey() {
       {step !== "you" && <header className={`j-head${score ? " has-action" : ""}`} key={`head-${step}`}>
         <div className="j-head-text">
         <span className="eyebrow">{index === 0 ? "AI watches the market. You grow." : `${String(index).padStart(2, "0")} · ${STEPS[index].label}`}</span>
-        {step === "route" && data?.route ? (
+        {step === "route" && data?.route && !gated ? (
           // the route page is named after the job it leads to
           <h1>
             <span className="j-head-kicker">{COPY.route.title}</span>
@@ -58,7 +61,7 @@ export default function Journey() {
       )}
 
       <div key={step} className={`j-stage ${direction > 0 ? "fwd" : "back"}`}>
-        <View />
+        {gate ? <RouteGate gate={gate} /> : <View />}
       </div>
 
       <nav className="j-nav" aria-label="Journey steps">

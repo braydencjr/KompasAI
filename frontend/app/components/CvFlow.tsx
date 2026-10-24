@@ -53,7 +53,6 @@ type Props = {
 /** You, step 1: the CV is read, its skills become stickers, and each skill is checked against the market. Which
  * job to aim for comes later (Your direction), after The Mirror has shown whether the current job is at risk. */
 export default function CvFlow({ fileName, lines, cv, animate }: Props) {
-  const { next } = useJourney();
   const [play, setPlay] = useState(animate);
   const [stage, setStage] = useState(cv && !animate ? 3 : 1);
   const refs = useRef<(HTMLElement | null)[]>([]);
@@ -141,7 +140,7 @@ export default function CvFlow({ fileName, lines, cv, animate }: Props) {
           </StageHead>
           {cv.malaysia_market && <MalaysiaMarket m={cv.malaysia_market} />}
           <Market cv={cv} />
-          <NextUp cv={cv} onNext={next} />
+          <NextUp cv={cv} />
         </div>
       )}
     </section>
@@ -391,8 +390,8 @@ function Market({ cv }: { cv: CvProfile }) {
   );
 }
 
-/** Where the skills stand, and the question The Mirror answers next. */
-function NextUp({ cv, onNext }: { cv: CvProfile; onNext: () => void }) {
+/** Where the skills stand: how many are in demand, gaining attention, steady or falling. */
+function NextUp({ cv }: { cv: CvProfile }) {
   const status = (id: string) => cv.signals[id]?.status ?? "";
   return (
     <div className="flow-next">
@@ -402,13 +401,6 @@ function NextUp({ cv, onNext }: { cv: CvProfile; onNext: () => void }) {
             <b>{cv.skills.filter((s) => b.statuses.includes(status(s.id))).length}</b> {b.label}
           </span>
         ))}
-      </div>
-      <div className="flow-next-cta">
-        <p>
-          <strong>Next: is your job safe from AI?</strong>
-          <span className="muted"> See which of its tasks AI is learning to do, before deciding whether to stay or switch.</span>
-        </p>
-        <button className="btn btn-primary" onClick={onNext}>Check my job →</button>
       </div>
     </div>
   );

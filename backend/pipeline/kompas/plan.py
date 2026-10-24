@@ -1,10 +1,11 @@
 """The Route's AI learning plan: Gemini turns the computed route (which skills, in which order) into a learning path,
-and every course in it is a real Coursera catalogue entry found by search.
+and every course in it is a real catalogue entry (Coursera) or a free course page (allow-listed sites) found by search.
 
 1. journey.route() decides the steps: the role's skill gaps, prerequisites first, then by Signal Ladder status.
 2. Gemini writes, per step, what to learn, a practice task, a time estimate and search terms for courses.
-3. The Coursera catalogue is searched with those terms: up to 8 real candidates per step.
-4. Gemini picks the best 1 to 3 candidates per step, by id. Ids that weren't candidates are dropped, so the model
+3. The Coursera catalogue is searched with those terms: up to 8 real candidates per step. Free courses (Tavily search
+   over free learning sites, when TAVILY_API_KEY is set) join the candidates, marked free.
+4. Gemini picks the best 1 to 3 candidates per step, by id, preferring free ones. Ids that weren't candidates are dropped, so the model
    can't add a course of its own (PRD: AI never invents courses).
 
 The plan is advice, labelled as AI-written; steps, order and courses come from code and the catalogue. Plans are
@@ -13,14 +14,19 @@ cached for a week per role and set of skills, so each costs two Gemini calls onc
 
 import hashlib
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 from . import llm
-from .connectors import coursera
+from .http import FetchError
+from .connectors import coursera, tavily
+
+log = logging.getLogger(__name__)
 
 CACHE_DAYS = 7
 MAX_COURSES = 3
 CANDIDATES = 8
+FREE_CANDIDATES = 4
 
 PLAN_INSTRUCTIONS = """You plan learning for Kompas, a career guidance app for working adults in Malaysia. The person
 wants to move into the role below. The steps are fixed: the skills they still need, already in the right order.
@@ -39,8 +45,10 @@ never state statistics; courses are chosen separately from a real catalogue."""
 
 PICK_INSTRUCTIONS = """For each learning step, choose the best 1 to 3 courses from that step's candidates: the ones that
 teach the step's skill most directly at a beginner-to-intermediate level. Use only candidate ids listed for that
-step. If no candidate really teaches the skill, choose none. `note`: one short sentence on why these fit (no
-statistics, no claims about the provider)."""
+step. If no candidate really teaches the skill, choose none. Candidates marked free cost nothing: prefer them, and
+include at least one free candidate per step when one really teaches the skill. `note`: one short sentence on why
+these fit (no statistics, no claims about the provider, and nothing about price except that a course is free when
+it is marked free)."""
 
 PLAN_SCHEMA = {
     "type": "object",
@@ -82,7 +90,8 @@ def _cache(conn):
 
 
 def _key(role: dict, steps: list[dict], have: list[str]) -> str:
-    raw = json.dumps({"v": 2, "role": role["isco"], "steps": [s["id"] for s in steps], "have": sorted(have)})
+    raw = json.dumps({"v": 3, "free": tavily.enabled(), "role": role["isco"], "steps": [s["id"] for s in steps],
+                      "have": sorted(have)})
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
@@ -112,16 +121,26 @@ def build(conn, route: dict, role: dict, have_labels: list[str], client=None) ->
     else:
         course_note = None
 
-    candidates: dict[str, list[dict]] = {}
-    if cat:
+    queries_for = {s["id"]: [s["label"], *(by_id.get(s["id"], {}).get("queries") or [])[:3]] for s in steps}
+    free: dict[str, list[dict]] = {}
+    if tavily.enabled():
         for s in steps:
-            queries = [s["label"], *(by_id.get(s["id"], {}).get("queries") or [])[:3]]
-            candidates[s["id"]] = coursera.search(cat, queries, CANDIDATES)
+            try:
+                free[s["id"]] = tavily.search(queries_for[s["id"]], FREE_CANDIDATES)
+            except FetchError as e:     # a bad key or a quota stops the rest too: the plan still stands without them
+                log.warning("Free course search unavailable: %s", e)
+                course_note = course_note or f"Free course search unavailable ({e})"
+                break
+
+    candidates: dict[str, list[dict]] = {}
+    for s in steps:
+        found = coursera.search(cat, queries_for[s["id"]], CANDIDATES) if cat else []
+        candidates[s["id"]] = free.get(s["id"], []) + found
 
     picks: dict[str, dict] = {}
     if any(candidates.values()):
         listing = [{"skill_id": s["id"], "skill": s["label"], "goal": by_id.get(s["id"], {}).get("goal", ""),
-                    "candidates": [{"id": c["id"], "title": c["title"], "provider": c["provider"]}
+                    "candidates": [{"id": c["id"], "title": c["title"], "provider": c["provider"], "free": bool(c.get("free"))}
                                    for c in candidates[s["id"]]]} for s in steps]
         chosen, error = llm._generate(PICK_INSTRUCTIONS, json.dumps(listing, ensure_ascii=False), PICK_SCHEMA, client)
         if error:
@@ -138,6 +157,7 @@ def build(conn, route: dict, role: dict, have_labels: list[str], client=None) ->
         if pick is not None:
             # only ids that were real candidates survive
             courses = [real[i] for i in pick.get("course_ids", []) if i in real][:MAX_COURSES]
+            courses.sort(key=lambda c: not c.get("free"))     # free ones first (the sort keeps the AI's order otherwise)
         else:
             courses = list(real.values())[:MAX_COURSES] if real and not picks else []
         out_steps.append({
