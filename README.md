@@ -169,7 +169,7 @@ cd backend
 - **Secrets:** API keys (Gemini, Anthropic, Supabase and others) are stored in Replit Secrets, never in the code.
 - **Persistence:** Data lives in Supabase, so a redeploy doesn't lose snapshots, profiles or learning routes.
 
-📄 Proof of use: `submission/SDC2026_Chanel_Replit_POU.pdf` (TODO)
+📄 Proof of use: [`submission/SDC2026_Chanel_Replit_POU.pdf`](submission/SDC2026_Chanel_Replit_POU.pdf)
 
 ## Challenges & Learnings
 
@@ -197,11 +197,11 @@ cd backend
 - [x] Team name, domain (Domain 1 / Domain 2) and SDG track filled in
 - [x] Slide deck link added
 - [x] Demo video link added
-- [ ] Replit used, with proof of use in `submission/`
-- [ ] Preliminary submission completed (`SDC2026_Chanel_Preliminary.pdf`)
-- [ ] Technology declaration completed (`SDC2026_Chanel_TechDeclaration.pdf`)
-- [ ] "How to Run" steps verified
-- [ ] No API keys or secrets committed to the repository
+- [x] Replit used, with proof of use in `submission/`
+- [x] Preliminary submission completed (`SDC2026_Chanel_Preliminary.pdf`)
+- [x] Technology declaration completed (`SDC2026_Chanel_TechDeclaration.pdf`)
+- [x] "How to Run" steps verified
+- [x] No API keys or secrets committed to the repository
 
 ## License
 
