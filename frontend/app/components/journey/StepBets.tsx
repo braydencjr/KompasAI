@@ -5,7 +5,7 @@ import { riskLabel, type Bet } from "../../data/bets";
 import { toBet } from "../../lib/adapters";
 import { isBet, type BetKind, type Evidence, type Journey, type Reason, type RoleScore, type StayOption } from "../../lib/journey";
 import { useProfile } from "../Profile";
-import RoadmapModal from "../RoadmapModal";
+import JobsButton from "../JobsButton";
 import Ring from "../Ring";
 import { SimButton } from "../SimulatorProvider";
 import Sparkline from "../Sparkline";
@@ -104,9 +104,9 @@ function fromStay(s: StayOption, r: RoleScore | undefined): Option {
   };
 }
 
-type CardProps = { o: Option; chosen: boolean; onChoose: () => void; onRoadmap: () => void; wide?: boolean; rank?: number };
+type CardProps = { o: Option; chosen: boolean; onChoose: () => void; wide?: boolean; rank?: number };
 
-function OptionCard({ o, chosen, onChoose, onRoadmap, wide = false, rank }: CardProps) {
+function OptionCard({ o, chosen, onChoose, wide = false, rank }: CardProps) {
   const profile = useProfile();
   const [why, setWhy] = useState(false);
   // the fit reason's evidence: the CV lines that show each skill the job needs
@@ -192,13 +192,11 @@ function OptionCard({ o, chosen, onChoose, onRoadmap, wide = false, rank }: Card
 
       <SimButton roleId={o.isco} variant="link" />
 
+      {o.bet && <JobsButton bet={o.bet} />}
+
       <div className="kp-actions">
-        {o.bet && o.bet.steps.length > 0 && (
-          <button className="btn btn-ghost" onClick={onRoadmap}>View full roadmap →</button>
-        )}
-        <button className={`btn ${chosen ? "btn-ghost" : "btn-primary"}`} onClick={onChoose}>
-          {chosen ? "Your route →" : o.kind === "stay" ? "Plan to strengthen it →" : "Choose this →"}
-        </button>
+        {/* picks this job and opens its route, where the AI learning plan is written */}
+        <button className="btn btn-ghost" onClick={onChoose}>View full roadmap →</button>
       </div>
     </>
   );
@@ -222,7 +220,6 @@ function OptionCard({ o, chosen, onChoose, onRoadmap, wide = false, rank }: Card
 
 export default function StepBets() {
   const { data, chooseRole, go, role: chosen } = useJourney();
-  const [roadmap, setRoadmap] = useState<Bet | null>(null);
   if (!data) return <div className="j-loading glass"><span className="sk sk-title" /><span className="sk sk-tile" /></div>;
 
   const byIsco = new Map(data.roles.map((r) => [r.isco, r]));
@@ -263,7 +260,7 @@ export default function StepBets() {
             <h3>Grow where you are</h3>
             <p className="muted">The skills that keep your current job strong as AI changes it.</p>
           </section>
-          <OptionCard o={stay} wide chosen={current === stay.isco} onChoose={() => choose(stay.isco)} onRoadmap={() => setRoadmap(stay.bet)} />
+          <OptionCard o={stay} wide chosen={current === stay.isco} onChoose={() => choose(stay.isco)} />
         </>
       )}
 
@@ -282,7 +279,7 @@ export default function StepBets() {
             </header>
             {c.options.length ? (
               c.options.map((o, i) => (
-                <OptionCard key={o.isco} o={o} rank={i + 1} chosen={current === o.isco} onChoose={() => choose(o.isco)} onRoadmap={() => setRoadmap(o.bet)} />
+                <OptionCard key={o.isco} o={o} rank={i + 1} chosen={current === o.isco} onChoose={() => choose(o.isco)} />
               ))
             ) : (
               <p className="muted kp-column-empty">No job fits this yet.</p>
@@ -291,7 +288,6 @@ export default function StepBets() {
         ))}
       </div>
 
-      {roadmap && <RoadmapModal bet={roadmap} onClose={() => setRoadmap(null)} />}
       <Estimate>Match scores are estimates from your skills and today&apos;s market signals, not predictions. You decide.</Estimate>
     </div>
   );

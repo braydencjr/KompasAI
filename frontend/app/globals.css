@@ -5793,3 +5793,185 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 .job-search-none { display: flex; flex-direction: column; gap: 8px; }
 .job-search-all { display: flex; flex-wrap: wrap; gap: 6px; }
 .job-search-all .chip { border: 0; cursor: pointer; font: inherit; font-size: 12.5px; }
+
+/* the job boards tile on its own (Your Kompas cards, The Route), and its popup */
+.kp-card > .jobs-cta, .kp-col > .jobs-cta, .plan-match-score > .jobs-cta { align-self: stretch; width: 100%; }
+.jobs-popup .modal-jobs.standalone { width: min(560px, 100%); }
+
+/* ---------- The Route: the AI learning plan, drawn as a path ---------- */
+.lp { display: flex; flex-direction: column; gap: 16px; }
+.lp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.lp-badge {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(124, 108, 240, 0.12);
+  color: #6d5ce8;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.lp-summary { font-size: 15px; line-height: 1.6; max-width: 75ch; }
+
+/* the path: a line down the left joining one node per stop */
+.lp-path { position: relative; list-style: none; display: flex; flex-direction: column; gap: 18px; padding-left: 0; }
+.lp-path::before {
+  content: "";
+  position: absolute;
+  left: 21px;
+  top: 10px;
+  bottom: 24px;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(var(--accent), #b7a9ee 70%, var(--green));
+  opacity: 0.45;
+}
+.lp-stop, .lp-end { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; align-items: start; }
+.lp-end { align-items: center; }
+.lp-end > :not(:first-child) { grid-column: 2; }
+.lp-start { grid-template-columns: 44px auto; }
+.lp-dot {
+  justify-self: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+.lp-goal-end { grid-template-columns: 44px auto auto; justify-content: start; gap: 4px 12px; }
+.lp-goal-end strong { font-size: 16px; }
+.lp-flag {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(16, 120, 80, 0.6);
+}
+.lp-node {
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px rgba(61, 155, 233, 0.45), 0 6px 16px -8px rgba(20, 40, 80, 0.45);
+}
+.lp-stop.done .lp-node { background: linear-gradient(145deg, #2a3550, var(--ink)); color: #fff; box-shadow: 0 0 14px -2px rgba(61, 155, 233, 0.6); }
+
+/* each stop: a card, with learn and courses as two boxes side by side, then the mini project */
+.lp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 22px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(15, 30, 60, 0.07), 0 16px 34px -26px rgba(20, 40, 80, 0.55);
+}
+.lp-stop.done .lp-card { opacity: 0.72; }
+.lp-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.lp-card-head .label { margin-bottom: 2px; }
+.lp-card-head h4 { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+.lp-goal { font-size: 14.5px; line-height: 1.55; color: var(--muted); }
+.lp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.lp-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f7f9fc;
+  box-shadow: inset 0 0 0 1px rgba(15, 30, 60, 0.06);
+}
+.lp-card h5 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lp-learn { display: flex; flex-direction: column; gap: 6px; padding-left: 20px; font-size: 14px; line-height: 1.45; }
+.lp-learn li::marker { color: var(--accent-ink); font-weight: 600; }
+.lp-courses { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.lp-courses li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(15, 30, 60, 0.07);
+}
+.lp-courses a { color: var(--accent-ink); font-weight: 500; font-size: 14px; line-height: 1.35; }
+.lp-courses a:hover { text-decoration: underline; }
+.lp-courses span { font-size: 12px; color: var(--muted); }
+.lp-why { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.lp-project {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(124, 108, 240, 0.08);
+  box-shadow: inset 3px 0 0 #8b7cf6;
+}
+.lp-project h5 { color: #6d5ce8; }
+.lp-project p:first-of-type { font-size: 14px; line-height: 1.5; }
+.lp-done {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  background: rgba(15, 30, 60, 0.05);
+  color: var(--muted);
+}
+.lp-done:hover { background: rgba(61, 155, 233, 0.12); color: var(--accent-ink); }
+.lp-stop.done .lp-done { background: var(--green-soft); color: var(--green); }
+.lp-foot { padding-top: 4px; }
+.lp-loading { display: flex; align-items: center; gap: 16px; padding: 28px 8px; }
+.lp-loading .ai-spark { --ai: #6d5ce8; }
+
+@media (max-width: 900px) {
+  .lp-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .lp-path::before { left: 15px; }
+  .lp-stop, .lp-end { grid-template-columns: 32px minmax(0, 1fr); gap: 10px; }
+  .lp-node { width: 32px; height: 32px; font-size: 14px; }
+}
+
+/* starting a stop's mini project, and the final project at the end of the path */
+.lp-start { align-self: flex-start; margin-top: 4px; }
+.lp-node-final { background: linear-gradient(145deg, #8b7cf6, #6d5ce8); color: #fff; box-shadow: 0 0 16px -4px rgba(109, 92, 232, 0.8); cursor: default; }
+.lp-capstone .lp-card { box-shadow: inset 0 0 0 1.5px rgba(124, 108, 240, 0.35), 0 18px 40px -26px rgba(109, 92, 232, 0.6); }
+.lp-capstone .lp-box p { line-height: 1.5; color: var(--muted); }
+.lp-final-result { padding: 4px 10px; border-radius: 999px; background: rgba(124, 108, 240, 0.12); color: #6d5ce8; font-size: 12px; font-weight: 600; }
+
+/* a mini project's result */
+.practice-result { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--hair); animation: plan-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.practice-score { display: flex; align-items: baseline; gap: 12px; }
+.practice-score strong { font-family: var(--mono); font-size: 34px; letter-spacing: -0.02em; color: #b45309; }
+.practice-score span { font-weight: 600; color: #b45309; }
+.practice-result.pass .practice-score strong, .practice-result.pass .practice-score span { color: var(--green); }
+
+/* the AI's comments on a written task */
+.doc-feedback { padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); font-size: 13.5px; line-height: 1.55; }

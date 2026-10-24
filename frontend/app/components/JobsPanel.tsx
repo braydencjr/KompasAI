@@ -8,9 +8,10 @@ import { liveJobs, type LiveJobs } from "../lib/kompas";
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-type Props = { bet: Bet; closing: boolean; onClose: () => void };
+/** standalone: its own popup (JobsButton) rather than the slot beside the roadmap */
+type Props = { bet: Bet; closing: boolean; onClose: () => void; standalone?: boolean };
 
-export default function JobsPanel({ bet, closing, onClose }: Props) {
+export default function JobsPanel({ bet, closing, onClose, standalone = false }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const { skills } = useProfile();
   // live openings for journey roles (their id is the ISCO code); the dashboard's sample bets keep their sample list
@@ -40,13 +41,13 @@ export default function JobsPanel({ bet, closing, onClose }: Props) {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
-  return (
-    <div className={`jobs-slot${closing ? " closing" : ""}`}>
+  const panel = (
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="modal modal-jobs glass"
+        className={`modal modal-jobs glass${standalone ? " standalone" : ""}`}
         role="dialog"
+        aria-modal={standalone || undefined}
         aria-labelledby="jobs-title"
         onClick={(e) => e.stopPropagation()}
       >
@@ -157,6 +158,7 @@ export default function JobsPanel({ bet, closing, onClose }: Props) {
           </p>
         </div>
       </div>
-    </div>
   );
+
+  return standalone ? panel : <div className={`jobs-slot${closing ? " closing" : ""}`}>{panel}</div>;
 }

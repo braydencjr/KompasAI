@@ -30,8 +30,9 @@ type Props = {
   emptyNote?: React.ReactNode;
   /** progress kept elsewhere (the journey); default: this browser's per-role progress */
   progress?: ReturnType<typeof useStepProgress>;
-  /** two cards instead of one: the skill match first, then the route under its own heading */
-  split?: { label: string; tags?: React.ReactNode };
+  /** two cards instead of one: the skill match first, then the route under its own heading; `extra` goes under
+   * the score (e.g. the job boards button) */
+  split?: { label: string; tags?: React.ReactNode; extra?: React.ReactNode; body?: React.ReactNode };
 };
 
 const FORMULA =
@@ -116,6 +117,7 @@ export default function CvMatch({ role, intro, breakdown, origin, details, foote
             </button>
           </div>
           <SimButton roleId={role.id} />
+          {split?.extra}
         </div>
         <SkillColumns role={role} gapClosed={gapClosed} quotes={skillQuotes} onRemove={onRemoveSkill} haveLabel={haveLabel} />
       </div>
@@ -152,7 +154,7 @@ export default function CvMatch({ role, intro, breakdown, origin, details, foote
               <span className="label">{split.label}</span>
               {split.tags}
             </div>
-            {route}
+            {split.body ?? route}
           </div>
         </section>
       </div>

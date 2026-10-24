@@ -17,7 +17,8 @@ type Props = {
   source: SimSource;
   /** why the sample is showing, when AI generation failed */
   note?: string;
-  onUseSample: () => void;
+  /** absent when this job has no built-in sample */
+  onUseSample?: () => void;
   onRegenerate: () => void;
   onClose: () => void;
   onFinish: (r: SimResult) => void;
@@ -32,7 +33,7 @@ const GENERATING = [
   "Checking every answer works…",
 ];
 
-function Generating({ onUseSample }: { onUseSample: () => void }) {
+function Generating({ onUseSample }: { onUseSample?: () => void }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setI((n) => (n + 1) % GENERATING.length), 2600);
@@ -50,9 +51,11 @@ function Generating({ onUseSample }: { onUseSample: () => void }) {
         </p>
       </div>
       <p className="muted small">This usually takes under a minute.</p>
-      <button className="sim-link" onClick={onUseSample}>
-        Skip and use a sample day instead
-      </button>
+      {onUseSample && (
+        <button className="sim-link" onClick={onUseSample}>
+          Skip and use a sample day instead
+        </button>
+      )}
     </div>
   );
 }
@@ -144,13 +147,13 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
 
         <header className="sim-head">
           <div className="plan-tags">
-            <span className="label">Work simulation{source === "loading" ? "" : ` · ${sim.setting}`}</span>
+            <span className="label">Work simulation{source !== "loading" && sim.setting ? ` · ${sim.setting}` : ""}</span>
             {source === "ai" && <span className="chip sim-source ai">✦ Written by AI for you</span>}
             {source === "sample" && <span className="chip sim-source">Sample scenario</span>}
             {task && <span className="chip chip-blue">⏱ {clock(pending ? pending.seconds : elapsed)}</span>}
           </div>
           <h2 id="sim-title">{sim.title}</h2>
-          {source !== "loading" && (
+          {source !== "loading" && source !== "error" && (
             <ol className="sim-progress" aria-label="Progress" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
               {sim.tasks.map((t, i) => (
                 <li
@@ -167,7 +170,18 @@ export default function WorkSimulator({ sim, source, note, onUseSample, onRegene
 
         {step === -1 && source === "loading" && <Generating onUseSample={onUseSample} />}
 
-        {step === -1 && source !== "loading" && (
+        {step === -1 && source === "error" && (
+          <div className="sim-intro">
+            <p className="sim-note">{note}</p>
+            <div className="sim-intro-actions">
+              <button className="btn btn-primary" onClick={onRegenerate}>
+                ✦ Try again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === -1 && source !== "loading" && source !== "error" && (
           <div className="sim-intro">
             {note && <p className="sim-note">{note}</p>}
             <div className="sim-bubble">

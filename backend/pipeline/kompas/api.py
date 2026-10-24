@@ -504,6 +504,23 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         """The Mirror, Ghost CV, Three Bets, full ranking and Route for one profile, snapshot and scenario."""
         return journey.build(cur, conn, _snapshot_id(conn, req.snapshot), _profile(req), _resources(conn))
 
+    @app.post("/journey/plan")
+    def journey_plan(req: JourneyRequest, conn=Depends(get_conn)):
+        """The Route as an AI learning plan: Gemini writes what to learn and a practice task per step, and picks
+        courses from a search of the real Coursera catalogue. 503 with a reason when no plan can be written; the
+        page then shows the rule-based route."""
+        from . import plan
+
+        p = _profile(req)
+        j = journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p, _resources(conn))
+        if not j["route"]:
+            raise HTTPException(422, "Choose a job first")
+        have = [cur.concepts[s].label for s in p.skills if s in cur.concepts]
+        try:
+            return plan.build(conn, j["route"], j["route"]["role"], have)
+        except plan.PlanUnavailable as e:
+            raise HTTPException(503, str(e))
+
     @app.post("/journey/ping")
     def journey_ping(req: PingRequest, conn=Depends(get_conn)):
         """What changed for this profile between two snapshots (The Ping)."""

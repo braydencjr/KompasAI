@@ -20,6 +20,8 @@ from app.services.simulations import (
     Sheet,
     SheetCell,
     SheetColumn,
+    SheetRow,
+    compile_formula,
     Table,
     problems,
     to_frontend,
@@ -29,9 +31,11 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def no_key(monkeypatch):
+def no_key(monkeypatch, tmp_path):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "your-anthropic-api-key")
-    sims._cache.clear()
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setattr(sims.ai_cache, "PATH", tmp_path / "ai_cache.db")
 
 
 def task(tool, **parts):
@@ -67,7 +71,8 @@ def reply(text):
 SHEET = Sheet(
     name="f.xlsx",
     columns=[SheetColumn(label="Item", fmt="text"), SheetColumn(label="Q3", fmt="rm"), SheetColumn(label="Q4", fmt="rm")],
-    rows=[[SheetCell(value="Revenue", answer=None), SheetCell(value="100", answer=None), SheetCell(value="", answer="=B2*2")]],
+    rows=[SheetRow(key="revenue", cells=[SheetCell(value="Revenue", answer=None), SheetCell(value="100", answer=None),
+                                         SheetCell(value="", answer="=[revenue@B]*2")])],
 )
 
 CALENDAR = Calendar(
@@ -163,3 +168,38 @@ def test_brief_returns_503_without_a_key():
         json={"ai_name": "A", "field": "Finance", "task": "t", "rubric": [{"label": "x", "keywords": ["x"]}], "prompt": "hi"},
     )
     assert r.status_code == 503
+
+
+def test_row_key_formulas_compile_to_a1():
+    rows = {"revenue": 0, "growth": 1, "cash": 3}
+    assert compile_formula("=[revenue]*(1+[growth@B])", 2, rows) == "=C2*(1+B3)"
+    assert compile_formula("=[cash@prev]+[revenue]", 3, rows) == "=C5+D2"
+    assert compile_formula("=SUM([revenue]:[cash])", 1, rows) == "=SUM(B2:B5)"
+
+
+def test_sheet_with_a_broken_formula_is_rejected():
+    sim = valid_sim()
+    sim.tasks[0].sheet.rows[0].cells[2].answer = "=[nope]*2"
+    assert any("unknown row key" in p for p in problems(sim))
+    sim.tasks[0].sheet.rows[0].cells[2].answer = "=[revenue@A]*2"     # column A is the label
+    assert any("text used in a calculation" in p for p in problems(sim))
+
+
+
+def test_columns_can_be_named_by_label():
+    rows = {"revenue": 0, "growth": 1}
+    labels = ["Item", "Q3 2024 Actual", "Q4 2024 Forecast"]
+    assert compile_formula("=[revenue@Q3 2024 Actual]*(1+[growth@q3 2024 actual])", 2, rows, labels) == "=B2*(1+B3)"
+
+
+def test_a_shortened_column_label_still_resolves():
+    labels = ["Item", "Actual Year 0", "Forecast Year 1"]
+    assert compile_formula("=[revenue@Forecast]", 1, {"revenue": 0}, labels) == "=C2"
+
+
+def test_ai_cache_round_trip():
+    from app.services import ai_cache
+    assert ai_cache.get("practice", ["Accountant", "Excel"]) is None
+    ai_cache.put("practice", ["Accountant", "Excel"], {"title": "A task"})
+    assert ai_cache.get("practice", ["Accountant", "Excel"]) == {"title": "A task"}
+    assert ai_cache.get("simulation", ["Accountant", "Excel"]) is None     # kinds are kept apart
