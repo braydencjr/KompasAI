@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Ghost, GhostLine, Horizon, Mirror, TaskCard } from "../../lib/journey";
 import { useProfile } from "../Profile";
 import { useJourney } from "./JourneyProvider";
-import { ScenarioToggle, useLadder } from "./shared";
+import { useLadder } from "./shared";
 
 /* AI Exposure: is your job safe (the verdict), what your CV is worth (the paper), and the tasks behind both.
    One step for what used to be The Mirror and the Ghost CV: they read the same AI signals, as tasks and as skills. */
@@ -277,7 +277,6 @@ export default function StepFuture() {
             <h3>Your skills outlook for {g.horizon}</h3>
             <p className="muted">Which skills gain value, which AI can take over, and what to add.</p>
           </div>
-          <ScenarioToggle />
         </header>
         <Paper g={g} job={m.title ?? ""} onTasks={showTasks} />
       </section>

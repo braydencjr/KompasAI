@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "./Auth";
 import { useJourney } from "./journey/JourneyProvider";
@@ -16,7 +16,9 @@ export default function AuthNudge({ anchor }: { anchor: React.RefObject<HTMLElem
   const { step } = useJourney();
   const gate = useStepGate("route");
   const [dismissed, setDismissed] = useState(true);
-  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  // `top` is the callout's own top edge, `arrow` how far down it the button's centre is
+  const [at, setAt] = useState<{ top: number; left: number; arrow: number } | null>(null);
+  const box = useRef<HTMLElement>(null);
 
   useEffect(() => {
     try {
@@ -28,11 +30,17 @@ export default function AuthNudge({ anchor }: { anchor: React.RefObject<HTMLElem
 
   const show = ready && !user && step === "route" && !gate && !dismissed;
 
+  // centred on the button, then moved up or down so the whole callout stays in the window (the button sits near the
+  // bottom of the sidebar, and a centred callout would run off the screen)
   useLayoutEffect(() => {
     if (!show) return;
     const place = () => {
       const r = anchor.current?.getBoundingClientRect();
-      if (r) setAt({ top: r.top + r.height / 2, left: r.right + 16 });
+      if (!r) return;
+      const h = box.current?.offsetHeight ?? 0;
+      const centre = r.top + r.height / 2;
+      const top = Math.max(16, Math.min(centre - h / 2, window.innerHeight - h - 16));
+      setAt({ top, left: r.right + 16, arrow: Math.max(20, Math.min(centre - top, h - 20)) });
     };
     place();
     window.addEventListener("resize", place);
@@ -47,7 +55,7 @@ export default function AuthNudge({ anchor }: { anchor: React.RefObject<HTMLElem
     return () => el.classList.remove("nudged");
   }, [show, anchor]);
 
-  if (!show || !at) return null;
+  if (!show) return null;
 
   function dismiss() {
     setDismissed(true);
@@ -57,7 +65,8 @@ export default function AuthNudge({ anchor }: { anchor: React.RefObject<HTMLElem
   }
 
   return createPortal(
-    <aside className="auth-nudge glass" role="status" style={{ top: at.top, left: at.left }}>
+    <aside ref={box} className="auth-nudge glass" role="status"
+      style={(at ? { top: at.top, left: at.left, "--arrow": `${at.arrow}px` } : { top: 0, left: 0, visibility: "hidden" }) as React.CSSProperties}>
       <strong>Sign in to save your learning progress</strong>
       <p>Without an account, your progress can be lost if this browser&apos;s data is cleared or you switch device.</p>
       <div className="auth-nudge-actions">

@@ -6,7 +6,6 @@ import { toRole } from "../../lib/adapters";
 import { journeyApi, type LearningPlan as Plan } from "../../lib/journey";
 import { useJourney } from "./JourneyProvider";
 import LearningPlan from "./LearningPlan";
-import { ScenarioToggle } from "./shared";
 
 type PlanState = { status: "loading" } | { status: "ready"; plan: Plan } | { status: "error"; message: string };
 
@@ -54,7 +53,6 @@ export default function StepRoute() {
   return (
     <>
       <div className="j-ghost-bar">
-        <ScenarioToggle />
         <span className="muted small">Steps run prerequisites first, then by how far up the Signal Ladder each skill is.</span>
       </div>
       <CvMatch

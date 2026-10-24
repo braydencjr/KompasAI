@@ -634,7 +634,7 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         page then shows the rule-based route."""
         from . import plan
 
-        p = _profile(req)
+        p = _profile(req, conn)
         j = journey.build(cur, conn, _snapshot_id(conn, req.snapshot), p, _resources(conn))
         if not j["route"]:
             raise HTTPException(422, "Choose a job first")

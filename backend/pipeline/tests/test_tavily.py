@@ -61,3 +61,58 @@ def test_errors_become_fetch_errors():
 def test_no_key_means_no_search(monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY")
     assert not tavily.enabled() and tavily.search(["python"]) == []
+
+
+def test_more_free_sites_are_accepted_only_on_course_pages():
+    ok = [
+        "https://alison.com/course/microsoft-word-for-everyday-use",
+        "https://learn.saylor.org/course/prdv003",
+        "https://edu.gcfglobal.org/en/word/",
+        "https://accountingcoach.com/accounting-basics/outline",
+        "https://www.w3schools.com/typescript",
+        "https://support.microsoft.com/en-us/excel",
+        "https://learning.sap.com/courses/financial-statement-reporting",
+        "https://trailhead.salesforce.com/content/learn/modules/salesforce-business-analyst-certification-prep",
+        "https://academy.hubspot.com/courses/inbound-marketing",
+        "https://huggingface.co/learn/llm-course/chapter1/1",
+        "https://learn.deeplearning.ai/courses/chatgpt-prompt-eng/lesson/dfbds/introduction",
+        "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting",
+        "https://openstax.org/books/statistics/pages/1-introduction",
+        "https://www.theodinproject.com/paths/full-stack-javascript/courses/react",
+        "https://applieddigitalskills.withgoogle.com/c/college-and-continuing-education/en/g-suite-certification-slides-part-1/",
+        "https://oyc.yale.edu/economics/econ-252-08",
+    ]
+    no = [
+        "https://alison.com/tag/microsoft-word",                      # a list of courses, not a course
+        "https://alison.com/careers/finance/financial-analyst",
+        "https://staging-test.alison.com/course/something",           # not the real site
+        "https://learn.saylor.org/enrol/index.php",
+        "https://edu.gcfglobal.org/en",
+        "https://accountingcoach.com/pro",                            # the paid plan
+        "https://www.w3schools.com/typescript/typescript_classes.php",
+        "https://grow.google/certificates/data-analytics",            # delivered on Coursera: not free
+        "https://huggingface.co/datasets/utahnlp/knows-benchmark",
+        "https://discuss.huggingface.co/t/how-to-learn/1",
+        "https://assets.openstax.org/oscms-prodcms/media/documents/Stats.pdf",
+        "https://trailhead.salesforce.com/credentials/businessanalyst",
+        "https://academy.hubspot.com/courses",
+        "https://www.open.edu/openlearn/tag/index.php",
+    ]
+    assert [u for u in ok if tavily._site(u) is None] == []
+    assert [u for u in no if tavily._site(u) is not None] == []
+
+
+def test_two_phrases_are_merged_and_no_site_fills_every_place():
+    def handler(request: httpx.Request) -> httpx.Response:
+        handler.queries.append(__import__("json").loads(request.content)["query"])
+        first = handler.queries[-1].startswith("word")
+        urls = ([f"https://alison.com/course/word-{i}" for i in range(5)] if first
+                else ["https://alison.com/course/word-0", "https://learn.saylor.org/course/prdv003", "https://edu.gcfglobal.org/en/word/"])
+        return httpx.Response(200, json={"results": [{"title": u.rsplit("/", 1)[-1] or "t", "url": u} for u in urls]})
+
+    handler.queries = []
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    out = tavily.search(["word processing", "microsoft word", "third phrase is not used"], limit=6, client=http)
+    assert handler.queries == ["word processing course", "microsoft word course"]      # two credits, no more
+    assert [c["provider"] for c in out] == ["Alison", "Alison", "Saylor Academy", "GCFGlobal LearnFree"]
+    assert len({c["url"] for c in out}) == len(out)

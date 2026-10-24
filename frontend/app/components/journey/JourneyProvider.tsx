@@ -101,7 +101,7 @@ export function JourneyProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-      if (saved && typeof saved === "object") setChoices({ ...FRESH, ...saved });
+      if (saved && typeof saved === "object") setChoices({ ...FRESH, ...saved, scenario: "moderate" });
     } catch {}
     setStep(stepFromHash());
     loaded.current = true;

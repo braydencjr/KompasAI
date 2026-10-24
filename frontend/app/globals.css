@@ -6190,7 +6190,6 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 .auth-nudge {
   position: fixed;
   z-index: 70;
-  transform: translateY(-50%);
   width: min(300px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
@@ -6203,7 +6202,7 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 .auth-nudge::after {          /* the arrow, pointing left at the button */
   content: "";
   position: absolute;
-  top: 50%;
+  top: var(--arrow, 50%);
   left: -7px;
   width: 14px;
   height: 14px;
@@ -6258,3 +6257,6 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 /* "Continue with Google" and "Continue without an account": two plain links, side by side */
 .auth-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 16px; }
 .auth-google-link { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+
+/* the CV box before anything is uploaded: a sentence, not placeholder bars */
+.flow-doc-empty { min-height: 96px; display: flex; align-items: center; }

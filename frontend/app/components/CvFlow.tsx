@@ -164,6 +164,41 @@ export default function CvFlow({ fileName, lines, read , cv, animate }: Props) {
   );
 }
 
+/** The same three stages before any CV is uploaded, with nothing in them yet. */
+export function EmptyFlow() {
+  return (
+    <section className="flow glass static" aria-label="What Kompas shows once your CV is uploaded">
+      <header className="flow-head">
+        <ol className="flow-steps">
+          {STAGES.map((s, i) => (
+            <li key={s}>
+              <span className="flow-dot">{i + 1}</span>
+              {s}
+            </li>
+          ))}
+        </ol>
+      </header>
+
+      <div className="flow-stage">
+        <StageHead n={1} title="Read your CV" />
+        <div className="flow-doc flow-doc-empty">
+          <p className="muted">The text of your CV will appear here once you upload it.</p>
+        </div>
+      </div>
+
+      <div className="flow-stage">
+        <StageHead n={2} title="Find your skills" />
+        <p className="muted small">The skills Kompas finds in your CV will appear here.</p>
+      </div>
+
+      <div className="flow-stage">
+        <StageHead n={3} title="Your skills in the market" />
+        <p className="muted small">How each of your skills is doing in the job market will appear here.</p>
+      </div>
+    </section>
+  );
+}
+
 function StageHead({ n, title, busy, children }: { n: number; title: string; busy?: boolean; children?: React.ReactNode }) {
   return (
     <div className="flow-stage-head">

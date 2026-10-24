@@ -10,7 +10,7 @@ import Ring from "../Ring";
 import { SimButton } from "../SimulatorProvider";
 import Sparkline from "../Sparkline";
 import { useJourney } from "./JourneyProvider";
-import { Estimate, ScenarioToggle } from "./shared";
+import { Estimate } from "./shared";
 
 /** Your Kompas: an upskilling suggestion for the current job, then the two best switches (the fastest-growing job you
  * fit and the safest move). The headline follows Your 2028's verdict; every option says why, with its evidence (PRD 5.4). */
@@ -248,10 +248,6 @@ export default function StepBets() {
           {data.stay && <span className="label">Your job: {data.stay.title}</span>}
           <h2>{HEAD[lead].title}</h2>
           <p>{HEAD[lead].body}</p>
-        </div>
-        <div className="gh-pace">
-          <span className="label">How fast does AI move?</span>
-          <ScenarioToggle />
         </div>
       </section>
 
