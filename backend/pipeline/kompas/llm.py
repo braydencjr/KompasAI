@@ -474,3 +474,113 @@ def judge_trends(skills: list[dict], client: genai.Client | None = None) -> tupl
     contents = "<skills>\n" + json.dumps(skills, ensure_ascii=False) + "\n</skills>"
     result, error = _generate(TREND_INSTRUCTIONS, contents, schema, client, thinking=0)
     return (None, error) if error else (result.get("skills") or [], None)
+
+
+# ---------- GitHub Trending repositories, for Radar ----------
+
+REPO_CATEGORIES = ("AI agents & coding tools", "Models & AI infrastructure", "Developer tools", "Data & analytics",
+                   "Security", "Apps & self-hosted")
+
+REPO_INSTRUCTIONS = """You describe trending GitHub repositories for people planning their careers, most of whom are
+not programmers. For each repository:
+- `category`: one of the categories below. Only if none fits at all, write a new category of 1 to 3 plain words.
+- `plain`: what it is and who would use it, in at most 18 plain words. No jargon; spell out acronyms. Start
+  with what it does ("Turns ...", "A guide to ..."), never with "This is" or "This tool".
+- `skill_id`: the Kompas skill below that someone would learn by working with it, or "none". Most repositories: "none".
+
+Categories:
+{categories}
+
+Kompas skills:
+{skills}"""
+
+
+def describe_repos(repos: list[dict], cur: Curated, client: genai.Client | None = None) -> tuple[list[dict] | None, str | None]:
+    """repos: [{full_name, description, language}]. Returns ([{full_name, category, plain, skill_id}], None) or
+    (None, reason)."""
+    skills = {cid: c.label for cid, c in sorted(cur.concepts.items()) if c.kind == "skill"}
+    schema = {
+        "type": "object",
+        "properties": {"repos": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"full_name": {"type": "string"}, "category": {"type": "string"},
+                           "plain": {"type": "string"}, "skill_id": {"type": "string", "enum": [NONE, *skills]}},
+            "required": ["full_name", "category", "plain", "skill_id"],
+        }}},
+        "required": ["repos"],
+    }
+    system = REPO_INSTRUCTIONS.format(categories="\n".join(f"- {c}" for c in REPO_CATEGORIES),
+                                      skills="\n".join(f"- {cid}: {label}" for cid, label in skills.items()))
+    contents = "<repos>\n" + json.dumps(repos, ensure_ascii=False, indent=1) + "\n</repos>"
+    result, error = _generate(system, contents, schema, client, thinking=0)
+    if error:
+        return None, error
+    return result.get("repos") or [], None
+
+
+# ---------- Radar: news headlines and skill meanings in plain words ----------
+
+STORY_INSTRUCTIONS = """You are the editor of a career newspaper for working people in Malaysia, most of whom are
+not programmers. You get stories from Malaysian news sites, Malaysian subreddits and Hacker News, each with its
+`outlet`, its title as published and sometimes a `snippet`. Titles may be in Malay or Manglish. For each story:
+- `headline`: a clear newspaper headline in English, in sentence case (only the first word and names capitalised),
+  at most 12 words, that a non-programmer understands. Say what happened. No jargon, no clickbait, no question
+  marks. Common terms stay as they are (AI, IPO, EV, 5G); spell out rarer acronyms. Use only what the title and
+  snippet say. For a Reddit post, say what the person is asking or sharing ("Fresh engineering graduate weighs
+  RM3,000 offer in Penang").
+- `dek`: one sentence, at most 22 words: what it means for people's work or careers. If the title doesn't say
+  enough to know, say what the story is about instead. Never invent facts. Start with the substance, never with
+  "This story", "This news", "This article" or "The story".
+- `skill_id`: the Kompas skill below the story is mainly about, or "none".
+- `career`: how much it matters to a working person in Malaysia planning their career:
+  3 = directly about jobs, pay, hiring, layoffs, job offers, skills in demand, or AI changing how people work.
+  2 = an industry or employer change likely to affect Malaysian workers (a sector booming or shrinking, a big
+      Malaysian employer expanding, closing or merging, a regulation that changes how companies work).
+  1 = business or technology background without a work angle: daily market moves (ringgit, Bursa, oil, Wall
+      Street), earnings, board appointments, foreign company news, airline routes, gadget launches.
+  0 = not about work: politics, crime, sport, entertainment, food, lifestyle, personal stories.
+  A new AI model, developer tool, library or programming-language release is 1, unless it changes how
+  non-programmers do their work (then 2). A software vulnerability is 1, unless a Malaysian organisation or a
+  service most people use is affected (then 2). Most stories are 0 or 1; give 3 rarely.
+- `topic`: a short lowercase key for the event, 2 to 5 words joined by hyphens ("waze-ban-malaysia",
+  "maxis-buys-astro-broadband"). Stories about the same event get the same key, also across outlets. If a story
+  is about one of the recent topics listed below, reuse that key exactly.
+
+Recent topics:
+{topics}
+
+Kompas skills:
+{skills}"""
+
+
+def describe_stories(stories: list[dict], cur: Curated, recent_topics: list[str] | None = None,
+                     client: genai.Client | None = None) -> tuple[list[dict] | None, str | None]:
+    """stories: [{id, outlet, title, snippet?}]. Returns ([{id, headline, dek, skill_id, career, topic}], None) or
+    (None, reason). recent_topics: keys given to earlier stories, so a story about the same event reuses its key."""
+    skills = {cid: c.label for cid, c in sorted(cur.concepts.items()) if c.kind == "skill"}
+    schema = {"type": "object", "properties": {"stories": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"id": {"type": "string"}, "headline": {"type": "string"}, "dek": {"type": "string"},
+                       "skill_id": {"type": "string", "enum": [NONE, *skills]},
+                       "career": {"type": "integer", "enum": [0, 1, 2, 3]}, "topic": {"type": "string"}},
+        "required": ["id", "headline", "dek", "skill_id", "career", "topic"],
+    }}}, "required": ["stories"]}
+    system = STORY_INSTRUCTIONS.format(skills="\n".join(f"- {cid}: {label}" for cid, label in skills.items()),
+                                       topics="\n".join(f"- {t}" for t in recent_topics or []) or "(none yet)")
+    contents = "<stories>\n" + json.dumps(stories, ensure_ascii=False, indent=1) + "\n</stories>"
+    result, error = _generate(system, contents, schema, client, thinking=0)
+    return (None, error) if error else (result.get("stories") or [], None)
+
+
+CONCEPT_INSTRUCTIONS = """For each skill, write `plain`: what it is and what people do with it at work, in one
+sentence of at most 16 plain words, for someone with no technical background. Spell out acronyms. No hype."""
+
+
+def describe_concepts(concepts: list[dict], client: genai.Client | None = None) -> tuple[list[dict] | None, str | None]:
+    """concepts: [{id, label}]. Returns ([{id, plain}], None) or (None, reason)."""
+    schema = {"type": "object", "properties": {"skills": {"type": "array", "items": {
+        "type": "object", "properties": {"id": {"type": "string"}, "plain": {"type": "string"}},
+        "required": ["id", "plain"]}}}, "required": ["skills"]}
+    contents = "<skills>\n" + json.dumps(concepts, ensure_ascii=False, indent=1) + "\n</skills>"
+    result, error = _generate(CONCEPT_INSTRUCTIONS, contents, schema, client, thinking=0)
+    return (None, error) if error else (result.get("skills") or [], None)

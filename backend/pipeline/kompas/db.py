@@ -376,7 +376,70 @@ def _m4_reference_data(conn):
         conn.execute(statement)
 
 
-MIGRATIONS = [(1, _m1_ingestion), (2, _m2_legacy_streams), (3, _m3_alias_suggestions), (4, _m4_reference_data)]
+def _m5_trending(conn):
+    """GitHub Trending scrapes and the LLM's reading of each repository, for Radar (kompas/radar.py)."""
+    for statement in """
+    -- One row per repository per scrape. The previous scrape of the same period gives rank changes
+    CREATE TABLE IF NOT EXISTS trending_repo (
+      scraped_at TEXT NOT NULL,
+      since TEXT NOT NULL,              -- daily | weekly
+      full_name TEXT NOT NULL,
+      description TEXT,
+      language TEXT,
+      stars INTEGER NOT NULL,
+      forks INTEGER NOT NULL,
+      period_stars INTEGER NOT NULL,    -- stars gained today / this week, as GitHub reports it
+      PRIMARY KEY (scraped_at, since, full_name)
+    );
+    CREATE INDEX IF NOT EXISTS trending_repo_since ON trending_repo(since, scraped_at);
+
+    -- What a repository is, in plain words, its category and the Kompas skill it relates to. Written once per
+    -- repository by the LLM from its name, description and language.
+    CREATE TABLE IF NOT EXISTS repo_category (
+      full_name TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      plain TEXT NOT NULL,
+      skill_id TEXT,
+      model TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+    """.split(";"):
+        conn.execute(statement)
+
+
+def _m6_plain_words(conn):
+    """Plain-words text the LLM writes once for Radar: a news headline per story, a meaning per skill."""
+    for statement in """
+    -- A Hacker News story rewritten as a newspaper headline for non-programmers, the skill it is about and
+    -- whether it matters to someone's work (relevant = 1) or is niche tech news (0)
+    CREATE TABLE IF NOT EXISTS story_plain (
+      doc_id TEXT PRIMARY KEY,
+      headline TEXT NOT NULL,
+      dek TEXT NOT NULL,
+      skill_id TEXT,
+      relevant INTEGER NOT NULL,
+      model TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    -- What a Kompas skill is, in one plain sentence
+    CREATE TABLE IF NOT EXISTS concept_plain (
+      concept_id TEXT PRIMARY KEY,
+      plain TEXT NOT NULL,
+      model TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+    """.split(";"):
+        conn.execute(statement)
+
+
+def _m7_story_career(conn):
+    """How much a story matters to someone's career (0-3), and the event it is about, so the same story told by
+    several outlets is shown once (kompas/radar.py)."""
+    _add_columns(conn, "story_plain", {"career": "INTEGER", "topic": "TEXT"})
+
+
+MIGRATIONS = [(1, _m1_ingestion), (2, _m2_legacy_streams), (3, _m3_alias_suggestions), (4, _m4_reference_data),
+              (5, _m5_trending), (6, _m6_plain_words), (7, _m7_story_career)]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
 

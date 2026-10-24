@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
+import "./tailwind.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+// headlines on Radar's front page
+const newsreader = Newsreader({
+  variable: "--font-serif",
   subsets: ["latin"],
 });
 
@@ -33,7 +40,7 @@ export default function RootLayout({
         {/* Only Chromium renders SVG filters in backdrop-filter; elsewhere the glass falls back to plain blur. */}
         <script dangerouslySetInnerHTML={{ __html: "if(window.chrome)document.documentElement.classList.add('lg-refract')" }} />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable}`}>
         {children}
       </body>
     </html>

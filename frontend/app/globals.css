@@ -4453,26 +4453,6 @@ h3 {
 .j-contribution { padding: 18px 22px; border-radius: 22px; }
 .j-contribution ul { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; }
 
-/* ---------- The Ping ---------- */
-.j-ping-step { display: flex; flex-direction: column; gap: 18px; }
-.j-demo { padding: 18px 22px; border-radius: 22px; display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
-.j-demo p { margin: 4px 0 0; }
-.j-demo-controls { display: flex; gap: 12px; align-items: flex-end; }
-.j-demo-controls label { display: flex; flex-direction: column; gap: 4px; }
-.j-ping { display: flex; flex-direction: column; gap: 14px; animation: rise 0.5s ease both; }
-.j-ping.refreshing { opacity: 0.6; }
-.j-ping-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.j-changes { padding: 18px 22px; border-radius: 22px; }
-.j-changes ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.j-changes li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13.5px; }
-.j-changes p { margin: 8px 0 0; }
-.j-was { color: var(--faint); text-decoration: line-through; }
-.j-reorder { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
-.j-reorder ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.j-reorder li { padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.6); font-size: 13px; }
-.j-reorder .before li { opacity: 0.6; }
-.j-reorder .after li { animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(0.2s + var(--i, 0) * 110ms); box-shadow: inset 0 0 0 1px rgba(61, 155, 233, 0.25); }
-
 /* ---------- Signal Ladder drawer ---------- */
 .j-drawer-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(11, 19, 36, 0.18); backdrop-filter: blur(3px); animation: fade-in 0.25s ease both; }
 .j-drawer { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(460px, calc(100vw - 24px)); overflow-y: auto; padding: 28px; border-radius: 28px; background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78)); animation: j-drawer-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; display: flex; flex-direction: column; gap: 12px; }
@@ -4495,7 +4475,7 @@ h3 {
 .j-ev-note { font-size: 11.5px; color: var(--faint); }
 
 @media (max-width: 960px) {
-  .j-piles, .j-bets, .j-ping-grid, .j-reorder { grid-template-columns: 1fr; }
+  .j-piles, .j-bets { grid-template-columns: 1fr; }
   .j-route-head { grid-template-columns: 1fr; }
   .j-paper { padding: 28px 22px; }
   .j-demo-controls { flex-wrap: wrap; }
@@ -5809,3 +5789,13 @@ button.current-job-change { border: 0; background: none; cursor: pointer; font: 
 .job-search-none { display: flex; flex-direction: column; gap: 8px; }
 .job-search-all { display: flex; flex-wrap: wrap; gap: 6px; }
 .job-search-all .chip { border: 0; cursor: pointer; font: inherit; font-size: 12.5px; }
+
+/* ---------- Radar ---------- */
+.nav-live { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); animation: nav-live 2s ease-in-out infinite; }
+@keyframes nav-live { 50% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } }
+.radar { display: flex; flex-direction: column; gap: 18px; }
+
+/* AI Live Trend: a news card that replaces another lands softly */
+.rd-land { animation: rd-land 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+@keyframes rd-land { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .rd-land { animation: none; } }

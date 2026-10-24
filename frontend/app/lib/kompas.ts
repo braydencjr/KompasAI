@@ -40,6 +40,7 @@ export type FeedItem = {
   points?: number; // Hacker News upvotes
   stars?: number; // GitHub stars
   description?: string; // repo description
+  concepts?: { id: string; label: string }[];
 };
 
 /** One explained card in the personal feed: a skill, what's happening, what it means, what to do. */
@@ -68,9 +69,9 @@ export type Profile = {
   limit?: number;
 };
 
-async function call<T>(path: string, init?: RequestInit): Promise<T | null> {
+async function call<T>(path: string, init?: RequestInit, timeoutMs = 5000): Promise<T | null> {
   try {
-    const res = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(5000), ...init });
+    const res = await fetch(`${API_URL}${path}`, { signal: AbortSignal.timeout(timeoutMs), ...init });
     return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;
@@ -284,4 +285,142 @@ export type LiveJobs = { role: string; jobs: LiveJob[]; source: string; fetched_
 export async function liveJobs(isco: string, skills: string[]): Promise<LiveJobs | null> {
   const params = new URLSearchParams({ isco, skills: skills.join(",") });
   return call<LiveJobs>(`/jobs?${params}`, { signal: AbortSignal.timeout(25_000) });
+}
+
+// ---------- Radar: what is moving right now ----------
+
+export type RadarRepo = {
+  full_name: string;
+  url: string;
+  description: string;
+  /** what it is in plain words, written by the LLM for non-programmers (null until it has read the repo) */
+  plain: string | null;
+  language: string | null;
+  stars: number;
+  forks: number;
+  /** stars gained today or this week, as GitHub reports it */
+  period_stars: number;
+  category: string;
+  rank: number;
+  category_rank: number;
+  /** rank in the same category at the previous scrape; null when new to it */
+  prev_category_rank: number | null;
+  skill: { id: string; label: string } | null;
+};
+
+export type RadarSince = "daily" | "weekly";
+
+export type RadarKeyword = {
+  term: string;
+  mentions: number;
+  baseline: number;
+  change: number;
+  new: boolean;
+  spark: number[];
+  concept_id: string | null;
+  evidence: { title: string; url: string }[];
+};
+
+export type RadarStory = {
+  id: string;
+  title: string;
+  url: string;
+  hn_url: string;
+  published_at: string;
+  points: number;
+  comments: number;
+  points_per_hour: number;
+  keywords: string[];
+};
+
+type LadderRung = { active: boolean; trend: number | null; level: "concept" | "family" | null };
+
+export type RadarTrendSkill = {
+  id: string;
+  label: string;
+  /** what it is in one plain sentence (null until the LLM has written it) */
+  plain: string | null;
+  status: LiveStatus;
+  /** the status at the comparison snapshot, when it differs */
+  was: LiveStatus | null;
+  move: "up" | "down" | null;
+  /** momentum: ladder moves, status and rising trends; the order within a field */
+  score: number;
+  ladder: { talk: LadderRung; abroad: LadderRung; malaysia: LadderRung };
+  /** how often a sample of Malaysian job postings asks for it */
+  postings: { postings: number; roles: { title: string; count: number; of: number }[]; quote: { text: string; role: string } | null } | null;
+  evidence: {
+    news: { headline: string; url: string; points?: number }[];
+    repos: { name: string; plain: string; stars_today: number; url: string }[];
+  };
+};
+
+export type RadarFamily = { id: string; label: string; status: LiveStatus | null; moving: number; skills: RadarTrendSkill[] };
+export type RadarTrends = { as_of: string | null; compared_to: string | null; families: RadarFamily[]; sample: { postings: number; roles: number } | null };
+
+export type RadarBrief = {
+  as_of: string | null;
+  compared_to: string | null;
+  headline: string;
+  summary: string;
+  by: string;
+  meters: { talk: { rising: number }; abroad: { rising: number }; malaysia: { rising: number; sample: { postings: number; roles: number } | null } };
+  climbed: number;
+  fell: number;
+};
+
+/** A shown story: read by the LLM and scored as mattering to people's careers. One per event. */
+export type RadarNews = {
+  id: string;
+  /** the event it tells; several outlets' stories about one event are shown once */
+  topic: string | null;
+  source: "my_news" | "reddit" | "hn_front";
+  outlet: string;
+  /** every outlet that covered the event */
+  outlets: string[];
+  headline: string;
+  dek: string | null;
+  title: string;
+  url: string;
+  published_at: string;
+  /** when the LLM first read it: when it reached Kompas */
+  first_seen: string;
+  /** votes where the source has them (Hacker News; Reddit with an API key) */
+  points: number | null;
+  comments: number | null;
+  /** how much it matters to a career: 2 = an industry change, 3 = jobs, pay, hiring, skills */
+  career: 2 | 3;
+  skill: { id: string; label: string } | null;
+  rank_score: number;
+};
+
+export const radar = {
+  brief: () => call<RadarBrief>("/radar/brief", undefined, 30000),
+  trends: () => call<RadarTrends>("/radar/trends", undefined, 30000),
+  news: () => call<{ as_of: string | null; items: RadarNews[] }>("/radar/news?limit=40", undefined, 20000),
+  repos: (since: RadarSince = "daily") =>
+    call<{ as_of: string | null; since: RadarSince; compared_to: string | null; categories: { label: string; count: number }[]; items: RadarRepo[] }>(
+      `/radar/repos?since=${since}`, undefined, 20000),
+  keywords: () => call<{ as_of: string | null; window_days: number; items: RadarKeyword[] }>("/radar/keywords?limit=20", undefined, 20000),
+};
+
+export type FeedEvent =
+  | { seq: number | string; type: "new" | "rising"; at: string; replay?: boolean; item: FeedItem }
+  | { seq: string; type: "news"; at: string; replay?: boolean; item: RadarNews };
+
+/** Subscribes to the whole live-feed event (not just the id). `onState` reports whether the stream is connected. */
+export function onFeedStream(handler: (event: FeedEvent) => void, onState?: (connected: boolean) => void): () => void {
+  if (typeof EventSource === "undefined") return () => {};
+  const es = new EventSource(`${API_URL}/feed/stream`);
+  const listener = (e: MessageEvent) => {
+    try {
+      handler(JSON.parse(e.data));
+    } catch {}
+  };
+  es.addEventListener("new", listener);
+  es.addEventListener("rising", listener);
+  es.addEventListener("news", listener);
+  es.onopen = () => onState?.(true);
+  es.onerror = () => onState?.(false);
+  return () => es.close();
 }

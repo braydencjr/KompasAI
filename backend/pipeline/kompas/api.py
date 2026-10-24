@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from . import brief, curated, cv, db, explain, ingest, journey, live, open_skills, requirements
+from . import brief, curated, cv, db, explain, ingest, journey, live, open_skills, radar, requirements
 from .connectors import ilo
 from .config import PARAMS
 from .http import FetchError
@@ -145,9 +145,9 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     @asynccontextmanager
     async def background():
         tasks = []
+        # e.g. KOMPAS_LIVE_SOURCES=hn_front while a GitHub backfill is using the search quota
+        enabled = os.environ.get("KOMPAS_LIVE_SOURCES", "hn_front,github").split(",")
         if live_mode:
-            # e.g. KOMPAS_LIVE_SOURCES=hn_front while a GitHub backfill is using the search quota
-            enabled = os.environ.get("KOMPAS_LIVE_SOURCES", "hn_front,github").split(",")
             intervals = {"hn_front": os.environ.get("KOMPAS_HN_INTERVAL", 120),
                          "github": os.environ.get("KOMPAS_GITHUB_INTERVAL", 900)}
             for source, interval in intervals.items():
@@ -155,6 +155,12 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
                     tasks.append(asyncio.create_task(live.poll_loop(source, float(interval), cur, PARAMS, bus)))
         if replay:
             tasks.append(asyncio.create_task(live.replay_loop(bus, float(os.environ.get("KOMPAS_REPLAY_INTERVAL", 4)))))
+        if os.environ.get("KOMPAS_RADAR", "1") != "0":
+            # Radar updates hourly on its own: GitHub Trending always, and Hacker News too unless the live
+            # pollers already fetch it every couple of minutes
+            hn = None if live_mode and "hn_front" in enabled else "hn_front"
+            tasks.append(asyncio.create_task(
+                live.radar_loop(float(os.environ.get("KOMPAS_RADAR_INTERVAL", 3600)), cur, PARAMS, bus, hn)))
         yield
         for t in tasks:
             t.cancel()
@@ -290,6 +296,36 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
         sid, items = _feed(conn, snapshot, concept, limit)
         return {"statuses_from": sid, "live": snapshot is None, "items": items}
 
+    @app.get("/radar/repos")
+    def radar_repos(since: Literal["daily", "weekly"] = "daily", conn=Depends(get_conn)):
+        """GitHub Trending, grouped into categories, with each repository's rank in its category last scrape."""
+        return radar.repos(conn, cur, since)
+
+    @app.get("/radar/brief")
+    def radar_brief(conn=Depends(get_conn)):
+        """The biggest shift on the Signal Ladder in a headline and two sentences, checked against the facts."""
+        return radar.brief(conn, cur)
+
+    @app.get("/radar/trends")
+    def radar_trends(conn=Depends(get_conn)):
+        """Skills grouped by family, ranked by momentum, each with its news, repositories and Malaysian postings."""
+        return radar.trends(conn, cur)
+
+    @app.get("/radar/news")
+    def radar_news(limit: int = Query(20, le=60), conn=Depends(get_conn)):
+        """The front page: rising Hacker News stories with plain-words headlines, work-relevant ones first."""
+        return radar.front_page(conn, cur, limit)
+
+    @app.get("/radar/keywords")
+    def radar_keywords(limit: int = Query(20, le=60), conn=Depends(get_conn)):
+        """Terms appearing far more often this week than the earlier baseline predicts. Open vocabulary."""
+        return radar.keywords(conn, cur, limit)
+
+    @app.get("/radar/discussions")
+    def radar_discussions(limit: int = Query(20, le=60), conn=Depends(get_conn)):
+        """Hacker News stories moving fastest (points per hour), with the trending keywords in their titles."""
+        return radar.discussions(conn, cur, limit)
+
     @app.get("/feed/stream")
     async def feed_stream(request: Request, last_event_id: str | None = Header(None)):
         """Server-sent events: `new` and `rising` feed items, each joined to its concepts' current status."""
@@ -300,6 +336,8 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
             try:
                 sid = conn.execute("SELECT id FROM snapshot ORDER BY as_of DESC LIMIT 1").fetchone()
                 item = dict(event["item"])
+                if "concept_ids" not in item:
+                    return event   # a news story (radar): it carries its own skill
                 item["concepts"] = _statuses(conn, sid["id"], item["concept_ids"], cur) if sid else []
                 return {**event, "item": item}
             finally:

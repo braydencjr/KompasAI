@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useProfile } from "./Profile";
 import { SidebarSnapshot } from "./Signals";
 import { STEPS, useOptionalJourney } from "./journey/JourneyProvider";
@@ -11,7 +12,7 @@ const ICONS: Record<string, string> = {
   future: "M6 3h9l4 4v14H6zM9 12h7M9 16h5",
   bets: "M4 20V10M10 20V4M16 20v-7M22 20H2",
   route: "M5 19c4 0 4-14 8-14s4 14 6 14",
-  ping: "M12 3a6 6 0 0 1 6 6v4l2 3H4l2-3V9a6 6 0 0 1 6-6zM10 20a2 2 0 0 0 4 0",
+  radar: "M12 12l6-6M12 21a9 9 0 1 1 9-9M12 17a5 5 0 1 1 5-5M12 12h.01",
 };
 
 function Icon({ d }: { d: string }) {
@@ -58,7 +59,9 @@ export default function Sidebar() {
   const { source, cv } = useProfile();
   const journey = useOptionalJourney();
   const fromCv = source === "cv";
-  const current = STEPS.findIndex((s) => s.id === journey?.step);
+  const pathname = usePathname();
+  const onRadar = pathname.startsWith("/radar");
+  const current = onRadar ? -1 : STEPS.findIndex((s) => s.id === journey?.step);
   const user = useUserName();
   const displayName = fromCv ? user.name : "Aisyah (sample)";
 
@@ -72,10 +75,10 @@ export default function Sidebar() {
       <nav className="nav j-rail" aria-label="Your journey">
         <span className="j-rail-line" aria-hidden><span style={{ height: `${(Math.max(current, 0) / (STEPS.length - 1)) * 100}%` }} /></span>
         {STEPS.map((s, i) => (
-          <a key={s.id} href={`#${s.id}`}
+          <a key={s.id} href={`/#${s.id}`}
             className={`nav-item${i === current ? " active" : ""}${i < current ? " done" : ""}`}
             onClick={(e) => {
-              if (!journey) return;
+              if (!journey || onRadar) return;
               e.preventDefault();
               journey.go(s.id);
             }}>
@@ -83,6 +86,14 @@ export default function Sidebar() {
             <span>{s.label}</span>
           </a>
         ))}
+      </nav>
+
+      <nav className="nav" aria-label="Live">
+        <Link href="/radar" className={`nav-item${onRadar ? " active" : ""}`}>
+          <span className="nav-node"><Icon d={ICONS.radar} /></span>
+          <span>AI Live Trend</span>
+          <span className="nav-live" aria-hidden />
+        </Link>
       </nav>
 
       <SidebarSnapshot />

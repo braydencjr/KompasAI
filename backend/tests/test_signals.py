@@ -5,6 +5,7 @@ from app.main import app
 
 def test_signal_engine_is_served_under_api_signals(tmp_path, monkeypatch):
     monkeypatch.setenv("KOMPAS_DB", str(tmp_path / "kompas.db"))
+    monkeypatch.setenv("KOMPAS_RADAR", "0")   # no GitHub Trending scrape from a test
     with TestClient(app) as client:          # runs the lifespan, as the real server does
         health = client.get("/api/signals/health").json()
         assert health["ok"] is True and health["latest_snapshot"] is None

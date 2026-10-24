@@ -63,6 +63,30 @@ async def poll_loop(source: str, interval: float, cur: Curated, p: Params, bus: 
         await asyncio.sleep(interval)
 
 
+async def radar_loop(interval: float, cur: Curated, p: Params, bus: Bus, hn_source: str | None):
+    """Radar's hourly refresh: GitHub Trending and the news (new stories go out as `news` events), and one Hacker
+    News poll when no live poller covers it.
+    The first pass runs at start-up only if the last scrape is older than the interval."""
+    from . import radar   # radar imports this package's db and llm; imported here to keep start-up light
+    first = True
+    while True:
+        try:
+            started = utcnow()
+            scraped = await asyncio.to_thread(radar.refresh_if_stale, cur, interval)
+            if scraped:
+                # the stories this run read and found worth showing, to the live feed (the page drips them in)
+                for item in await asyncio.to_thread(radar.fresh_news, cur, started):
+                    bus.publish({"seq": f"n:{item['id']}", "type": "news", "at": utcnow(), "item": item})
+            if hn_source and (scraped or not first):
+                for e in await asyncio.to_thread(run_cycle, hn_source, cur, p):
+                    bus.publish(e)
+            log.info("radar refresh: trending %s", "scraped" if scraped else "still fresh")
+        except Exception:
+            log.exception("radar refresh failed; serving the last good data")
+        first = False
+        await asyncio.sleep(interval)
+
+
 async def replay_loop(bus: Bus, interval: float):
     """Re-streams the recorded event log in order, forever. Events are marked replay=true."""
     while True:

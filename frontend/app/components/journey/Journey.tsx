@@ -3,7 +3,6 @@
 import { STEPS, useJourney } from "./JourneyProvider";
 import StepBets from "./StepBets";
 import StepFuture from "./StepFuture";
-import StepPing from "./StepPing";
 import StepRoute from "./StepRoute";
 import StepYou from "./StepYou";
 
@@ -15,10 +14,9 @@ const COPY: Record<(typeof STEPS)[number]["id"], { title: React.ReactNode; sub: 
   future: { title: "Your work in 2028", sub: "Is your job safe from AI, what your skills will be worth, and the tasks behind both." },
   bets: { title: "Where your Kompas points", sub: "Upskill where you are, or switch: the fastest-growing job you fit, or the safest move." },
   route: { title: "Your learning route", sub: "An ordered plan to your chosen role, with verified courses and the evidence for every step." },
-  ping: { title: "The world moved. Here's what changed for you.", sub: "Each new snapshot re-scores the market. Kompas shows what moved, why, and re-plans." },
 };
 
-const VIEWS = { you: StepYou, future: StepFuture, bets: StepBets, route: StepRoute, ping: StepPing };
+const VIEWS = { you: StepYou, future: StepFuture, bets: StepBets, route: StepRoute };
 
 export default function Journey() {
   const { step, direction, back, next, go, error, loading, data } = useJourney();
