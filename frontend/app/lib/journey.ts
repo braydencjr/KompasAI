@@ -49,6 +49,8 @@ export type Mirror = {
   /** share of tasks AI could do today, by 2028 under moderate progress, and if AI moves fast */
   shares: Record<Horizon, number>;
   exposed_capabilities: string[];
+  exposed_task_count?: number;
+  total_task_count?: number;
 };
 
 export type GhostLine = {
@@ -208,15 +210,22 @@ export type JourneyRequest = {
 };
 
 async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `Request failed (${res.status})`);
-  return data as T;
+  try {
+    const res = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(typeof data?.detail === "string" ? data.detail : `Request failed (${res.status})`);
+    return data as T;
+  } catch (err: unknown) {
+    if (signal?.aborted || (err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError"))) {
+      return null as unknown as T;
+    }
+    throw err;
+  }
 }
 
 export type PlanCourse = {

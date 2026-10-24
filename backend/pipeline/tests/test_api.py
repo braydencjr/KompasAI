@@ -85,6 +85,16 @@ def test_rescore_recomputes_market_data_and_keeps_what_the_cv_said(conn, cur):
     assert client.post("/profile/rescore", json={"nope": 1}).status_code == 422
 
 
+def test_snapshots_build_endpoint(conn, cur):
+    seed(conn, cur)
+    client = TestClient(create_app(live_mode=False, replay=False))
+    r = client.post("/snapshots/build?as_of=2026-10-24")
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert r.json()["snapshot"]["id"] == "2026-10-24"
+    assert client.get("/snapshots/latest").json()["id"] == "2026-10-24"
+
+
 def test_the_learning_plan_endpoint_runs_with_the_chosen_job(conn, cur, monkeypatch):
     """The route page asks for the plan with a chosen job; it once crashed on a helper called without its arguments."""
     from kompas import plan

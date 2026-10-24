@@ -134,13 +134,15 @@ class BriefRequest(JourneyRequest):
     from_snapshot: str | None = None              # for kind=ping
 
 
-def create_router(live_mode: bool | None = None, replay: bool | None = None):
-    """The signal API as a router, plus the background tasks it needs (live pollers, replay).
+def create_router(live_mode: bool | None = None, replay: bool | None = None,
+                  auto_snapshot: bool | None = None):
+    """The signal API as a router, plus the background tasks it needs (live pollers, replay, daily snapshot).
 
     Returns (router, background): include the router in any FastAPI app, and enter `background()` in that
     app's lifespan. backend/app serves it under /api/signals; create_app() serves it on its own."""
     live_mode = os.environ.get("KOMPAS_LIVE") == "1" if live_mode is None else live_mode
     replay = os.environ.get("KOMPAS_REPLAY") == "1" if replay is None else replay
+    auto_snapshot = os.environ.get("KOMPAS_AUTO_SNAPSHOT", "1") != "0" if auto_snapshot is None else auto_snapshot
     cur = curated.load()
     bus = live.Bus()
 
@@ -170,6 +172,10 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
             hn = None if live_mode and "hn_front" in enabled else "hn_front"
             tasks.append(asyncio.create_task(
                 live.radar_loop(float(os.environ.get("KOMPAS_RADAR_INTERVAL", 3600)), cur, PARAMS, bus, hn)))
+        if auto_snapshot:
+            snapshot_interval = float(os.environ.get("KOMPAS_SNAPSHOT_INTERVAL", 3600))
+            tasks.append(asyncio.create_task(
+                live.daily_snapshot_loop(snapshot_interval, cur, PARAMS)))
         yield
         for t in tasks:
             t.cancel()
@@ -205,6 +211,15 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     @app.get("/snapshots")
     def snapshots(conn=Depends(get_conn)):
         return [dict(r) for r in conn.execute("SELECT id, as_of, created_at FROM snapshot ORDER BY as_of")]
+
+    @app.post("/snapshots/build")
+    def build_snapshot(as_of: str | None = None, conn=Depends(get_conn)):
+        """Builds a dated snapshot (defaults to today) and persists it to the database."""
+        from datetime import date
+        from . import snapshot as snapshot_mod
+        target_date = as_of or date.today().isoformat()
+        res = snapshot_mod.build(conn, cur, target_date, PARAMS, export=False)
+        return {"ok": True, "snapshot": res}
 
     @app.get("/snapshots/{sid}")
     def snapshot(sid: str, conn=Depends(get_conn)):
@@ -692,9 +707,10 @@ def create_router(live_mode: bool | None = None, replay: bool | None = None):
     return app, background
 
 
-def create_app(live_mode: bool | None = None, replay: bool | None = None) -> FastAPI:
+def create_app(live_mode: bool | None = None, replay: bool | None = None,
+               auto_snapshot: bool | None = None) -> FastAPI:
     """The signal API on its own (`kompas serve`). backend/app serves the same routes under /api/signals."""
-    router, background = create_router(live_mode, replay)
+    router, background = create_router(live_mode, replay, auto_snapshot)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
