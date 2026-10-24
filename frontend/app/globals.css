@@ -255,6 +255,7 @@ html.lg-refract .glass {
 
 .main > .hero {
   max-width: 640px;
+  margin-inline: 0;
 }
 
 /* ---------- sidebar ---------- */
