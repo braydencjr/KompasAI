@@ -69,7 +69,6 @@ KompasAI turns a resume into a personal, evidence-backed career outlook. Gemini 
 │   └── app/                 # Next.js routes (/, /radar, /login), components and API clients
 ├── supabase/
 │   └── schema.sql           # profiles, learning routes and finished steps
-├── PRD.md                   # product requirements
 ├── LICENSE
 └── README.md
 ```
